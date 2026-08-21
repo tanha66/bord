@@ -667,3 +667,14 @@ a{color:inherit}
 
 /* فاصله برای نوار شناور */
 body{padding-bottom:82px !important}
+
+/* ---- تیکت پشتیبانی و گفتگو ---- */
+.grow{flex:1;min-width:0}
+.flex.center{justify-content:center}
+.ticket-body{display:flex;flex-direction:column;gap:10px}
+.ticket-message{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.ticket-message p{margin:6px 0 0;font-size:13px;line-height:1.9;color:var(--text-soft);white-space:normal}
+.ticket-message b{font-size:13px;color:var(--text)}
+.ticket-message.mine{background:rgba(16,185,129,.07);border-color:rgba(16,185,129,.35)}
+.leader-row .grow strong{display:block;font-size:13px}
+.leader-row .grow small{display:block;color:var(--text-dim);font-size:11px;margin-top:2px}

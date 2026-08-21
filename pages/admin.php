@@ -16,6 +16,7 @@ $TABS = [
     'categories' => '🗂 دسته‌بندی‌ها',
     'withdrawals' => '🏦 تسویه‌ها',
     'transactions' => '🧾 تراکنش‌ها',
+    'contact' => '📨 پیام‌های تماس',
     'settings' => '⚙️ تنظیمات سایت',
     'collect' => '🤖 جمع‌آوری خودکار',
 ];
@@ -58,6 +59,7 @@ if ($tab === 'dashboard') {
         'published' => (int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn(),
         'pending' => (int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='pending'")->fetchColumn(),
         'reports' => (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status='open'")->fetchColumn(),
+        'contact' => (function () use ($pdo) { try { return (int)$pdo->query("SELECT COUNT(*) FROM contact_messages WHERE status='new'")->fetchColumn(); } catch (Throwable $e) { return 0; } })(),
         'withdrawals' => (int)$pdo->query("SELECT COUNT(*) FROM withdrawals WHERE status IN ('pending','reviewing')")->fetchColumn(),
         'sales' => (int)$pdo->query("SELECT COALESCE(SUM(price_paid),0) FROM tip_accesses WHERE access_type='purchase'")->fetchColumn(),
         'balance' => (int)$pdo->query('SELECT COALESCE(SUM(balance),0) FROM users')->fetchColumn(),
@@ -77,7 +79,7 @@ if ($tab === 'dashboard') {
       <?php foreach ([
         ['کاربران', $stats['users'], '👥'], ['کل قلق‌ها', $stats['tips'], '🔧'],
         ['منتشرشده', $stats['published'], '✅'], ['در انتظار بررسی', $stats['pending'], '⏳'],
-        ['گزارش‌های باز', $stats['reports'], '🚩'], ['تسویه در انتظار', $stats['withdrawals'], '🏦'],
+        ['گزارش‌های باز', $stats['reports'], '🚩'], ['پیام تماس جدید', $stats['contact'], '📨'], ['تسویه در انتظار', $stats['withdrawals'], '🏦'],
         ['حجم فروش (تومان)', $stats['sales'], '💳'], ['موجودی کاربران (تومان)', $stats['balance'], '💰'],
       ] as $card): ?>
         <div class="card">
@@ -439,6 +441,57 @@ elseif ($tab === 'transactions') {
     <?php
 }
 
+/* ---------------- CONTACT MESSAGES ---------------- */
+elseif ($tab === 'contact') {
+    $statusFilter = in_array($_GET['status'] ?? '', ['new','answered','closed'], true) ? $_GET['status'] : '';
+    try {
+        if ($statusFilter === '') {
+            $rows = $pdo->query('SELECT * FROM contact_messages ORDER BY FIELD(status,"new","answered","closed"), created_at DESC LIMIT 200')->fetchAll();
+        } else {
+            $q = $pdo->prepare('SELECT * FROM contact_messages WHERE status=? ORDER BY created_at DESC LIMIT 200');
+            $q->execute([$statusFilter]);
+            $rows = $q->fetchAll();
+        }
+    } catch (Throwable $e) { $rows = []; }
+    $statusLabels = ['new'=>'جدید','answered'=>'پاسخ داده شد','closed'=>'بسته شد'];
+    ?>
+    <div class="page-title" style="margin-top:0">
+      <h1 style="font-size:20px">📨 پیام‌های تماس با ما</h1>
+      <p>پیام‌هایی که از صفحه «تماس با ما» ثبت شده‌اند.</p>
+    </div>
+    <div class="flex between items-center mb">
+      <div class="tip-meta">
+        <a class="pill <?=$statusFilter===''?'green':''?>" href="<?=url('admin',['tab'=>'contact'])?>">همه</a>
+        <?php foreach ($statusLabels as $k => $v): ?>
+          <a class="pill <?=$statusFilter===$k?'green':''?>" href="<?=url('admin',['tab'=>'contact','status'=>$k])?>"><?=h($v)?></a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php if (!$rows): ?>
+      <div class="card empty">پیامی ثبت نشده است.</div>
+    <?php else: foreach ($rows as $m): ?>
+      <div class="card" style="padding:16px;margin-bottom:12px">
+        <div class="flex between items-center" style="gap:10px;flex-wrap:wrap">
+          <div class="grow">
+            <strong><?=h($m['subject'])?></strong>
+            <small class="muted"> · <?=h($m['name'])?><?=!empty($m['email'])?' · <span dir="ltr">'.h($m['email']).'</span>':''?><?=!empty($m['phone'])?' · <span dir="ltr">'.h($m['phone']).'</span>':''?><?=!empty($m['user_id'])?' · <a class="check" href="'.url('profile/'.$m['user_id']).'">پروفایل کاربر</a>':''?></small>
+            <div class="muted" style="font-size:11px"><?=ago($m['created_at'])?></div>
+          </div>
+          <span class="pill <?=$m['status']==='new'?'amber':($m['status']==='answered'?'green':'rose')?>"><?=h($statusLabels[$m['status']] ?? $m['status'])?></span>
+        </div>
+        <p class="rich mt" style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px"><?=nl2br(h($m['body']))?></p>
+        <form method="post" class="tip-meta mt">
+          <input type="hidden" name="csrf" value="<?=csrf()?>">
+          <input type="hidden" name="action" value="contact_status">
+          <input type="hidden" name="contact_id" value="<?=$m['id']?>">
+          <?php if ($m['status'] !== 'answered'): ?><button class="btn btn-primary btn-sm" name="op" value="answered">✔ پاسخ داده شد</button><?php endif; ?>
+          <?php if ($m['status'] !== 'closed'): ?><button class="btn btn-secondary btn-sm" name="op" value="closed">بستن</button><?php else: ?><button class="btn btn-secondary btn-sm" name="op" value="reopen">باز کردن مجدد</button><?php endif; ?>
+          <button class="btn btn-danger btn-sm" name="op" value="delete" onclick="return confirm('این پیام حذف شود؟')">حذف</button>
+        </form>
+      </div>
+    <?php endforeach; endif;
+}
+
 /* ---------------- SETTINGS ---------------- */
 elseif ($tab === 'settings') {
     ?>
@@ -456,8 +509,16 @@ elseif ($tab === 'settings') {
         <div class="form-group"><label class="field-label">زیرتیتر صفحه اصلی</label><textarea class="field" name="hero_subtitle" rows="2"><?=h($s['hero_subtitle'] ?? '')?></textarea></div>
         <div class="grid grid-3">
           <div class="form-group"><label class="field-label">قوانین استفاده</label><textarea class="field" name="terms_text" rows="5"><?=h($s['terms_text'] ?? '')?></textarea></div>
+          <div class="form-group"><label class="field-label">حریم خصوصی</label><textarea class="field" name="privacy_text" rows="5"><?=h($s['privacy_text'] ?? '')?></textarea></div>
           <div class="form-group"><label class="field-label">درباره ما</label><textarea class="field" name="about_text" rows="5"><?=h($s['about_text'] ?? '')?></textarea></div>
-          <div class="form-group"><label class="field-label">تماس با ما</label><textarea class="field" name="contact_text" rows="5"><?=h($s['contact_text'] ?? '')?></textarea></div>
+        </div>
+        <div class="form-group"><label class="field-label">متن اضافی تماس با ما (بالای اطلاعات تماس)</label><textarea class="field" name="contact_text" rows="3"><?=h($s['contact_text'] ?? '')?></textarea></div>
+        <div class="grid grid-3">
+          <div class="form-group"><label class="field-label">ایمیل پشتیبانی</label><input class="field" dir="ltr" name="contact_email" value="<?=h($s['contact_email'] ?? '')?>" placeholder="support@example.com"></div>
+          <div class="form-group"><label class="field-label">تلفن پشتیبانی</label><input class="field" dir="ltr" name="contact_phone" value="<?=h($s['contact_phone'] ?? '')?>" placeholder="021-00000000"></div>
+          <div class="form-group"><label class="field-label">تلگرام</label><input class="field" dir="ltr" name="contact_telegram" value="<?=h($s['contact_telegram'] ?? '')?>" placeholder="@bordkhan"></div>
+          <div class="form-group"><label class="field-label">اینستاگرام</label><input class="field" dir="ltr" name="contact_instagram" value="<?=h($s['contact_instagram'] ?? '')?>" placeholder="@bordkhan"></div>
+          <div class="form-group"><label class="field-label">آدرس</label><input class="field" name="contact_address" value="<?=h($s['contact_address'] ?? '')?>"></div>
         </div>
       </div>
 

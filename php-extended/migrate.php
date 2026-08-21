@@ -28,6 +28,7 @@ $columns = [
     ['users', 'address', 'TEXT NULL'], ['users', 'postal_code', 'VARCHAR(20) NULL'],
     ['users', 'landline', 'VARCHAR(30) NULL'], ['users', 'mobile', 'VARCHAR(30) NULL'],
     ['users', 'city', 'VARCHAR(100) NULL'], ['users', 'support_group', 'VARCHAR(80) NULL'],
+    ['users', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0'],
     ['board_orders', 'full_name', 'VARCHAR(160) NULL'], ['board_orders', 'phone', 'VARCHAR(30) NULL'],
     ['board_orders', 'address', 'TEXT NULL'], ['board_orders', 'city', 'VARCHAR(100) NULL'],
     ['board_orders', 'postal_code', 'VARCHAR(20) NULL'], ['board_orders', 'carrier', 'VARCHAR(40) NULL'],
@@ -44,6 +45,11 @@ $columns = [
     ['settings', 'z2c_bank_name', 'VARCHAR(120) NULL'], ['settings', 'z2c_account_name', 'VARCHAR(160) NULL'],
     ['settings', 'z2c_card_number', 'VARCHAR(40) NULL'],
     ['settings', 'actionbar_json', 'TEXT NULL'],
+    ['settings', 'privacy_text', 'TEXT NULL'],
+    ['settings', 'contact_email', 'VARCHAR(190) NULL'], ['settings', 'contact_phone', 'VARCHAR(40) NULL'],
+    ['settings', 'contact_telegram', 'VARCHAR(190) NULL'], ['settings', 'contact_instagram', 'VARCHAR(190) NULL'],
+    ['settings', 'contact_address', 'VARCHAR(300) NULL'],
+    ['bk_gateway_payments', 'order_id', 'VARCHAR(190) NULL'],
 ];
 foreach ($columns as [$table, $column, $definition]) bk_add_col($pdo, $table, $column, $definition);
 
@@ -64,10 +70,20 @@ $tables = [
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_ticket_messages_ticket(ticket_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    'contact_messages' => "CREATE TABLE contact_messages (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NULL,
+        name VARCHAR(160) NOT NULL, email VARCHAR(190) NULL, phone VARCHAR(30) NULL,
+        subject VARCHAR(255) NOT NULL, body TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'new',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_contact_status(status), INDEX idx_contact_user(user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     'bk_gateway_payments' => "CREATE TABLE bk_gateway_payments (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL,
         amount BIGINT NOT NULL, gateway VARCHAR(30) NOT NULL, authority VARCHAR(190) NULL,
-        reference VARCHAR(190) NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        order_id VARCHAR(190) NULL, reference VARCHAR(190) NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, verified_at DATETIME NULL,
         UNIQUE KEY uq_gateway_authority(gateway, authority), INDEX idx_gateway_user_status(user_id,status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
@@ -75,4 +91,4 @@ $tables = [
 foreach ($tables as $name => $ddl) if (!bk_table($pdo, $name)) $pdo->exec($ddl);
 
 header('Content-Type: text/html; charset=utf-8');
-echo '<div dir="rtl" style="font:16px Tahoma;max-width:700px;margin:40px auto"><h2>مهاجرت PHP بردخان انجام شد</h2><p>ستون‌های آدرس/ارسال، تنظیمات درگاه، پرداخت‌ها، تیکت‌ها و گروه پشتیبانی آماده شدند.</p><b>این فایل را حذف یا محدود کنید.</b></div>';
+echo '<div dir="rtl" style="font:16px Tahoma;max-width:700px;margin:40px auto"><h2>مهاجرت PHP بردخان انجام شد</h2><p>ستون‌های آدرس/ارسال، تنظیمات درگاه، پرداخت‌ها، تیکت‌ها، پیام‌های تماس، متن حریم خصوصی و اطلاعات تماس آماده شدند.</p><b>این فایل را حذف یا محدود کنید.</b></div>';

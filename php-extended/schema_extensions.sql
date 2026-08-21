@@ -7,7 +7,8 @@ ALTER TABLE users
   ADD COLUMN landline VARCHAR(30) NULL,
   ADD COLUMN mobile VARCHAR(30) NULL,
   ADD COLUMN city VARCHAR(100) NULL,
-  ADD COLUMN support_group VARCHAR(80) NULL;
+  ADD COLUMN support_group VARCHAR(80) NULL,
+  ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0;
 
 ALTER TABLE board_orders
   ADD COLUMN full_name VARCHAR(160) NULL,
@@ -37,7 +38,13 @@ ALTER TABLE settings
   ADD COLUMN z2c_bank_name VARCHAR(120) NULL,
   ADD COLUMN z2c_account_name VARCHAR(160) NULL,
   ADD COLUMN z2c_card_number VARCHAR(40) NULL,
-  ADD COLUMN actionbar_json TEXT NULL;
+  ADD COLUMN actionbar_json TEXT NULL,
+  ADD COLUMN privacy_text TEXT NULL,
+  ADD COLUMN contact_email VARCHAR(190) NULL,
+  ADD COLUMN contact_phone VARCHAR(40) NULL,
+  ADD COLUMN contact_telegram VARCHAR(190) NULL,
+  ADD COLUMN contact_instagram VARCHAR(190) NULL,
+  ADD COLUMN contact_address VARCHAR(300) NULL;
 
 CREATE TABLE IF NOT EXISTS tickets (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -67,12 +74,28 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
   INDEX idx_ticket_messages_ticket (ticket_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NULL,
+  name VARCHAR(160) NOT NULL,
+  email VARCHAR(190) NULL,
+  phone VARCHAR(30) NULL,
+  subject VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'new',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_contact_status (status),
+  INDEX idx_contact_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS bk_gateway_payments (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id INT UNSIGNED NOT NULL,
   amount BIGINT NOT NULL,
   gateway VARCHAR(30) NOT NULL,
   authority VARCHAR(190) NULL,
+  order_id VARCHAR(190) NULL,
   reference VARCHAR(190) NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

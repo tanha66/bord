@@ -88,11 +88,12 @@ function bk_gateway_request(string $gateway, int $amountToman, string $callback,
     }
     if ($gateway === 'idipay') {
         if ($key === '') return ['error'=>'API Key آیدیپی در تنظیمات وارد نشده است'];
+        $orderId = 'BK-' . date('YmdHis') . '-' . random_int(100,999);
         $r = bk_http_json('https://api.idpay.ir/v1.1/payment', [
-            'order_id' => 'BK-' . date('YmdHis') . '-' . random_int(100,999), 'amount' => $amountRial,
+            'order_id' => $orderId, 'amount' => $amountRial,
             'callback' => $callback, 'desc' => $description, 'phone' => $mobile,
         ], ['X-API-KEY: ' . $key, 'X-SANDBOX: ' . ($sandbox ? '1' : '0')]);
-        if (!empty($r['id']) && !empty($r['link'])) return ['authority'=>$r['id'], 'url'=>$r['link']];
+        if (!empty($r['id']) && !empty($r['link'])) return ['authority'=>$r['id'], 'url'=>$r['link'], 'order_id'=>$orderId];
         return ['error' => $r['error_message'] ?? $r['message'] ?? 'خطا در درخواست آیدیپی', 'response'=>$r];
     }
     if ($gateway === 'zibal') {
@@ -105,7 +106,7 @@ function bk_gateway_request(string $gateway, int $amountToman, string $callback,
     }
     return ['error' => 'درگاه انتخاب‌شده پشتیبانی نمی‌شود'];
 }
-function bk_gateway_verify(string $gateway, string $authority, int $amountToman): array {
+function bk_gateway_verify(string $gateway, string $authority, int $amountToman, string $orderId = ''): array {
     $merchant = (string)bk_setting('gateway_merchant_id', ''); $key = (string)bk_setting('gateway_api_key', $merchant); $rial = $amountToman * 10;
     if ($gateway === 'zarinpal') {
         $base = ((int)bk_setting('gateway_sandbox',1) === 1) ? 'https://sandbox.zarinpal.com/pg/v4/payment' : 'https://payment.zarinpal.com/pg/v4/payment';
@@ -117,7 +118,7 @@ function bk_gateway_verify(string $gateway, string $authority, int $amountToman)
         return (($r['result'] ?? -1) === 100) ? ['ok'=>true,'reference'=>(string)($r['refNumber'] ?? $authority)] : ['ok'=>false,'error'=>$r['message'] ?? 'تأیید زیبال ناموفق بود'];
     }
     if ($gateway === 'idipay') {
-        $r = bk_http_json('https://api.idpay.ir/v1.1/payment/verify', ['id'=>$authority,'order_id'=>$_GET['order_id'] ?? ''], ['X-API-KEY: '.$key,'X-SANDBOX: '.((int)bk_setting('gateway_sandbox',1)===1?'1':'0')]);
+        $r = bk_http_json('https://api.idpay.ir/v1.1/payment/verify', ['id'=>$authority,'order_id'=>$orderId], ['X-API-KEY: '.$key,'X-SANDBOX: '.((int)bk_setting('gateway_sandbox',1)===1?'1':'0')]);
         return (($r['status'] ?? 0) === 100) ? ['ok'=>true,'reference'=>(string)($r['settlement']['id'] ?? $authority)] : ['ok'=>false,'error'=>$r['error_message'] ?? 'تأیید آیدیپی ناموفق بود'];
     }
     return ['ok'=>false,'error'=>'درگاه نامعتبر'];
@@ -150,7 +151,7 @@ function bk_extended_action(string $action): never {
         $callback = SITE_URL . '/wallet-plus?verify=1';
         $r = bk_gateway_request($gateway,$amount,$callback,'شارژ کیف پول بردخان',(string)($u['mobile'] ?? $u['phone']));
         if (!empty($r['error'])) { if (!bk_ajax()) { $GLOBALS['bk_error']=$r['error']; bk_back('wallet-plus'); } bk_json(['ok'=>false,'error'=>$r['error']],502); }
-        db()->prepare('INSERT INTO bk_gateway_payments(user_id,amount,gateway,authority) VALUES(?,?,?,?)')->execute([$u['id'],$amount,$gateway,$r['authority']]);
+        db()->prepare('INSERT INTO bk_gateway_payments(user_id,amount,gateway,authority,order_id) VALUES(?,?,?,?,?)')->execute([$u['id'],$amount,$gateway,$r['authority'],$r['order_id'] ?? null]);
         if (!bk_ajax()) { header('Location: '.$r['url']); exit; }
         bk_json(['ok'=>true,'url'=>$r['url'],'authority'=>$r['authority']]);
     }
@@ -189,8 +190,14 @@ function bk_extended_action(string $action): never {
 function bk_render_wallet_plus(): never {
     $u=bk_login();
     if (isset($_GET['verify'], $_GET['Authority'])) {
-        $q=db()->prepare("SELECT * FROM bk_gateway_payments WHERE user_id=? AND authority=? AND status='pending'");$q->execute([$u['id'],$_GET['Authority']]);$p=$q->fetch();
-        if($p){$v=bk_gateway_verify($p['gateway'],(string)$p['authority'],(int)$p['amount']);if($v['ok']){db()->beginTransaction();db()->prepare("UPDATE users SET balance=balance+? WHERE id=?")->execute([$p['amount'],$u['id']]);bk_tx($u['id'],(int)$p['amount'],'charge','شارژ درگاه '.$p['gateway'],'confirmed',['method'=>'gateway','gateway'=>$p['gateway'],'reference'=>$v['reference']]);db()->prepare("UPDATE bk_gateway_payments SET status='confirmed',reference=?,verified_at=NOW() WHERE id=?")->execute([$v['reference'],$p['id']]);db()->commit();$message='پرداخت تأیید و موجودی شارژ شد.';}else{$message='تأیید پرداخت ناموفق بود: '.$v['error'];}}
+        $pdo=db();
+        $pdo->beginTransaction();
+        try {
+            $q=$pdo->prepare("SELECT * FROM bk_gateway_payments WHERE user_id=? AND authority=? AND status='pending' FOR UPDATE");
+            $q->execute([$u['id'],$_GET['Authority']]);$p=$q->fetch();
+            if($p){$v=bk_gateway_verify($p['gateway'],(string)$p['authority'],(int)$p['amount'],(string)($p['order_id'] ?? ''));if($v['ok']){$pdo->prepare("UPDATE users SET balance=balance+? WHERE id=?")->execute([$p['amount'],$u['id']]);bk_tx($u['id'],(int)$p['amount'],'charge','شارژ درگاه '.$p['gateway'],'confirmed',['method'=>'gateway','gateway'=>$p['gateway'],'reference'=>$v['reference']]);$pdo->prepare("UPDATE bk_gateway_payments SET status='confirmed',reference=?,verified_at=NOW() WHERE id=?")->execute([$v['reference'],$p['id']]);$message='پرداخت تأیید و موجودی شارژ شد.';}else{$pdo->prepare("UPDATE bk_gateway_payments SET status='failed' WHERE id=?")->execute([$p['id']]);$message='تأیید پرداخت ناموفق بود: '.$v['error'];}}
+            $pdo->commit();
+        } catch (Throwable $e) { if($pdo->inTransaction())$pdo->rollBack(); $message='خطا در تأیید پرداخت: '.$e->getMessage(); }
     }
     $s = ['type'=>bk_setting('gateway_type','zarinpal'),'enabled'=>(int)bk_setting('gateway_enabled',0),'min'=>(int)bk_setting('gateway_min_charge',100000),'max'=>(int)bk_setting('gateway_max_charge',50000000),'bank'=>bk_setting('z2c_bank_name',''),'owner'=>bk_setting('z2c_account_name',''),'card'=>bk_setting('z2c_card_number','')];
     header_html('شارژ کیف پول');

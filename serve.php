@@ -3,8 +3,8 @@
  * Media proxy: serves images/videos only for users who have unlocked the tip.
  * Blocks direct hotlinks and returns 403 if not authorized. Also applies watermark for paid/like content.
  */
-require __DIR__ . '/config.php';
-session_start();
+require_once __DIR__ . '/config.php';
+if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 
 $type = $_GET['t'] ?? '';
 $id   = (int)($_GET['id'] ?? 0);
