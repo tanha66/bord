@@ -40,6 +40,7 @@ ALTER TABLE settings
   ADD COLUMN z2c_card_number VARCHAR(40) NULL,
   ADD COLUMN actionbar_json TEXT NULL,
   ADD COLUMN privacy_text TEXT NULL,
+  ADD COLUMN contact_form_enabled TINYINT(1) NOT NULL DEFAULT 0,
   ADD COLUMN contact_email VARCHAR(190) NULL,
   ADD COLUMN contact_phone VARCHAR(40) NULL,
   ADD COLUMN contact_telegram VARCHAR(190) NULL,

@@ -459,6 +459,9 @@ elseif ($tab === 'contact') {
       <h1 style="font-size:20px">📨 پیام‌های تماس با ما</h1>
       <p>پیام‌هایی که از صفحه «تماس با ما» ثبت شده‌اند.</p>
     </div>
+    <?php if (empty($s['contact_form_enabled'])): ?>
+      <div class="notice" style="margin-bottom:14px">⚠️ فرم پیام «تماس با ما» در حال حاضر <b>غیرفعال</b> است؛ کاربران پیام جدیدی ثبت نمی‌کنند. برای فعال‌سازی به <a class="check" href="<?=url('admin',['tab'=>'settings'])?>">تنظیمات سایت</a> بروید.</div>
+    <?php endif; ?>
     <div class="flex between items-center mb">
       <div class="tip-meta">
         <a class="pill <?=$statusFilter===''?'green':''?>" href="<?=url('admin',['tab'=>'contact'])?>">همه</a>
@@ -513,6 +516,14 @@ elseif ($tab === 'settings') {
           <div class="form-group"><label class="field-label">درباره ما</label><textarea class="field" name="about_text" rows="5"><?=h($s['about_text'] ?? '')?></textarea></div>
         </div>
         <div class="form-group"><label class="field-label">متن اضافی تماس با ما (بالای اطلاعات تماس)</label><textarea class="field" name="contact_text" rows="3"><?=h($s['contact_text'] ?? '')?></textarea></div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label class="field-label" style="margin:0">فرم پیام «تماس با ما»</label>
+          <select class="field" name="contact_form_enabled" style="width:auto">
+            <option value="0" <?=empty($s['contact_form_enabled'])?'selected':''?>>غیرفعال (پیش‌فرض)</option>
+            <option value="1" <?=!empty($s['contact_form_enabled'])?'selected':''?>>فعال</option>
+          </select>
+          <small class="muted" style="font-size:11px">وقتی غیرفعال است، فرم ثبت پیام نمایش داده نمی‌شود و کاربران به تیکت پشتیبانی هدایت می‌شوند؛ پیام‌های قبلی و تب «پیام‌های تماس» محفوظ می‌مانند.</small>
+        </div>
         <div class="grid grid-3">
           <div class="form-group"><label class="field-label">ایمیل پشتیبانی</label><input class="field" dir="ltr" name="contact_email" value="<?=h($s['contact_email'] ?? '')?>" placeholder="support@example.com"></div>
           <div class="form-group"><label class="field-label">تلفن پشتیبانی</label><input class="field" dir="ltr" name="contact_phone" value="<?=h($s['contact_phone'] ?? '')?>" placeholder="021-00000000"></div>

@@ -46,6 +46,7 @@ $columns = [
     ['settings', 'z2c_card_number', 'VARCHAR(40) NULL'],
     ['settings', 'actionbar_json', 'TEXT NULL'],
     ['settings', 'privacy_text', 'TEXT NULL'],
+    ['settings', 'contact_form_enabled', 'TINYINT(1) NOT NULL DEFAULT 0'],
     ['settings', 'contact_email', 'VARCHAR(190) NULL'], ['settings', 'contact_phone', 'VARCHAR(40) NULL'],
     ['settings', 'contact_telegram', 'VARCHAR(190) NULL'], ['settings', 'contact_instagram', 'VARCHAR(190) NULL'],
     ['settings', 'contact_address', 'VARCHAR(300) NULL'],

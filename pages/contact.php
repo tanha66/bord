@@ -4,10 +4,12 @@ $s = settings();
 $u = current_user();
 $error = '';
 $done  = false;
+$contactEnabled = (int)($s['contact_form_enabled'] ?? 0) === 1;
 
-/* ---------- form submit ---------- */
+/* ---------- form submit (فقط وقتی ماژول فعال است) ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'contact_send') {
     if (function_exists('check_csrf')) check_csrf();
+    if (!$contactEnabled) { flash('بخش پیام‌ها موقتاً غیرفعال است؛ از تیکت پشتیبانی استفاده کنید.', 'error'); redirect_to('tickets'); }
     if (!empty($_POST['website'])) { http_response_code(403); exit; } // honeypot ضد ربات
     $name    = function_exists('clean_text') ? clean_text($_POST['name'] ?? '') : trim(strip_tags($_POST['name'] ?? ''));
     $email   = trim($_POST['email'] ?? '');
@@ -58,7 +60,9 @@ header_html('تماس با ما');
   <div class="grid grid-2">
     <section class="card auth-card">
       <h3>📨 فرم تماس</h3>
-      <?php if (!$done): ?>
+      <?php if (!$contactEnabled): ?>
+        <div class="notice mt">بخش پیام‌ها در حال حاضر غیرفعال است. برای ارتباط با ما از <a class="check" href="<?=url('tickets')?>">تیکت پشتیبانی</a> استفاده کنید.</div>
+      <?php elseif (!$done): ?>
       <form method="post" class="mt">
         <input type="hidden" name="csrf" value="<?=function_exists('csrf') ? csrf() : ''?>">
         <input type="hidden" name="action" value="contact_send">
