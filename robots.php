@@ -1,16 +1,38 @@
 <?php
-require __DIR__ . '/config.php';
+require_once __DIR__ . '/config.php';
 header('Content-Type: text/plain; charset=utf-8');
-echo "User-agent: *\n";
-echo "Allow: /\n";
-echo "Disallow: /admin\n";
-echo "Disallow: /settings\n";
-echo "Disallow: /wallet\n";
-echo "Disallow: /my-tips\n";
-echo "Disallow: /bookmarks\n";
-echo "Disallow: /favorites\n";
-echo "Disallow: /notifications\n";
-echo "Disallow: /upload\n";
-echo "Disallow: /serve.php\n";
-echo "Disallow: /install.php\n";
-echo "Sitemap: " . rtrim(SITE_URL, '/') . "/sitemap.xml\n";
+$lines = [
+    'User-agent: *',
+    'Allow: /',
+    // صفحات خصوصی و فرم‌ها
+    'Disallow: /admin',
+    'Disallow: /settings',
+    'Disallow: /wallet',
+    'Disallow: /wallet-plus',
+    'Disallow: /profile',
+    'Disallow: /profile-edit',
+    'Disallow: /tickets',
+    'Disallow: /my-tips',
+    'Disallow: /my-boards',
+    'Disallow: /bookmarks',
+    'Disallow: /favorites',
+    'Disallow: /notifications',
+    'Disallow: /upload',
+    'Disallow: /seller-apply',
+    'Disallow: /login',
+    'Disallow: /register',
+    'Disallow: /verify',
+    'Disallow: /forgot',
+    // زیرساخت
+    'Disallow: /serve',
+    'Disallow: /cron-collect',
+    'Disallow: /serve.php',
+    'Disallow: /install.php',
+    'Disallow: /migrate.php',
+    'Disallow: /php-extended/',
+    'Disallow: /config.php',
+    'Disallow: /sql/',
+    '',
+    'Sitemap: ' . rtrim(SITE_URL, '/') . '/sitemap.xml',
+];
+echo implode("\n", $lines) . "\n";

@@ -1,0 +1,39 @@
+# ============================================================
+#  Bordkhan - Pretty URLs (front controller: index.php?r=...)
+# ============================================================
+
+# No directory listings
+Options -Indexes
+
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Block direct web access to raw SQL / sensitive files
+RewriteRule ^sql(/|$) - [F,L]
+RewriteRule \.(sql|md|ini|log)$ - [F,L]
+RewriteRule ^uploads/.*\.(php|phtml|php[0-9])$ - [F,L]
+
+# Serve real files and directories directly (css, images, uploads, ...)
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Route everything else to the front controller
+RewriteRule ^(.*)$ index.php?r=$1 [QSA,L]
+</IfModule>
+
+# Fallback when mod_rewrite is disabled on the host:
+# index.php reads REDIRECT_URL and routes the request itself.
+ErrorDocument 404 /index.php
+
+# Protect config.php (works on Apache 2.2 and 2.4)
+<FilesMatch "^(config\.php)$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# ---- AFTER INSTALLATION IS COMPLETE, uncomment to harden: ----
+# RewriteRule ^install\.php$ - [F,L]
+# RewriteRule ^php-extended/ - [F,L]

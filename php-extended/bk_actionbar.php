@@ -65,6 +65,7 @@ if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'bk_actionbar.php' || (($GLOBALS
     $pdo = db();
     $notice = '';
     if (($_POST['ab_action'] ?? '') === 'save') {
+        if (function_exists('check_csrf')) check_csrf();
         $labels = $_POST['label'] ?? []; $hrefs = $_POST['href'] ?? []; $icons = $_POST['icon'] ?? [];
         $primaries = $_POST['primary'] ?? []; $enabled = $_POST['enabled'] ?? []; $roles = $_POST['roles'] ?? [];
         $items = [];
@@ -88,7 +89,7 @@ if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'bk_actionbar.php' || (($GLOBALS
     $allRoles = ['guest'=>'مهمان','user'=>'کاربر','seller'=>'فروشنده','support'=>'پشتیبانی','supervisor'=>'ناظر','admin'=>'مدیر'];
     header_html('نوار شناور');
     ?><main class="wrap page"><div class="page-title"><h1>مدیریت نوار شناور پایین صفحه</h1><p><?=h($notice ?: 'آیتم‌ها را کم/زیاد کنید. حداکثر ۸ آیتم روی نوار نمایش داده می‌شود.')?></p></div>
-    <form method="post"><input type="hidden" name="ab_action" value="save">
+    <form method="post"><input type="hidden" name="csrf" value="<?=function_exists('csrf')?csrf():''?>"><input type="hidden" name="ab_action" value="save">
     <div id="ab-rows">
     <?php foreach ($items as $i => $it): ?>
       <div class="card auth-card mt ab-row">

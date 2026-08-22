@@ -59,7 +59,15 @@ if ($act) {
         $verified = !empty($_POST['verified']) ? 1 : 0; $banned = !empty($_POST['is_banned']) ? 1 : 0;
         $sellerStatus = in_array(($_POST['seller_status'] ?? 'none'), ['none','pending','approved','rejected'], true) ? ($_POST['seller_status'] ?? 'none') : 'none';
         if ($sellerStatus === '' || $sellerStatus === null) $sellerStatus = 'none';
-        if (mb_strlen($name) < 2 || !preg_match('/^09\d{9}$/', $phone)) { $notice = 'نام و موبایل معتبر لازم است.'; }
+        $blocked = false;
+        if ($uid) {
+            $q = $pdo->prepare('SELECT role FROM users WHERE id=?'); $q->execute([$uid]); $target = $q->fetch();
+            if ($target && $target['role'] === 'superadmin' && $admin['role'] !== 'superadmin') { $notice = 'فقط سوپرادمین می‌تواند حساب سوپرادمین را تغییر دهد.'; $blocked = true; }
+            if ($target && $uid === (int)$admin['id'] && $role !== $admin['role']) { $notice = 'نمی‌توانید نقش خودتان را تغییر دهید.'; $blocked = true; }
+            if ($target && $uid === (int)$admin['id'] && $banned) { $notice = 'نمی‌توانید حساب خودتان را مسدود کنید.'; $blocked = true; }
+        }
+        if ($blocked) { /* skip */ }
+        elseif (mb_strlen($name) < 2 || !preg_match('/^09\d{9}$/', $phone)) { $notice = 'نام و موبایل معتبر لازم است.'; }
         else {
             if ($uid) {
                 $pdo->prepare('UPDATE users SET name=?,phone=?,role=?,verified=?,is_banned=?,seller_status=? WHERE id=?')
@@ -77,7 +85,7 @@ if ($act) {
             }
         }
     }
-    if ($act === 'user_del') { $uid=(int)$_POST['user_id']; if ($uid !== (int)$admin['id']) { $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$uid]); $notice='کاربر حذف شد.'; } else $notice='حساب خودتان را حذف نکنید.'; }
+    if ($act === 'user_del') { $uid=(int)$_POST['user_id']; if ($uid === (int)$admin['id']) { $notice='حساب خودتان را حذف نکنید.'; } else { $q=$pdo->prepare('SELECT role FROM users WHERE id=?');$q->execute([$uid]);$t=$q->fetch(); if ($t && $t['role']==='superadmin' && $admin['role']!=='superadmin') { $notice='فقط سوپرادمین می‌تواند حساب سوپرادمین را حذف کند.'; } elseif (bkx_col($pdo,'users','is_deleted')) { $pdo->prepare("UPDATE users SET is_deleted=1, phone=CONCAT('del-',id,'-',phone), email=LEFT(CONCAT('del-',id,'-',COALESCE(email,'')),190) WHERE id=?")->execute([$uid]); $notice='کاربر حذف شد (محتواهای او حفظ می‌شود).'; } else { $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$uid]); $notice='کاربر حذف شد.'; } } }
     if ($act === 'user_balance') {
         $uid=(int)$_POST['user_id']; $delta=(int)($_POST['delta']??0);
         if ($delta) { $pdo->prepare('UPDATE users SET balance=GREATEST(0,balance+?) WHERE id=?')->execute([$delta,$uid]);
