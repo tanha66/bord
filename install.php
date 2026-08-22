@@ -157,6 +157,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('tips', 'source_url', 'source_url VARCHAR(500) NULL');
                     $ensureColumn('tips', 'source_name', 'source_name VARCHAR(200) NULL');
 
+                    // 3.5) ماژول‌های تکمیلی: همه ستون‌ها و جدول‌ها (تیکت، پیام تماس، درگاه و…)
+                    // با همان نصب اصلی اعمال می‌شوند — نیازی به اجرای جداگانهٔ migrate.php نیست.
+                    $modulesReport = ['report' => [], 'added' => 0, 'skipped' => 0, 'errors' => 0];
+                    $modulesErrorList = [];
+                    if (is_file(__DIR__ . '/php-extended/schema_build.php')) {
+                        require_once __DIR__ . '/php-extended/schema_build.php';
+                        $modulesReport['report'] = bk_apply_schema($pdo);
+                        [$modulesReport['added'], $modulesReport['skipped'], $modulesReport['errors']] = bk_schema_summary($modulesReport['report']);
+                        foreach ($modulesReport['report'] as $r) {
+                            if ($r[1] === 'error') $modulesErrorList[] = $r[0] . ': ' . $r[2];
+                        }
+                    }
+
                     // 4) Admin
                     $hash = password_hash($adminPass, PASSWORD_DEFAULT);
                     $pdo->prepare("INSERT INTO users (phone,email,password_hash,name,role,points,balance,referral_code,phone_verified,verified) VALUES (?,?,?,?,'superadmin',5200,0,'ADMIN001',1,1) ON DUPLICATE KEY UPDATE name=VALUES(name), password_hash=VALUES(password_hash), role='superadmin', phone_verified=1, verified=1")
@@ -263,6 +276,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
 
                     $_SESSION['done'] = [
                         'url' => $siteUrl, 'phone' => $adminPhone, 'pass' => $adminPass,
+                        'modules' => [
+                            'added' => $modulesReport['added'],
+                            'skipped' => $modulesReport['skipped'],
+                            'errors' => $modulesReport['errors'],
+                            'errorList' => array_slice($modulesErrorList, 0, 10),
+                        ],
                     ];
                     $step = 3;
                 } catch (Throwable $e) {
@@ -322,8 +341,12 @@ button:hover{background:#056d49}
       <b>آدرس ورود مدیریت:</b>
       <div class="loginbox"><?=esc($_SESSION['done']['url'] . '/login')?></div>
       <b>شماره موبایل:</b> <span dir="ltr"><?=esc($_SESSION['done']['phone'])?></span><br>
-      <b>رمز عبور:</b> <span dir="ltr"><?=esc($_SESSION['done']['pass'])?></span>
+      <b>رمز عبور:</b> <span dir="ltr"><?=esc($_SESSION['done']['pass'])?></span><br><br>
+      <b>ماژول‌های تکمیلی (تیکت پشتیبانی، پیام تماس، درگاه پرداخت، کیف پول):</b> <?=(int)$_SESSION['done']['modules']['added']?> مورد نصب شد<?=(int)$_SESSION['done']['modules']['skipped'] > 0 ? ' · ' . (int)$_SESSION['done']['modules']['skipped'] . ' مورد از قبل موجود بود' : ''?> ✓
     </div>
+    <?php if (!empty($_SESSION['done']['modules']['errors'])): ?>
+    <div class="warn">⚠️ <?=(int)$_SESSION['done']['modules']['errors']?> مورد از ماژول‌ها اعمال نشد:<br><span dir="ltr"><?=esc(implode('<br>', $_SESSION['done']['modules']['errorList']))?></span><br>معمولاً به دلیل محدودیت مجوز کاربر دیتابیس (ALTER/CREATE) است؛ بعد از رفع، می‌توانید <b>php-extended/migrate.php?key=INSTALL_KEY</b> را یک‌بار اجرا کنید.</div>
+    <?php endif; ?>
     <div class="warn">⚠️ همین حالا فایل <b>install.php</b> را حذف یا تغییرنام دهید و سپس رمز مدیر را از پنل تغییر دهید.</div>
     <a href="<?=esc($_SESSION['done']['url'])?>/" style="text-decoration:none"><button type="button">🚀 ورود به سایت</button></a>
 

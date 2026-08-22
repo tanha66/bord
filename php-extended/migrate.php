@@ -58,84 +58,13 @@ try {
     bk_migrate_page('اتصال به دیتابیس برقرار نشد', 'خطا: <b>' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</b><br>مقادیر DB_HOST / DB_NAME / DB_USER / DB_PASS را در فایل config.php بررسی کنید و مطمئن شوید دیتابیس و کاربر آن در هاست ساخته شده‌اند.', 500, false);
 }
 
-/* ---------- ابزارهای کمکی ---------- */
-function bk_col($pdo, string $table, string $column): bool {
-    $q = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
-    $q->execute([$table, $column]);
-    return (bool)$q->fetchColumn();
-}
-function bk_table($pdo, string $table): bool {
-    $q = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
-    $q->execute([$table]);
-    return (bool)$q->fetchColumn();
-}
+/* ---------- تعریف مشترک اسکیمای ماژول‌ها ---------- */
+/* ستون‌ها و جدول‌ها یک‌جا در schema_build.php نگهداری می‌شوند و
+   در install.php (نصب تازه) نیز همین فایل اعمال می‌شود. */
+require_once __DIR__ . '/schema_build.php';
 
-/* ---------- تعریف مهاجرت‌ها ---------- */
-$columns = [
-    ['users', 'address', 'TEXT NULL'], ['users', 'postal_code', 'VARCHAR(20) NULL'],
-    ['users', 'landline', 'VARCHAR(30) NULL'], ['users', 'mobile', 'VARCHAR(30) NULL'],
-    ['users', 'city', 'VARCHAR(100) NULL'], ['users', 'support_group', 'VARCHAR(80) NULL'],
-    ['users', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0'],
-    ['board_orders', 'full_name', 'VARCHAR(160) NULL'], ['board_orders', 'phone', 'VARCHAR(30) NULL'],
-    ['board_orders', 'address', 'TEXT NULL'], ['board_orders', 'city', 'VARCHAR(100) NULL'],
-    ['board_orders', 'postal_code', 'VARCHAR(20) NULL'], ['board_orders', 'carrier', 'VARCHAR(40) NULL'],
-    ['wallet_transactions', 'status', "VARCHAR(20) NOT NULL DEFAULT 'confirmed'"],
-    ['wallet_transactions', 'method', 'VARCHAR(30) NULL'], ['wallet_transactions', 'gateway', 'VARCHAR(40) NULL'],
-    ['wallet_transactions', 'receipt_url', 'VARCHAR(500) NULL'], ['wallet_transactions', 'bank_name', 'VARCHAR(120) NULL'],
-    ['wallet_transactions', 'card_number', 'VARCHAR(40) NULL'], ['wallet_transactions', 'reference', 'VARCHAR(160) NULL'],
-    ['settings', 'gateway_enabled', 'TINYINT(1) NOT NULL DEFAULT 0'],
-    ['settings', 'gateway_type', "VARCHAR(20) NOT NULL DEFAULT 'zarinpal'"],
-    ['settings', 'gateway_merchant_id', 'VARCHAR(190) NULL'], ['settings', 'gateway_api_key', 'VARCHAR(255) NULL'],
-    ['settings', 'gateway_sandbox', 'TINYINT(1) NOT NULL DEFAULT 1'],
-    ['settings', 'gateway_min_charge', 'BIGINT NOT NULL DEFAULT 100000'],
-    ['settings', 'gateway_max_charge', 'BIGINT NOT NULL DEFAULT 50000000'],
-    ['settings', 'z2c_bank_name', 'VARCHAR(120) NULL'], ['settings', 'z2c_account_name', 'VARCHAR(160) NULL'],
-    ['settings', 'z2c_card_number', 'VARCHAR(40) NULL'],
-    ['settings', 'actionbar_json', 'TEXT NULL'],
-    ['settings', 'privacy_text', 'TEXT NULL'],
-    ['settings', 'contact_form_enabled', 'TINYINT(1) NOT NULL DEFAULT 0'],
-    ['settings', 'contact_email', 'VARCHAR(190) NULL'], ['settings', 'contact_phone', 'VARCHAR(40) NULL'],
-    ['settings', 'contact_telegram', 'VARCHAR(190) NULL'], ['settings', 'contact_instagram', 'VARCHAR(190) NULL'],
-    ['settings', 'contact_address', 'VARCHAR(300) NULL'],
-    ['bk_gateway_payments', 'order_id', 'VARCHAR(190) NULL'],
-];
-
-$tables = [
-    'tickets' => "CREATE TABLE tickets (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL,
-        destination VARCHAR(20) NOT NULL DEFAULT 'support', seller_id INT UNSIGNED NULL,
-        order_id INT UNSIGNED NULL, category VARCHAR(80) NOT NULL DEFAULT 'عمومی',
-        priority VARCHAR(20) NOT NULL DEFAULT 'normal', title VARCHAR(255) NOT NULL,
-        body TEXT NOT NULL, assigned_to INT UNSIGNED NULL, status VARCHAR(20) NOT NULL DEFAULT 'open',
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_tickets_user(user_id), INDEX idx_tickets_status(status), INDEX idx_tickets_assigned(assigned_to)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-    'ticket_messages' => "CREATE TABLE ticket_messages (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ticket_id INT UNSIGNED NOT NULL,
-        sender_id INT UNSIGNED NOT NULL, body TEXT NOT NULL,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_ticket_messages_ticket(ticket_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-    'contact_messages' => "CREATE TABLE contact_messages (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NULL,
-        name VARCHAR(160) NOT NULL, email VARCHAR(190) NULL, phone VARCHAR(30) NULL,
-        subject VARCHAR(255) NOT NULL, body TEXT NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'new',
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_contact_status(status), INDEX idx_contact_user(user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-    'bk_gateway_payments' => "CREATE TABLE bk_gateway_payments (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL,
-        amount BIGINT NOT NULL, gateway VARCHAR(30) NOT NULL, authority VARCHAR(190) NULL,
-        order_id VARCHAR(190) NULL, reference VARCHAR(190) NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, verified_at DATETIME NULL,
-        UNIQUE KEY uq_gateway_authority(gateway, authority), INDEX idx_gateway_user_status(user_id,status)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-];
-
+$columns = bk_schema_columns();
+$tables  = bk_schema_tables();
 $requiredTables = ['users', 'settings', 'tips', 'boards', 'board_orders', 'wallet_transactions'];
 
 /* ================= حالت عیب‌یابی ================= */
@@ -149,64 +78,38 @@ if ($diag) {
     $rows .= '<b>کلید نصب:</b> ' . ((string)INSTALL_KEY === 'CHANGE_THIS_INSTALL_KEY' ? '<b style="color:#b3261e">هنوز پیش‌فرض است — install.php را اجرا نکرده‌اید</b>' : '<b style="color:#0a7a4a">تنظیم شده ✓</b>') . '<br><br>';
     $rows .= '<b>جدول‌های پایه (ساخته‌شده توسط install.php):</b><br>';
     foreach ($requiredTables as $t) {
-        try { $exists = bk_table($pdo, $t); } catch (Throwable $e) { $exists = false; }
+        try { $exists = bk_table_exists($pdo, $t); } catch (Throwable $e) { $exists = false; }
         $rows .= '• ' . htmlspecialchars($t, ENT_QUOTES, 'UTF-8') . ': ' . ($exists ? '<b style="color:#0a7a4a">موجود ✓</b>' : '<b style="color:#b3261e">ناموجود ✗</b>') . '<br>';
     }
     $rows .= '<br><b>جدول‌های این ماژول:</b><br>';
     foreach (array_keys($tables) as $t) {
-        try { $exists = bk_table($pdo, $t); } catch (Throwable $e) { $exists = false; }
+        try { $exists = bk_table_exists($pdo, $t); } catch (Throwable $e) { $exists = false; }
         $rows .= '• ' . htmlspecialchars($t, ENT_QUOTES, 'UTF-8') . ': ' . ($exists ? '<b style="color:#0a7a4a">موجود ✓</b>' : 'ناموجود') . '<br>';
     }
     $missingCols = 0;
     foreach ($columns as [$t, $c, $d]) {
-        try { if (!bk_col($pdo, $t, $c)) $missingCols++; } catch (Throwable $e) {}
+        try { if (!bk_col_exists($pdo, $t, $c)) $missingCols++; } catch (Throwable $e) {}
     }
     $rows .= '<br><b>ستون‌های این ماژول:</b> ' . count($columns) . ' ستون بررسی شد — '
            . ($missingCols === 0 ? '<b style="color:#0a7a4a">همه موجودند ✓ (اگر جدول‌های پایه موجود بودند)</b>' : '<b>' . $missingCols . ' ستون هنوز اضافه نشده است</b>') . '<br>';
-    $rows .= '<br><b>نتیجه:</b> ' . (bk_table($pdo, 'users') && bk_table($pdo, 'settings') ? 'محیط آماده اجرای مهاجرت است؛ همین آدرس را بدون diag باز کنید.' : 'ابتدا <b>install.php</b> را اجرا کنید تا جدول‌های پایه ساخته شوند.') ;
+    $rows .= '<br><b>نتیجه:</b> ' . (bk_table_exists($pdo, 'users') && bk_table_exists($pdo, 'settings') ? 'محیط آماده اجرای مهاجرت است؛ همین آدرس را بدون diag باز کنید.' : 'ابتدا <b>install.php</b> را اجرا کنید تا جدول‌های پایه ساخته شوند.') ;
     bk_migrate_page('عیب‌یابی نصب بردخان', $rows, 200, true);
 }
 
 /* ================= پیش‌نیازها ================= */
 $missing = [];
 foreach ($requiredTables as $t) {
-    if (!bk_table($pdo, $t)) $missing[] = $t;
+    if (!bk_table_exists($pdo, $t)) $missing[] = $t;
 }
 if ($missing) {
     bk_migrate_page('جدول‌های پایه وجود ندارند', 'این جدول‌ها پیدا نشدند: <b>' . htmlspecialchars(implode('، ', $missing), ENT_QUOTES, 'UTF-8') . '</b><br><br>یعنی <b>install.php</b> هنوز با موفقیت اجرا نشده است.<br>۱) اول <span dir="ltr">install.php</span> را باز کنید و مراحل نصب را کامل کنید.<br>۲) بعد دوباره همین صفحه را اجرا کنید.<br><br>اگر install.php را اجرا کرده‌اید اما این جدول‌ها نیستند، نام دیتابیس در config.php اشتباه است (DB_NAME).', 500, false);
 }
 
 /* ================= اجرای مهاجرت ================= */
-$report = [];
+$report = bk_apply_schema($pdo);
 $errors = [];
-
-foreach ($columns as [$table, $column, $definition]) {
-    $label = $table . '.' . $column;
-    try {
-        if (bk_col($pdo, $table, $column)) {
-            $report[] = [$label, 'skipped', 'از قبل موجود بود'];
-        } else {
-            $pdo->exec('ALTER TABLE `' . $table . '` ADD COLUMN `' . $column . '` ' . $definition);
-            $report[] = [$label, 'added', 'اضافه شد'];
-        }
-    } catch (Throwable $e) {
-        $report[] = [$label, 'error', $e->getMessage()];
-        $errors[] = $label . ': ' . $e->getMessage();
-    }
-}
-
-foreach ($tables as $name => $ddl) {
-    try {
-        if (bk_table($pdo, $name)) {
-            $report[] = [$name, 'skipped', 'جدول از قبل موجود بود'];
-        } else {
-            $pdo->exec($ddl);
-            $report[] = [$name, 'added', 'جدول ساخته شد'];
-        }
-    } catch (Throwable $e) {
-        $report[] = [$name, 'error', $e->getMessage()];
-        $errors[] = $name . ': ' . $e->getMessage();
-    }
+foreach ($report as $r) {
+    if ($r[1] === 'error') $errors[] = $r[0] . ': ' . $r[2];
 }
 
 /* ================= نتیجه ================= */
