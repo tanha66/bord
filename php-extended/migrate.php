@@ -62,6 +62,7 @@ try {
 /* ستون‌ها و جدول‌ها یک‌جا در schema_build.php نگهداری می‌شوند و
    در install.php (نصب تازه) نیز همین فایل اعمال می‌شود. */
 require_once __DIR__ . '/schema_build.php';
+require_once __DIR__ . '/seed_categories.php';
 
 $columns = bk_schema_columns();
 $tables  = bk_schema_tables();
@@ -112,6 +113,10 @@ foreach ($report as $r) {
     if ($r[1] === 'error') $errors[] = $r[0] . ': ' . $r[2];
 }
 
+/* ---------- تکمیل دسته‌بندی برندها (برای نصب‌های قدیمی) ---------- */
+$catReport = ['added' => 0, 'skipped' => 0];
+try { $catReport = bk_seed_categories($pdo); } catch (Throwable $e) { $errors[] = 'دسته‌بندی برندها: ' . $e->getMessage(); }
+
 /* ================= نتیجه ================= */
 $okCount = $skipCount = 0;
 foreach ($report as $r) { if ($r[1] === 'added') $okCount++; elseif ($r[1] === 'skipped') $skipCount++; }
@@ -119,7 +124,8 @@ foreach ($report as $r) { if ($r[1] === 'added') $okCount++; elseif ($r[1] === '
 $body = '';
 if (!$errors) {
     $body = '<b style="color:#0a7a4a">مهاجرت با موفقیت انجام شد.</b><br>'
-          . $okCount . ' مورد اضافه شد · ' . $skipCount . ' مورد از قبل موجود بود.<br><br>'
+          . $okCount . ' مورد اضافه شد · ' . $skipCount . ' مورد از قبل موجود بود.<br>'
+          . 'دسته‌بندی برندها: ' . (int)$catReport['added'] . ' برند/مدل جدید اضافه شد · ' . (int)$catReport['skipped'] . ' مورد از قبل موجود بود.<br><br>'
           . 'حالا: <b>این فایل (migrate.php) را از سرور حذف کنید.</b>';
 } else {
     $body = '<b style="color:#b3261e">' . count($errors) . ' خطا در حین مهاجرت رخ داد</b> (بقیه موارد با موفقیت انجام شد).<br><br>'

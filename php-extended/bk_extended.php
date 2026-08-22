@@ -48,7 +48,7 @@ function bk_upload_receipt(): ?string {
     $f = $_FILES['receipt'] ?? null;
     if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) return null;
     if ((int)$f['size'] > 5 * 1024 * 1024) return null;
-    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']);
+    $mime = file_mime($f['tmp_name']);
     $ext = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'][$mime] ?? null;
     if (!$ext) return null;
     if (!is_dir(UPLOAD_DIR . '/receipts')) mkdir(UPLOAD_DIR . '/receipts', 0755, true);

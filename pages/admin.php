@@ -279,12 +279,16 @@ elseif ($tab === 'users') {
       <input type="hidden" name="r" value="admin"><input type="hidden" name="tab" value="users">
       <input class="field" name="q" value="<?=h($q)?>" placeholder="جستجوی نام یا موبایل…">
     </form>
+    <p class="muted" style="font-size:11px;margin:0 0 10px">✏️ نام، موبایل، نقش و وضعیت هر کاربر را همین‌جا ویرایش کنید و با فیلد «± شارژ» موجودی کیف پول او را کم/زیاد کنید. برای ویرایش کامل‌تر (رمز عبور، آدرس و حذف) از <a class="check" href="<?=url('admin-users')?>">مدیریت پیشرفته کاربران</a> استفاده کنید.</p>
     <div class="card table-wrap">
       <table class="table">
-        <tr><th>کاربر</th><th>نقش</th><th>امتیاز</th><th>موجودی</th><th>وضعیت</th><th>ذخیره</th></tr>
+        <tr><th>کاربر (ویرایش)</th><th>نقش</th><th>امتیاز</th><th>موجودی / شارژ</th><th>وضعیت</th><th>ذخیره</th></tr>
         <?php foreach ($items as $x): ?>
         <tr>
-          <td><?=h($x['name'])?><br><small dir="ltr" class="muted"><?=h($x['phone'])?></small></td>
+          <td style="min-width:140px">
+            <input class="field" style="width:120px;margin-bottom:5px;font-size:12px;padding:6px" name="name" value="<?=h($x['name'])?>" placeholder="نام">
+            <input class="field" dir="ltr" style="width:120px;font-size:12px;padding:6px" name="phone" value="<?=h($x['phone'])?>" placeholder="موبایل">
+          </td>
           <td>
             <form method="post" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
               <input type="hidden" name="csrf" value="<?=csrf()?>">
@@ -297,7 +301,10 @@ elseif ($tab === 'users') {
               </select>
           </td>
           <td><?=fa($x['points'])?></td>
-          <td><?=money($x['balance'])?></td>
+          <td style="min-width:130px"><?=money($x['balance'])?><br>
+            <input class="field" style="width:100px;margin-top:5px;font-size:12px;padding:6px" type="number" name="delta" placeholder="± شارژ (تومان)">
+            <input class="field" style="width:100px;margin-top:4px;font-size:11px;padding:6px" name="note" placeholder="توضیح شارژ">
+          </td>
           <td>
               <label style="font-size:11px"><input type="checkbox" name="verified" value="1" <?=$x['verified']?'checked':''?>> تأیید</label>
               <label style="font-size:11px"><input type="checkbox" name="banned" value="1" <?=$x['is_banned']?'checked':''?>> مسدود</label>

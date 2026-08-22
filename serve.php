@@ -67,7 +67,7 @@ $path = '/uploads/'.basename($file);
 $pdo->prepare("INSERT INTO media_access(user_id,media_type,path,nonce,ip) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE created_at=created_at")
     ->execute([$userId, $type, $path, $nonce, $_SERVER['REMOTE_ADDR'] ?? '']);
 
-$mime = (new finfo(FILEINFO_MIME_TYPE))->file($full);
+$mime = file_mime($full);
 if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
   $size = filesize($full);
   header('Content-Type: '.$mime);

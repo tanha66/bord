@@ -193,82 +193,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $pdo->prepare("INSERT INTO settings (id,site_title,hero_title,hero_subtitle,meta_description,auto_collect_sources,auto_collect_queries,auto_collect_cron_key) VALUES (1,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE site_title=VALUES(site_title), meta_description=VALUES(meta_description)")
                         ->execute([$siteName, 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی', 'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.', 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی؛ راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای.', $defaultSources, $defaultQueries, $cronKey]);
 
-                    // 7) Categories
-                    // Full category tree: level-1 parent → level-2 brand → level-3 model
-                    $categories = [
-                        ['پاور','⚡',[
-                            ['گرین',['GP530','GP600','GP750']],
-                            ['کورسیر',['VS','CV','RM']],
-                            ['ترمالتیک',['Smart','Toughpower']],
-                            ['کولر مستر',['MWE','GM']],
-                            ['متفرقه',[]],
-                        ]],
-                        ['مادربرد','🖥️',[
-                            ['گیگابایت',['B450','B550','B650','H310','H510']],
-                            ['ایسوس',['Prime','TUF Gaming','ROG Strix','ProArt']],
-                            ['MSI',['MAG','Bazooka','Tomahawk','Mortar']],
-                            ['ASRock',['Steel Legend','Phantom','Pro RS']],
-                        ]],
-                        ['لپ‌تاپ','💻',[
-                            ['ایسوس',['TUF Gaming','ROG','VivoBook','ZenBook']],
-                            ['لنوو',['IdeaPad','Legion','ThinkPad','Yoga']],
-                            ['اچ‌پی',['Pavilion','Victus','Omen','EliteBook']],
-                            ['دل',['Inspiron','XPS','Latitude','G15']],
-                            ['ایسر',['Aspire','Nitro','Swift']],
-                            ['مک بوک',['Air M1','Air M2','Pro 13','Pro 14','Pro 16']],
-                        ]],
-                        ['کارت گرافیک','🎮',[
-                            ['انویدیا',['GTX 1050/1060/1650','RTX 2060','RTX 3060','RTX 4060','RTX 4070']],
-                            ['AMD',['RX 580','RX 6600','RX 6700XT','RX 7600']],
-                        ]],
-                        ['مانیتور و تلویزیون','📺',[
-                            ['سامسونگ',['Odyssey','M5','UA50','Neo QLED']],
-                            ['ال‌جی',['UltraGear','QLED','C2/C3']],
-                            ['سونی',['Bravia X75','Bravia X80']],
-                            ['گنوتی',['M1','M2']],
-                        ]],
-                        ['موبایل و تبلت','📱',[
-                            ['شیائومی',['ردمی نوت 9','ردمی نوت 10','ردمی نوت 11','ردمی نوت 12','پوکو X3','پوکو X4']],
-                            ['سامسونگ',['گلکسی A12','گلکسی A32','گلکسی A52','گلکسی A54','گلکسی S21','گلکسی S22','گلکسی S23']],
-                            ['آیفون',['11','12','13','14','15']],
-                            ['هواوی',['Y6','Y8','P30','Nova']],
-                            ['تبلت',['آیپد','سامسونگ Tab','شیائومی Pad']],
-                        ]],
-                        ['لوازم خانگی','🧺',[
-                            ['لباسشویی',['سامسونگ','ال‌جی','بوش','پاکشوما']],
-                            ['ظرفشویی',['سامسونگ','ال‌جی','بوش']],
-                            ['یخچال و فریزر',['سامسونگ','ال‌جی','اسنوا','دوو']],
-                            ['تلویزیون خانگی',['سامسونگ','ال‌جی','سونی']],
-                        ]],
-                        ['بردهای صنعتی','🏭',[
-                            ['اینورتر',['زیمنس','دلتا','شنایدر','ABB']],
-                            ['PLC',['زیمنس S7','میتسوبیشی FX','دلتا DVP']],
-                            ['درایو و CNC',['فانوک','زیمنس','هایده‌نهایین']],
-                        ]],
-                        ['آداپتور و شارژر','🔌',[
-                            ['لپ‌تاپ',['ایسوس','لنوو','اچ‌پی','دل','۹۰ وات','۱۲۵ وات']],
-                            ['موبایل',['شارژر آیفون','شارژر سامسونگ','شارژر شیائومی']],
-                            ['صنعتی',['۱۲ ولت','۲۴ ولت','۴۸ ولت']],
-                        ]],
-                        ['سایر','🔧',[]],
-                    ];
-                    $find = $pdo->prepare('SELECT id FROM categories WHERE name=? AND parent_id IS NULL LIMIT 1');
-                    $ins = $pdo->prepare('INSERT INTO categories (parent_id,name,slug,icon) VALUES (?,?,?,?)');
-                    $childFind = $pdo->prepare('SELECT id FROM categories WHERE name=? AND parent_id=? LIMIT 1');
-                    foreach ($categories as [$cname, $icon, $children]) {
-                        $find->execute([$cname]); $parentRow = $find->fetchColumn();
-                        if (!$parentRow) { $ins->execute([null, $cname, 'cat-' . md5($cname), $icon]); $parentRow = $pdo->lastInsertId(); }
-                        foreach ($children as $childEntry) {
-                            $childName = is_array($childEntry) ? $childEntry[0] : $childEntry;
-                            $grandchildren = is_array($childEntry) ? ($childEntry[1] ?? []) : [];
-                            $childFind->execute([$childName, $parentRow]);
-                            $childId = $childFind->fetchColumn();
-                            if (!$childId) { $ins->execute([$parentRow, $childName, 'cat-' . md5($cname . $childName), null]); $childId = $pdo->lastInsertId(); }
-                            foreach ($grandchildren as $grand) {
-                                $childFind->execute([$grand, $childId]);
-                                if (!$childFind->fetchColumn()) $ins->execute([$childId, $grand, 'cat-' . md5($cname . $childName . $grand), null]);
-                            }
-                        }
+                    // 7) Categories — درخت کامل برندها و مدل‌های شناخته‌شده (مشترک با migrate)
+                    $catSeed = ['added' => 0, 'skipped' => 0];
+                    if (is_file(__DIR__ . '/php-extended/seed_categories.php')) {
+                        require_once __DIR__ . '/php-extended/seed_categories.php';
+                        $catSeed = bk_seed_categories($pdo);
                     }
 
                     // 8) Uploads dir
@@ -282,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                             'errors' => $modulesReport['errors'],
                             'errorList' => array_slice($modulesErrorList, 0, 10),
                         ],
+                        'cats' => $catSeed,
                     ];
                     $step = 3;
                 } catch (Throwable $e) {
@@ -342,7 +272,8 @@ button:hover{background:#056d49}
       <div class="loginbox"><?=esc($_SESSION['done']['url'] . '/login')?></div>
       <b>شماره موبایل:</b> <span dir="ltr"><?=esc($_SESSION['done']['phone'])?></span><br>
       <b>رمز عبور:</b> <span dir="ltr"><?=esc($_SESSION['done']['pass'])?></span><br><br>
-      <b>ماژول‌های تکمیلی (تیکت پشتیبانی، پیام تماس، درگاه پرداخت، کیف پول):</b> <?=(int)$_SESSION['done']['modules']['added']?> مورد نصب شد<?=(int)$_SESSION['done']['modules']['skipped'] > 0 ? ' · ' . (int)$_SESSION['done']['modules']['skipped'] . ' مورد از قبل موجود بود' : ''?> ✓
+      <b>ماژول‌های تکمیلی (تیکت پشتیبانی، پیام تماس، درگاه پرداخت، کیف پول):</b> <?=(int)$_SESSION['done']['modules']['added']?> مورد نصب شد<?=(int)$_SESSION['done']['modules']['skipped'] > 0 ? ' · ' . (int)$_SESSION['done']['modules']['skipped'] . ' مورد از قبل موجود بود' : ''?> ✓<br>
+      <b>دسته‌بندی برندها:</b> <?=(int)$_SESSION['done']['cats']['added']?> برند/مدل اضافه شد ✓
     </div>
     <?php if (!empty($_SESSION['done']['modules']['errors'])): ?>
     <div class="warn">⚠️ <?=(int)$_SESSION['done']['modules']['errors']?> مورد از ماژول‌ها اعمال نشد:<br><span dir="ltr"><?=esc(implode('<br>', $_SESSION['done']['modules']['errorList']))?></span><br>معمولاً به دلیل محدودیت مجوز کاربر دیتابیس (ALTER/CREATE) است؛ بعد از رفع، می‌توانید <b>php-extended/migrate.php?key=INSTALL_KEY</b> را یک‌بار اجرا کنید.</div>

@@ -20,6 +20,25 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+/* ---------- helper های مقاوم برای هاست‌های اشتراکی ---------- */
+
+/* اگر افزونه mbstring نصب نباشد، fallback ساده (جلوگیری از خطای مرگبار) */
+if (!function_exists('mb_strlen')) {
+    function mb_strlen($s, $enc = null): int { return strlen((string)$s); }
+    function mb_substr($s, $start, $len = null, $enc = null): string { $s = (string)$s; return $len === null ? substr($s, $start) : substr($s, $start, $len); }
+}
+
+/* تشخیص نوع MIME بدون وابستگی به fileinfo (finfo → mime_content_type → getimagesize) */
+function file_mime(string $path): string {
+    if (class_exists('finfo')) {
+        try { $f = new finfo(FILEINFO_MIME_TYPE); $m = $f->file($path); if (is_string($m) && $m !== '') return $m; } catch (Throwable $e) {}
+    }
+    if (function_exists('mime_content_type')) { $m = @mime_content_type($path); if (is_string($m) && $m !== '') return $m; }
+    $m = @getimagesize($path);
+    if (is_array($m) && !empty($m['mime'])) return (string)$m['mime'];
+    return '';
+}
+
 function db(): PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) return $pdo;
