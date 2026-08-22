@@ -655,6 +655,7 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
     if(e.target.closest && e.target.closest('#themeToggle')) setTheme(localStorage.getItem('bk_theme')==='light'?'dark':'light');
   });
 })();
+</script>
 <script>
 /* فیلتر زندهٔ دسته‌بندی — یک تعریف سراسری برای همهٔ صفحات */
 if(typeof bkFilterSelect!=='function'){function bkFilterSelect(inp){var sel=inp.parentElement?inp.parentElement.querySelector('select'):null;if(!sel)return;var q=(inp.value||'').trim().toLowerCase();Array.prototype.forEach.call(sel.options,function(o){if(!o.value)return;var t=(o.textContent||'').toLowerCase();var og=o.parentElement&&o.parentElement.label?o.parentElement.label.toLowerCase():'';o.hidden=q===''||t.indexOf(q)!==-1||og.indexOf(q)!==-1;});Array.prototype.forEach.call(sel.querySelectorAll('optgroup'),function(g){var any=false;Array.prototype.forEach.call(g.options,function(o){if(!o.hidden)any=true;});g.hidden=!any;});var si=sel.selectedIndex;if(si>=0&&sel.options[si]&&sel.options[si].hidden){sel.value='';}}}
@@ -1036,78 +1037,660 @@ if($page==='notifications'){$u=require_login();$items=db()->prepare('SELECT * FR
 
 if($page==='settings'){$u=require_login();header_html('تنظیمات');?><main class="wrap page"><div class="page-title"><h1>تنظیمات حساب</h1></div><div class="card auth-card"><h3>پروفایل</h3><form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="profile_update"><div class="form-group"><label class="field-label">نام</label><input class="field" name="name" value="<?=h($u['name'])?>"></div><div class="form-group"><label class="field-label">بیوگرافی</label><textarea class="field" name="bio" rows="4"><?=h($u['bio'])?></textarea></div><button class="btn btn-primary">ذخیره</button></form></div></main><?php footer_html();exit;}
 
-if($page==='reels'){$u=current_user();$items=db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY COALESCE(t.published_at,t.created_at) DESC LIMIT 60")->fetchAll();$ids=array_map(fn($t)=>(int)$t['id'],$items);$ccMap=[];$lkMap=[];$fvMap=[];if($ids){$in=implode(',',$ids);$c=db()->query("SELECT tip_id,COUNT(*) n FROM comments WHERE is_deleted=0 AND tip_id IN ($in) GROUP BY tip_id")->fetchAll();foreach($c as $r)$ccMap[(int)$r['tip_id']]=(int)$r['n'];if($u){$q=db()->prepare("SELECT tip_id FROM tip_accesses WHERE user_id=? AND tip_id IN ($in)");$q->execute([(int)$u['id']]);foreach($q->fetchAll() as $r)$lkMap[(int)$r['tip_id']]=true;$q=db()->prepare("SELECT tip_id FROM favorites WHERE user_id=? AND tip_id IN ($in)");$q->execute([(int)$u['id']]);foreach($q->fetchAll() as $r)$fvMap[(int)$r['tip_id']]=true;}}?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="robots" content="index,follow"><title>ریلز قلق‌های تعمیراتی | <?=h(SITE_NAME)?></title><link rel="stylesheet" href="<?=url('assets/style.css')?>"><style>
-html,body{margin:0;padding:0;background:#000;height:100%}
-.reels-body{font-family:inherit}
-.reels-topbar{position:fixed;top:0;inset-inline:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:linear-gradient(rgba(0,0,0,.75),transparent)}
-.reels-topbar .logo{color:#fff;font-size:18px;text-decoration:none;font-weight:900}
-.reels-topbar .links{display:flex;gap:8px}
-.reels-close{color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);padding:6px 14px;border-radius:20px;font-size:12px;text-decoration:none}
-.reels-feed{height:100dvh;overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain}
+if($page==='reels_demo' || $page==='reels-test'){
+    // تست صفحه ریلز - نسخه دمو بدون نیاز به دیتابیس (برای تست فرانت‌اند)
+    $u = null;
+    try { $u = current_user(); } catch(Throwable $e) { $u = null; }
+    $demo_tips = [
+        ['id'=>1,'title'=>'رفع مشکل روشن نشدن لپ‌تاپ ایسوس X550 — راهنمای کامل','short_description'=>'در این قلق آموزشی، روش تشخیص و رفع مشکل روشن نشدن در لپ‌تاپ ایسوس به‌صورت گام‌به‌گام توضیح داده شده است.','access_type'=>'free','price'=>0,'difficulty'=>'medium','views'=>1240,'likes_count'=>89,'rating_sum'=>42,'rating_count'=>10,'author_name'=>'علی رضایی','verified'=>1,'images'=>['https://picsum.photos/seed/bord1/800/1200','https://picsum.photos/seed/bord1b/800/1200'],'video_url'=>''],
+        ['id'=>2,'title'=>'علت و راه‌حل شارژ نشدن موبایل سامسونگ','short_description'=>'موبایل سامسونگ با مشکل شارژ نشدن مواجه شده است. در ادامه علت‌های رایج و روش تعمیر مرحله‌به‌مرحله آموزش داده می‌شود.','access_type'=>'like','price'=>0,'difficulty'=>'hard','views'=>890,'likes_count'=>45,'rating_sum'=>38,'rating_count'=>8,'author_name'=>'سارا احمدی','verified'=>0,'images'=>['https://picsum.photos/seed/bord2/800/1200'],'video_url'=>''],
+        ['id'=>3,'title'=>'مادربرد گیگابایت دچار اتصال کوتاه شده — تشخیص و تعمیر','short_description'=>'مادربرد گیگابایت با مشکل اتصال کوتاه مواجه شده است. روش شناسایی قطعه معیوب با مولتی‌متر و تعویض آن آموزش داده می‌شود.','access_type'=>'paid','price'=>75000,'difficulty'=>'hard','views'=>2100,'likes_count'=>156,'rating_sum'=>95,'rating_count'=>20,'author_name'=>'محمد حسینی','verified'=>1,'images'=>['https://picsum.photos/seed/bord3/800/1200','https://picsum.photos/seed/bord3b/800/1200','https://picsum.photos/seed/bord3c/800/1200'],'video_url'=>''],
+        ['id'=>4,'title'=>'رفع مشکل تصویر نداشتن تلویزیون ال‌جی — راهنمای کامل','short_description'=>'تلویزیون ال‌جی با مشکل تصویر نداشتن مواجه شده است. بررسی بک‌لایت و برد درایور به‌صورت کامل توضیح داده شده.','access_type'=>'free','price'=>0,'difficulty'=>'easy','views'=>560,'likes_count'=>32,'rating_sum'=>20,'rating_count'=>5,'author_name'=>'رضا کریمی','verified'=>0,'images'=>['https://picsum.photos/seed/bord4/800/1200'],'video_url'=>''],
+        ['id'=>5,'title'=>'علت و راه‌حل بوق خطا در مادربرد ایسوس','short_description'=>'مادربرد ایسوس هنگام روشن شدن بوق خطا می‌دهد. الگوی بوق‌ها و روش عیب‌یابی رم و پردازنده آموزش داده می‌شود.','access_type'=>'like','price'=>0,'difficulty'=>'medium','views'=>730,'likes_count'=>67,'rating_sum'=>30,'rating_count'=>7,'author_name'=>'نازنین موسوی','verified'=>1,'images'=>['https://picsum.photos/seed/bord5/800/1200'],'video_url'=>'https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+    ];
+    $ccMap=[1=>12,2=>5,3=>23,4=>2,5=>8];
+    $fvMap=[];
+?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>تست ریلز (دمو) | <?=h(SITE_NAME)?></title>
+<link rel="stylesheet" href="<?=url('assets/style.css')?>?v=8">
+<style>
+html,body{margin:0;padding:0;background:#000;height:100%;overscroll-behavior:none}
+.reels-body{font-family:Vazirmatn,Tahoma,sans-serif;background:#000;color:#fff;overflow:hidden}
+.reels-topbar{position:fixed;top:0;inset-inline:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));background:linear-gradient(rgba(0,0,0,.82),rgba(0,0,0,.35) 60%,transparent)}
+.reels-topbar .logo{color:#fff;font-size:18px;text-decoration:none;font-weight:900;display:flex;align-items:center;gap:6px}
+.reels-topbar .logo-mark{width:32px;height:32px;border-radius:10px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.35);color:#10b981;display:grid;place-items:center}
+.reels-close{color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:6px 14px;border-radius:20px;font-size:12px;text-decoration:none}
+.reels-progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:60;background:rgba(255,255,255,.12)} .reels-progress i{display:block;height:100%;background:#10b981;width:0%;transition:width .25s}
+.reels-feed{height:100dvh;overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain} .reels-feed::-webkit-scrollbar{display:none}
 .reel{position:relative;height:100dvh;scroll-snap-align:start;background:#0a0a0a;overflow:hidden}
-.reel-media{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-.reel-media img{width:100%;height:100%;object-fit:cover}
-.reel-media .video-play{position:absolute;width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.55);border:2px solid #fff;color:#fff;font-size:24px;display:grid;place-items:center}
-.reel-dots{position:absolute;top:64px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:5}
-.reel-dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.35);transition:.2s}
-.reel-dots i.on{background:#fff;width:18px;border-radius:4px}
-.reel-info{position:absolute;inset-inline-start:14px;inset-inline-end:86px;bottom:0;z-index:4;padding-bottom:26px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.78));pointer-events:none}
-.reel-info .author-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;pointer-events:auto}
-.reel-info .avatar{width:34px;height:34px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-weight:900;font-size:15px;border:2px solid #fff}
-.reel-info .author-name{font-weight:800;font-size:13px}
-.reel-info .check{color:#7fe0b4}
-.reel-info h3{margin:0 0 5px;font-size:15px;font-weight:900}
-.reel-info p{margin:0;font-size:12px;color:#e6e6e6;line-height:1.9;max-height:66px;overflow:hidden}
-.reel-pills{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.reel-pills .pill{background:rgba(255,255,255,.16);color:#fff;font-size:10px;padding:3px 9px;border-radius:12px}
-.reel-rail{position:absolute;inset-inline-end:10px;bottom:90px;z-index:6;display:flex;flex-direction:column;align-items:center;gap:18px}
-.ra-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:0;cursor:pointer;color:#fff;font-size:25px;text-shadow:0 1px 6px rgba(0,0,0,.7)}
-.ra-btn small{font-size:10px;font-weight:800}
-.ra-btn.liked{color:#ff2d55}
-.ra-btn .buy-chip{display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);border-radius:16px;padding:8px 9px;font-size:11px;font-weight:800;line-height:1.6;text-align:center}
-.ra-btn .buy-chip .price{color:#ffd166}
-.heart-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:90px;pointer-events:none;z-index:9;transition:none}
-.heart-pop.show{animation:bkpop .7s ease}
-@keyframes bkpop{0%{transform:translate(-50%,-50%) scale(0)}35%{transform:translate(-50%,-50%) scale(1.25)}70%{transform:translate(-50%,-50%) scale(.95)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
-.reel-lock{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);color:#fff;text-align:center;padding:20px}
-.reel-lock .lk-ic{font-size:46px}
-.reel-lock b{font-size:16px}
-.reel-lock p{font-size:12px;color:#ddd;max-width:270px;line-height:2;margin:0}
-.lk-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.lk-btn{border:0;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer;background:#fff;color:#111}
+.reel-media{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#080c0e}
+.reel-media img{width:100%;height:100%;object-fit:cover} .reel-media img.bk-blur{filter:blur(18px) brightness(.7) scale(1.06)}
+.reel-dots{position:absolute;top:70px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:5;background:rgba(0,0,0,.35);padding:5px 9px;border-radius:20px}
+.reel-dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.38);display:block} .reel-dots i.on{background:#fff;width:20px;border-radius:4px}
+.reel-info{position:absolute;inset-inline-start:14px;inset-inline-end:86px;bottom:0;z-index:4;padding:0 0 28px;padding-bottom:max(28px,env(safe-area-inset-bottom));color:#fff;background:linear-gradient(transparent 0%,rgba(0,0,0,.55) 30%,rgba(0,0,0,.88) 100%);pointer-events:none}
+.reel-info .author-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;pointer-events:auto}
+.reel-info .avatar{width:36px;height:36px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-weight:900;font-size:15px;border:2px solid #fff}
+.reel-info h3{margin:0 0 6px;font-size:15px;font-weight:900;line-height:1.5}
+.reel-info p{margin:0;font-size:12px;color:#e6e6e6;line-height:1.9;opacity:.92}
+.reel-pills{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap} .reel-pills .pill{background:rgba(255,255,255,.16);color:#fff;font-size:10px;padding:3px 9px;border-radius:12px}
+.reel-rail{position:absolute;inset-inline-end:10px;bottom:96px;bottom:max(96px,calc(env(safe-area-inset-bottom) + 86px));z-index:6;display:flex;flex-direction:column;align-items:center;gap:18px}
+.ra-btn{display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:0;cursor:pointer;color:#fff;font-size:26px;text-shadow:0 1px 10px rgba(0,0,0,.8)}
+.ra-btn small{font-size:10px;font-weight:800} .ra-btn.liked{color:#ff2d55}
+.ra-btn .buy-chip{display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(0,0,0,.58);border:1px solid rgba(255,255,255,.32);border-radius:16px;padding:8px 10px;font-size:11px;font-weight:800}
+.heart-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:88px;pointer-events:none;z-index:9;opacity:0}
+.heart-pop.show{animation:bkpop .72s cubic-bezier(.17,.89,.32,1.49) forwards}
+@keyframes bkpop{0%{transform:translate(-50%,-50%) scale(0);opacity:0}15%{opacity:1}35%{transform:translate(-50%,-50%) scale(1.25)}70%{transform:translate(-50%,-50%) scale(.95)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.reel-lock{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.52);backdrop-filter:blur(6px);color:#fff;text-align:center;padding:22px}
+.reel-lock .lk-ic{font-size:48px} .reel-lock b{font-size:16px;font-weight:900} .reel-lock p{font-size:12px;color:#ddd;max-width:300px;line-height:2}
+.lk-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.lk-btn{border:0;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer;background:#fff;color:#111;text-decoration:none}
 .lk-btn.green{background:#10b981;color:#04110b}
-.comments-sheet{position:absolute;inset-inline:0;bottom:-100%;height:62%;background:#14181d;border-radius:22px 22px 0 0;z-index:12;transition:bottom .28s ease;display:flex;flex-direction:column;overflow:hidden}
+.comments-sheet{position:absolute;inset-inline:0;bottom:-100%;height:64%;background:#11181f;border-radius:22px 22px 0 0;z-index:12;transition:bottom .32s;display:flex;flex-direction:column;overflow:hidden;border-top:1px solid rgba(255,255,255,.12)}
 .comments-sheet.open{bottom:0}
-.cs-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.12);display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800;font-size:14px}
-.cs-close{background:transparent;border:0;color:#fff;font-size:18px;cursor:pointer}
-.cs-list{flex:1;overflow-y:auto;padding:12px 16px;color:#fff}
-.cs-item{display:flex;gap:10px;margin-bottom:14px}
-.cs-item .av{width:30px;height:30px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-size:12px;font-weight:900;flex-shrink:0}
-.cs-item b{font-size:12px}
-.cs-item p{margin:3px 0 0;font-size:12px;color:#d9d9d9;line-height:1.9}
-.cs-item small{color:#8b98a5;font-size:10px}
-.cs-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.12);background:#101419}
-.cs-form input{flex:1;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:10px 14px;color:#fff;font-size:13px;outline:0}
+.cs-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800;font-size:14px}
+.cs-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:14px;cursor:pointer}
+.cs-list{flex:1;overflow-y:auto;padding:14px 16px;color:#fff}
+.cs-item{display:flex;gap:10px;margin-bottom:16px}
+.cs-item .av{width:32px;height:32px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-size:12px;font-weight:900;flex-shrink:0;color:#04110b}
+.cs-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.1);background:#0d131a}
+.cs-form input{flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:11px 14px;color:#fff;font-size:13px;outline:0}
 .cs-form button{background:#10b981;border:0;border-radius:20px;padding:0 18px;color:#04110b;font-weight:800;cursor:pointer;font-size:13px}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#14181d;border:1px solid rgba(255,255,255,.2);color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;z-index:99;max-width:90%;text-align:center}
-.toast a{color:#34d399}
-@media(min-width:768px){.reel-media img{object-fit:contain}.reel-info{inset-inline-end:110px}}
-</style></head><body class="reels-body"><header class="reels-topbar"><a class="logo" href="<?=url()?>"><span style="color:#10b981">⌁</span> برد<em>خان</em> · ریلز</a><div class="links"><a class="reels-close" href="<?=url('tips')?>">قلق‌ها</a><a class="reels-close" href="<?=url()?>">✕</a></div></header><main class="reels-feed" id="reelsFeed"><?php foreach($items as $t):$imgs=tip_images($t);$tid=(int)$t['id'];$locked=!tip_has_access($t,$u);$liked=!empty($fvMap[$tid]);$rating=$t['rating_count']?round($t['rating_sum']/$t['rating_count'],1):0;?><div class="reel" id="reel-<?=$tid?>" data-id="<?=$tid?>" data-access="<?=h($t['access_type'])?>" data-price="<?=(int)$t['price']?>" data-locked="<?=$locked?'1':'0'?>" data-liked="<?=$liked?'1':'0'?>"><div class="reel-media"><?php if($imgs):?><img src="<?=h($imgs[0])?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" data-imgs="<?=h(implode('|',$imgs))?>"><?php if(count($imgs)>1):?><div class="reel-dots"><?php foreach($imgs as $k=>$v):?><i class="<?=$k===0?'on':''?>"></i><?php endforeach;?></div><?php endif;?><?php if(!empty($t['video_url'])):?><div class="video-play">▶</div><?php endif;?><?php else:?><div class="reel-cover" style="width:100%;height:100%;display:grid;place-items:center;color:#fff;font-size:18px;background:#111"><?=h($t['title'])?></div><?php endif;?></div><?php if($locked):?><div class="reel-lock"><div class="lk-ic"><?=$t['access_type']==='paid'?'🔒':'💗'?></div><b><?=$t['access_type']==='paid'?'این قلق پولی است':'این قلق با لایک باز می‌شود'?></b><p>برای دیدن تصویر اصلی و مراحل کامل تعمیر، <?=$t['access_type']==='paid'?'مبلغ را بپردازید':'یک لایک ثبت کنید'?>.</p><div class="lk-actions"><button class="lk-btn green" data-act="unlock"><?=$t['access_type']==='paid'?('💳 خرید — '.money($t['price']).' تومان'):'♥ لایک و باز کردن'?></button><a class="lk-btn" href="<?=url('tip/'.$tid)?>">جزئیات قلق</a></div></div><?php endif;?><div class="reel-info"><div class="author-row"><span class="avatar"><?=h(mb_substr($t['author_name']??'؟',0,1))?></span><span class="author-name"><?=h($t['author_name']??'تعمیرکار')?> <?php if(!empty($t['verified'])):?><span class="check">✓</span><?php endif;?></span></div><h3><?=h($t['title'])?></h3><p><?=h($t['short_description'])?></p><div class="reel-pills"><span class="pill"><?=h($t['access_type']==='paid'?money($t['price']).' تومان':($t['access_type']==='like'?'با لایک':'رایگان'))?></span><span class="pill"><?=h(['easy'=>'آسان','medium'=>'متوسط','hard'=>'سخت'][$t['difficulty']??'medium']??'متوسط')?></span><?php if($rating):?><span class="pill">★ <?=fa($rating)?></span><?php endif;?></div></div><div class="reel-rail"><button class="ra-btn<?=$liked?' liked':''?>" data-act="like" aria-label="لایک"><span><?=$liked?'❤️':'🤍'?></span><small data-count><?=fa($t['likes_count'])?></small></button><button class="ra-btn" data-act="comments" aria-label="نظرات"><span>💬</span><small><?=fa($ccMap[$tid]??0)?></small></button><button class="ra-btn" data-act="share" aria-label="اشتراک‌گذاری"><span>➦</span><small>اشتراک</small></button><?php if($locked&&$t['access_type']!=='free'):?><button class="ra-btn" data-act="unlock" aria-label="باز کردن"><span class="buy-chip"><?=$t['access_type']==='paid'?('💰 <span class="price">'.fa((int)($t['price']/1000)).'k</span>'):'♥'?><br>باز کردن</span></button><?php endif;?></div><div class="heart-pop">❤️</div><div class="comments-sheet"><div class="cs-head"><span>💬 نظرات</span><button class="cs-close" data-act="csclose">✕</button></div><div class="cs-list"><div class="cs-item" style="color:#8b98a5;font-size:12px">در حال دریافت…</div></div><div class="cs-form"><?php if($u):?><input type="text" placeholder="نظر خود را بنویسید…" maxlength="500"><button data-act="cssend">ارسال</button><?php else:?><a class="lk-btn green" style="text-decoration:none;width:100%;text-align:center" href="<?=url('login')?>">برای نظر وارد شوید</a><?php endif;?></div></div></div><?php endforeach;?><?php if(!$items):?><div class="reel" style="display:grid;place-items:center;color:#fff">هنوز قلقی برای نمایش نیست.</div><?php endif;?></main><div id="bkToast" class="toast" style="display:none"></div><script>
-var BKC={{csrf:<?=json_encode(csrf())?>,guest:<?=json_encode(!$u)?>}};
-function bkToast(m,link){var t=document.getElementById('bkToast');t.innerHTML=m+(link?' <a href="'+link+'">شارژ کیف پول ←</a>':'');t.style.display='block';clearTimeout(t._h);t._h=setTimeout(function(){t.style.display='none';},3600);}
-function bkAjax(url,body){return fetch(url,{method:'POST',body:body,headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json().catch(function(){return null;});});}
-function bkLike(reel){var btn=reel.querySelector('[data-act=like]');var cnt=reel.querySelector('[data-count]');var fd=new FormData();fd.append('csrf',BKC.csrf);fd.append('action','favorite');fd.append('tip_id',reel.dataset.id);bkAjax(window.location.href,fd).then(function(j){if(!j||!j.ok){bkToast(j&&j.error?j.error:'خطا در ثبت لایک.');return;}var liked=j.liked;reel.dataset.liked=liked?'1':'0';btn.classList.toggle('liked',liked);btn.querySelector('span').textContent=liked?'❤️':'🤍';if(cnt)cnt.textContent=j.likes;popHeart(reel,liked);});}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#111a24;border:1px solid rgba(255,255,255,.18);color:#fff;padding:12px 20px;border-radius:24px;font-size:13px;z-index:99;max-width:92%;text-align:center}
+.toast a{color:#34d399;font-weight:800;text-decoration:none}
+.test-badge{position:fixed;top:50px;left:12px;z-index:70;background:#10b981;color:#04110b;font-size:11px;font-weight:900;padding:6px 12px;border-radius:20px}
+</style></head><body class="reels-body">
+<div class="reels-progress"><i id="reelsProgress"></i></div>
+<div class="test-badge">🧪 حالت تست ریلز - دمو</div>
+<header class="reels-topbar">
+  <a class="logo" href="<?=url()?>"><span class="logo-mark">⌁</span> برد<em>خان</em> · ریلز تست</a>
+  <div class="links"><a class="reels-close" href="<?=url('reels')?>">ریلز اصلی</a><a class="reels-close" href="<?=url()?>">✕</a></div>
+</header>
+<main class="reels-feed" id="reelsFeed">
+<?php foreach($demo_tips as $t):
+    $tid=(int)$t['id'];
+    $locked = $t['access_type']!=='free';
+    $liked = false;
+    $displayUrls = $t['images'];
+    $dataThumbs = h(json_encode($displayUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    $dataFulls = $dataThumbs;
+?>
+<div class="reel" id="reel-<?=$tid?>" data-id="<?=$tid?>" data-access="<?=h($t['access_type'])?>" data-price="<?=(int)$t['price']?>" data-locked="<?=$locked?'1':'0'?>" data-liked="0" data-index="0">
+  <div class="reel-media">
+    <img src="<?=h($displayUrls[0])?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" data-thumbs="<?=$dataThumbs?>" data-fulls="<?=$dataFulls?>" loading="eager">
+    <?php if(count($displayUrls)>1): ?><div class="reel-dots"><?php foreach($displayUrls as $k=>$v): ?><i class="<?=$k===0?'on':''?>"></i><?php endforeach;?></div><?php endif; ?>
+    <?php if(!empty($t['video_url'])): ?><div class="video-play">▶</div><?php endif; ?>
+  </div>
+  <?php if($locked): ?>
+  <div class="reel-lock">
+    <div class="lk-ic"><?=$t['access_type']==='paid'?'🔒':'💗'?></div>
+    <b><?=$t['access_type']==='paid'?'این قلق پولی است':'این قلق با لایک باز می‌شود'?></b>
+    <p>این یک دمو تست است. در نسخه واقعی <?=$t['access_type']==='paid'?'باید مبلغ را بپردازید':'باید لایک کنید'?>.</p>
+    <div class="lk-actions"><button class="lk-btn green" data-act="unlock">تست باز کردن (دمو)</button><a class="lk-btn" href="<?=url('tip/'.$tid)?>">جزئیات</a></div>
+  </div>
+  <?php endif; ?>
+  <div class="reel-info">
+    <div class="author-row"><span class="avatar"><?=h(mb_substr($t['author_name'],0,1))?></span><span class="author-name"><?=h($t['author_name'])?> ✓</span><span style="margin-right:auto;background:rgba(16,185,129,.2);border:1px solid rgba(16,185,129,.4);color:#34d399;padding:3px 8px;border-radius:10px;font-size:10px">تست #<?=fa($tid)?></span></div>
+    <h3><?=h($t['title'])?></h3>
+    <p><?=h($t['short_description'])?></p>
+    <div class="reel-pills"><span class="pill"><?=h($t['access_type']==='paid'?money($t['price']).' تومان':($t['access_type']==='like'?'با لایک':'رایگان'))?></span><span class="pill"><?=h(['easy'=>'آسان','medium'=>'متوسط','hard'=>'سخت'][$t['difficulty']]??'متوسط')?></span><span class="pill">◉ <?=fa($t['views'])?></span></div>
+  </div>
+  <div class="reel-rail">
+    <button class="ra-btn" data-act="like" aria-label="لایک"><span>🤍</span><small data-count><?=fa($t['likes_count'])?></small></button>
+    <button class="ra-btn" data-act="comments" aria-label="نظرات"><span>💬</span><small><?=fa($ccMap[$tid]??0)?></small></button>
+    <button class="ra-btn" data-act="share" aria-label="اشتراک"><span>➦</span><small>اشتراک</small></button>
+    <?php if($locked): ?><button class="ra-btn" data-act="unlock"><span class="buy-chip">باز کردن<br>دمو</span></button><?php endif; ?>
+  </div>
+  <div class="heart-pop">❤️</div>
+  <div class="comments-sheet"><div class="cs-head"><span>💬 نظرات (دمو)</span><button class="cs-close" data-act="csclose">✕</button></div>
+    <div class="cs-list">
+      <div class="cs-item"><span class="av">ع</span><div><b>علی</b><p>این قلق عالی بود، مشکل من حل شد!</p><small>۲ ساعت پیش</small></div></div>
+      <div class="cs-item"><span class="av">س</span><div><b>سارا</b><p>ممنون بابت آموزش کامل 🙏</p><small>۵ ساعت پیش</small></div></div>
+    </div>
+    <div class="cs-form"><input type="text" placeholder="نظر تستی بنویسید…" maxlength="200"><button data-act="cssend">ارسال (دمو)</button></div>
+  </div>
+</div>
+<?php endforeach; ?>
+</main>
+<div id="bkToast" class="toast" style="display:none"></div>
+<script>
+var BKC={csrf:'demo',guest:false,base:'/',demo:true};
+function bkToast(m){var t=document.getElementById('bkToast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(function(){t.style.display='none'},2500);}
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function parseImgs(reel){var img=reel.querySelector('.reel-media img');try{var thumbs=JSON.parse(img.getAttribute('data-thumbs')||'[]');var fulls=JSON.parse(img.getAttribute('data-fulls')||'[]');return {thumbs:thumbs,fulls:fulls,el:img};}catch(e){return {thumbs:[],fulls:[],el:img};}}
+function currentDisplayList(reel){var p=parseImgs(reel);return reel.dataset.locked==='1'?p.thumbs:p.fulls;}
+function updateDots(reel,idx){reel.querySelectorAll('.reel-dots i').forEach(function(d,i){d.classList.toggle('on',i===idx);});}
 function popHeart(reel,show){var h=reel.querySelector('.heart-pop');if(!h)return;h.classList.remove('show');if(show){void h.offsetWidth;h.classList.add('show');}}
-function bkUnlock(reel){var fd=new FormData();fd.append('csrf',BKC.csrf);fd.append('action','unlock');fd.append('tip_id',reel.dataset.id);bkAjax(window.location.href,fd).then(function(j){if(!j){bkToast('پاسخی از سرور دریافت نشد.');return;}if(j.ok){reel.dataset.locked='0';var lock=reel.querySelector('.reel-lock');if(lock)lock.remove();var buy=reel.querySelector('[data-act=unlock]');if(buy)buy.remove();var img=reel.querySelector('.reel-media img');if(img)img.classList.remove('bk-blur');bkToast(j.message||'باز شد ✓');}else{if(j.wallet){bkToast(j.error||'موجودی کافی نیست.','/wallet');}else{bkToast(j.error||'باز نشد.');}}});}
-function bkShare(reel){var url=location.origin+'/tip/'+reel.dataset.id;var title=reel.querySelector('.reel-info h3');var text=title?title.textContent:'قلق تعمیراتی بردخان';if(navigator.share){navigator.share({title:text,text:text,url:url}).catch(function(){});}else{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){bkToast('لینک کپی شد ✓');},function(){bkToast('لینک: '+url);});}else{bkToast('لینک: '+url);}}}
-function bkOpenComments(reel){var sheet=reel.querySelector('.comments-sheet');sheet.classList.add('open');var list=sheet.querySelector('.cs-list');fetch('/ajax-comments?tip_id='+reel.dataset.id,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json();}).then(function(j){if(!j)return;if(!j.items||!j.items.length){list.innerHTML='<div class="cs-item" style="color:#8b98a5;font-size:12px">اولین نظر را شما ثبت کنید ✍️</div>';return;}var h='';j.items.forEach(function(c){h+='<div class="cs-item"><span class="av">'+esc(c.name.charAt(0))+'</span><div><b>'+esc(c.name)+'</b><p>'+esc(c.body)+'</p><small>'+esc(c.ago)+'</small></div></div>';});list.innerHTML=h;});}
-function bkSendComment(reel,input){var v=(input.value||'').trim();if(v.length<2){bkToast('متن نظر کوتاه است.');return;}var fd=new FormData();fd.append('csrf',BKC.csrf);fd.append('action','comment');fd.append('tip_id',reel.dataset.id);fd.append('body',v);bkAjax(window.location.href,fd).then(function(j){if(j&&j.ok){input.value='';bkOpenComments(reel);}else{bkToast(j&&j.error?j.error:'خطا در ثبت نظر.');}});}
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]'); if(!b) return;
+  var reel=b.closest('.reel'); if(!reel) return;
+  var act=b.dataset.act;
+  if(act==='like'){
+    var btn=reel.querySelector('[data-act=like]'); var liked=reel.dataset.liked==='1';
+    reel.dataset.liked=liked?'0':'1'; btn.classList.toggle('liked',!liked);
+    btn.querySelector('span').textContent=!liked?'❤️':'🤍';
+    var cnt=btn.querySelector('[data-count]'); if(cnt){var n=parseInt(cnt.textContent.replace(/[^0-9]/g,''))||0; cnt.textContent=!liked?n+1:Math.max(0,n-1);}
+    popHeart(reel,!liked); bkToast(!liked?'لایک شد ❤️ (تست)':'لایک حذف شد (تست)');
+  }else if(act==='comments'){reel.querySelector('.comments-sheet').classList.add('open');}
+  else if(act==='share'){var url=location.origin+'/tip/'+reel.dataset.id; if(navigator.clipboard){navigator.clipboard.writeText(url).then(function(){bkToast('لینک کپی شد: '+url);});}else{bkToast('لینک: '+url);} }
+  else if(act==='unlock'){reel.dataset.locked='0'; var lock=reel.querySelector('.reel-lock'); if(lock) lock.remove(); reel.querySelectorAll('[data-act=unlock]').forEach(function(x){if(x.closest('.reel-rail')) x.remove();}); var img=reel.querySelector('.reel-media img'); if(img) img.classList.remove('bk-blur'); bkToast('در حالت دمو باز شد ✓'); popHeart(reel,true);}
+  else if(act==='csclose'){reel.querySelector('.comments-sheet').classList.remove('open');}
+  else if(act==='cssend'){var inp=reel.querySelector('.cs-form input'); if(inp && inp.value.trim().length>=2){var list=reel.querySelector('.cs-list'); var div=document.createElement('div'); div.className='cs-item'; div.innerHTML='<span class=\"av\">ش</span><div><b>شما</b><p>'+esc(inp.value)+'</p><small>همین الان</small></div>'; list.appendChild(div); inp.value=''; bkToast('نظر تستی ثبت شد (دمو)');}}
+});
+var lastTap=0;
+document.addEventListener('click',function(e){
+  var reel=e.target.closest('.reel'); if(!reel) return;
+  if(e.target.closest('.reel-rail')||e.target.closest('.reel-info')||e.target.closest('.reel-lock')||e.target.closest('.comments-sheet')||e.target.closest('[data-act]')) return;
+  var now=Date.now(); if(now-lastTap<300){var btn=reel.querySelector('[data-act=like]'); var liked=reel.dataset.liked==='1'; reel.dataset.liked=liked?'0':'1'; if(btn){btn.classList.toggle('liked',!liked); btn.querySelector('span').textContent=!liked?'❤️':'🤍';} popHeart(reel,!liked); bkToast(!liked?'لایک شد ❤️ (دابل‌تپ)':'لایک حذف شد');} lastTap=now;
+});
+document.addEventListener('click',function(e){
+  var img=e.target.closest('.reel-media img'); if(!img) return; var reel=img.closest('.reel'); if(!reel||reel.dataset.locked==='1') return;
+  var list=currentDisplayList(reel); if(list.length<2) return;
+  var curIdx=parseInt(reel.dataset.index||'0'); var next=(curIdx+1)%list.length; reel.dataset.index=next; img.src=list[next]; updateDots(reel,next);
+});
+document.addEventListener('keydown',function(e){
+  var feed=document.getElementById('reelsFeed'); if(!feed) return;
+  if(e.key==='ArrowDown'){e.preventDefault();feed.scrollBy({top:innerHeight*0.9,behavior:'smooth'});}
+  if(e.key==='ArrowUp'){e.preventDefault();feed.scrollBy({top:-innerHeight*0.9,behavior:'smooth'});}
+  if(e.key==='Escape'){document.querySelectorAll('.comments-sheet.open').forEach(function(s){s.classList.remove('open');});}
+});
+(function(){var feed=document.getElementById('reelsFeed'); var bar=document.getElementById('reelsProgress'); if(!feed||!bar) return; function upd(){var max=feed.scrollHeight-feed.clientHeight; var pct=max>0?(feed.scrollTop/max*100):0; bar.style.width=pct+'%';} feed.addEventListener('scroll',upd,{passive:true}); upd();})();
+console.log('%c[Reels Demo Test] ۵ ریل دمو بارگذاری شد','color:#10b981;font-weight:bold');
+console.log('[Reels Demo Test] تست‌ها: دابل‌تپ لایک, کلیک تصویر برای تعویض, کامنت, اشتراک, باز کردن قفل');
+</script>
+</body></html><?php exit;}
+
+if($page==='reels'){
+    $u=current_user();
+    // تست صفحه ریلز: بارگذاری ۶۰ قلق آخر با اطلاعات کامل
+    $items=db()->query("SELECT t.*,u.name author_name,u.verified,u.avatar FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY COALESCE(t.published_at,t.created_at) DESC LIMIT 60")->fetchAll();
+    $ids=array_map(fn($t)=>(int)$t['id'],$items);
+    $ccMap=[];$fvMap=[];
+    if($ids){
+        $in=implode(',',$ids);
+        $c=db()->query("SELECT tip_id,COUNT(*) n FROM comments WHERE is_deleted=0 AND tip_id IN ($in) GROUP BY tip_id")->fetchAll();
+        foreach($c as $r)$ccMap[(int)$r['tip_id']]=(int)$r['n'];
+        if($u){
+            $q=db()->prepare("SELECT tip_id FROM favorites WHERE user_id=? AND tip_id IN ($in)");
+            $q->execute([(int)$u['id']]);
+            foreach($q->fetchAll() as $r)$fvMap[(int)$r['tip_id']]=true;
+        }
+    }
+    // helper برای ساخت URL ایمن تصویر ریلز (خارجی یا داخلی با media_url)
+    $reel_img_url = function(string $path, array $tip, ?array $user, bool $locked): string {
+        $path=trim($path);
+        if($path==='') return '';
+        if(preg_match('#^https?://#i',$path)) return $path; // خارجی: مستقیم
+        // داخلی: از media_url استفاده می‌کنیم (thumb برای قفل)
+        return media_url($path, $locked?'thumb':'img', (int)$tip['id'], $user ? (int)$user['id'] : 0);
+    };
+?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="index,follow">
+<title>ریلز قلق‌های تعمیراتی | <?=h(SITE_NAME)?></title>
+<link rel="stylesheet" href="<?=url('assets/style.css')?>?v=8">
+<style>
+:root{--reel-bg:#000}
+html,body{margin:0;padding:0;background:var(--reel-bg);height:100%;overscroll-behavior:none}
+.reels-body{font-family:Vazirmatn,Tahoma,sans-serif;background:#000;color:#fff;overflow:hidden}
+/* Topbar */
+.reels-topbar{position:fixed;top:0;inset-inline:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));background:linear-gradient(rgba(0,0,0,.82),rgba(0,0,0,.35) 60%,transparent)}
+.reels-topbar .logo{color:#fff;font-size:18px;text-decoration:none;font-weight:900;display:flex;align-items:center;gap:6px}
+.reels-topbar .logo-mark{width:32px;height:32px;border-radius:10px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.35);color:#10b981;display:grid;place-items:center}
+.reels-topbar .links{display:flex;gap:8px}
+.reels-close{color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:6px 14px;border-radius:20px;font-size:12px;text-decoration:none;backdrop-filter:blur(8px);transition:.15s}
+.reels-close:hover{background:rgba(255,255,255,.22)}
+/* Progress bar */
+.reels-progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:60;background:rgba(255,255,255,.12)}
+.reels-progress i{display:block;height:100%;background:#10b981;width:0%;transition:width .25s ease}
+/* Feed */
+.reels-feed{height:100dvh;overflow-y:scroll;scroll-snap-type:y mandatory;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.reels-feed::-webkit-scrollbar{display:none}
+.reel{position:relative;height:100dvh;scroll-snap-align:start;background:#0a0a0a;overflow:hidden;isolation:isolate}
+.reel-media{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#080c0e}
+.reel-media img{width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none;transition:filter .25s}
+.reel-media img.bk-blur{filter:blur(18px) brightness(.7) scale(1.06)}
+.reel-media .video-play{position:absolute;width:68px;height:68px;border-radius:50%;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.9);color:#fff;font-size:26px;display:grid;place-items:center;backdrop-filter:blur(4px);z-index:2}
+.reel-dots{position:absolute;top:70px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:5;background:rgba(0,0,0,.35);padding:5px 9px;border-radius:20px;backdrop-filter:blur(6px)}
+.reel-dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.38);transition:.22s;display:block}
+.reel-dots i.on{background:#fff;width:20px;border-radius:4px}
+/* Info bottom */
+.reel-info{position:absolute;inset-inline-start:14px;inset-inline-end:86px;bottom:0;z-index:4;padding:0 0 28px;padding-bottom:max(28px,env(safe-area-inset-bottom));color:#fff;background:linear-gradient(transparent 0%,rgba(0,0,0,.55) 30%,rgba(0,0,0,.88) 100%);pointer-events:none}
+.reel-info .author-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;pointer-events:auto}
+.reel-info .avatar{width:36px;height:36px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-weight:900;font-size:15px;border:2px solid #fff;flex:none}
+.reel-info .author-name{font-weight:800;font-size:13px;display:flex;align-items:center;gap:4px}
+.reel-info .check{color:#7fe0b4}
+.reel-info h3{margin:0 0 6px;font-size:15px;font-weight:900;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.reel-info p{margin:0;font-size:12px;color:#e6e6e6;line-height:1.9;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;opacity:.92}
+.reel-pills{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.reel-pills .pill{background:rgba(255,255,255,.16);color:#fff;font-size:10px;padding:3px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(4px)}
+/* Right rail */
+.reel-rail{position:absolute;inset-inline-end:10px;bottom:96px;bottom:max(96px,calc(env(safe-area-inset-bottom) + 86px));z-index:6;display:flex;flex-direction:column;align-items:center;gap:18px}
+.ra-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:0;cursor:pointer;color:#fff;font-size:26px;text-shadow:0 1px 10px rgba(0,0,0,.8);transition:transform .12s}
+.ra-btn:active{transform:scale(.9)}
+.ra-btn small{font-size:10px;font-weight:800;letter-spacing:.2px;text-shadow:0 1px 6px rgba(0,0,0,.9)}
+.ra-btn.liked{color:#ff2d55;filter:drop-shadow(0 0 10px rgba(255,45,85,.6))}
+.ra-btn .buy-chip{display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(0,0,0,.58);border:1px solid rgba(255,255,255,.32);border-radius:16px;padding:8px 10px;font-size:11px;font-weight:800;line-height:1.5;text-align:center;backdrop-filter:blur(8px)}
+.ra-btn .buy-chip .price{color:#ffd166}
+/* Heart pop */
+.heart-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:88px;pointer-events:none;z-index:9;opacity:0}
+.heart-pop.show{animation:bkpop .72s cubic-bezier(.17,.89,.32,1.49) forwards}
+@keyframes bkpop{0%{transform:translate(-50%,-50%) scale(0);opacity:0}15%{opacity:1}35%{transform:translate(-50%,-50%) scale(1.25)}70%{transform:translate(-50%,-50%) scale(.95)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+/* Lock overlay */
+.reel-lock{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.52);backdrop-filter:blur(6px);color:#fff;text-align:center;padding:22px}
+.reel-lock .lk-ic{font-size:48px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.6))}
+.reel-lock b{font-size:16px;font-weight:900}
+.reel-lock p{font-size:12px;color:#ddd;max-width:300px;line-height:2;margin:0;opacity:.9}
+.lk-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.lk-btn{border:0;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer;background:#fff;color:#111;transition:.15s;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.lk-btn:hover{transform:translateY(-1px)}
+.lk-btn.green{background:#10b981;color:#04110b;box-shadow:0 6px 20px rgba(16,185,129,.35)}
+/* Comments sheet */
+.comments-sheet{position:absolute;inset-inline:0;bottom:-100%;height:64%;background:#11181f;border-radius:22px 22px 0 0;z-index:12;transition:bottom .32s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden;border-top:1px solid rgba(255,255,255,.12);box-shadow:0 -10px 40px rgba(0,0,0,.6)}
+.comments-sheet.open{bottom:0}
+.cs-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800;font-size:14px;flex:none}
+.cs-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:14px;cursor:pointer}
+.cs-list{flex:1;overflow-y:auto;padding:14px 16px;color:#fff;overscroll-behavior:contain}
+.cs-item{display:flex;gap:10px;margin-bottom:16px;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.cs-item .av{width:32px;height:32px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-size:12px;font-weight:900;flex-shrink:0;color:#04110b}
+.cs-item b{font-size:12px;color:#fff}
+.cs-item p{margin:4px 0 0;font-size:12px;color:#d1d9e2;line-height:1.9;word-break:break-word}
+.cs-item small{color:#8b98a5;font-size:10px}
+.cs-form{display:flex;gap:8px;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.1);background:#0d131a;flex:none}
+.cs-form input{flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:11px 14px;color:#fff;font-size:13px;outline:0;transition:.15s}
+.cs-form input:focus{border-color:#10b981;background:rgba(255,255,255,.1)}
+.cs-form button{background:#10b981;border:0;border-radius:20px;padding:0 18px;color:#04110b;font-weight:800;cursor:pointer;font-size:13px;transition:.15s}
+.cs-form button:hover{background:#34d399}
+/* Toast */
+.toast{position:fixed;bottom:28px;bottom:max(28px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#111a24;border:1px solid rgba(255,255,255,.18);color:#fff;padding:12px 20px;border-radius:24px;font-size:13px;z-index:99;max-width:92%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);backdrop-filter:blur(12px)}
+.toast a{color:#34d399;font-weight:800;text-decoration:none}
+.toast.error{border-color:rgba(248,113,113,.4);background:#1a1214}
+/* Empty */
+.reels-empty{height:100dvh;display:grid;place-items:center;color:#fff;text-align:center;padding:24px}
+.reels-empty .box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:28px 22px;max-width:360px}
+.reels-empty h2{margin:0 0 8px;font-size:18px}
+.reels-empty p{margin:0 0 14px;color:#9fb0c3;font-size:13px;line-height:2}
+@media(min-width:768px){.reel-media img{object-fit:contain;background:#080c0e}.reel-info{inset-inline-end:110px}.reels-feed{max-width:480px;margin:0 auto;border-inline:1px solid rgba(255,255,255,.08)}}
+</style>
+</head><body class="reels-body">
+<div class="reels-progress"><i id="reelsProgress"></i></div>
+<header class="reels-topbar">
+  <a class="logo" href="<?=url()?>"><span class="logo-mark">⌁</span> برد<em>خان</em> · ریلز</a>
+  <div class="links">
+    <a class="reels-close" href="<?=url('tips')?>">قلق‌ها</a>
+    <a class="reels-close" href="<?=url()?>">✕</a>
+  </div>
+</header>
+<main class="reels-feed" id="reelsFeed">
+<?php if(!$items): ?>
+  <div class="reels-empty">
+    <div class="box">
+      <div style="font-size:42px;margin-bottom:8px">🎬</div>
+      <h2>هنوز ریلزی برای نمایش نیست</h2>
+      <p>اولین قلق را شما ثبت کنید تا در ریلز نمایش داده شود. ریلز مثل اینستاگرام، اسکرول عمودی تمام‌صفحه است.</p>
+      <a class="lk-btn green" href="<?=url('upload')?>">➕ ثبت اولین قلق</a>
+      <a class="lk-btn" style="margin-top:8px" href="<?=url('tips')?>">مشاهده قلق‌ها</a>
+    </div>
+  </div>
+<?php else: foreach($items as $t):
+    $imgs=tip_images($t);
+    $tid=(int)$t['id'];
+    $locked=!tip_has_access($t,$u);
+    $liked=!empty($fvMap[$tid]);
+    $rating=$t['rating_count']?round($t['rating_sum']/$t['rating_count'],1):0;
+    // ساخت لیست URL ایمن برای هر عکس
+    $thumbUrls=[]; $fullUrls=[]; $displayUrls=[];
+    foreach($imgs as $p){
+        $thumbUrls[] = $reel_img_url($p,$t,$u,true);
+        $fullUrls[]  = $reel_img_url($p,$t,$u,false);
+    }
+    $displayUrls = $locked ? $thumbUrls : $fullUrls;
+    $firstDisplay = $displayUrls[0] ?? '';
+    // برای data attributes: JSON امن
+    $dataThumbs = h(json_encode($thumbUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    $dataFulls  = h(json_encode($fullUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+?>
+<div class="reel" id="reel-<?=$tid?>" data-id="<?=$tid?>" data-access="<?=h($t['access_type'])?>" data-price="<?=(int)$t['price']?>" data-locked="<?=$locked?'1':'0'?>" data-liked="<?=$liked?'1':'0'?>" data-index="0">
+  <div class="reel-media">
+    <?php if($firstDisplay): ?>
+      <img src="<?=h($firstDisplay)?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" data-thumbs="<?=$dataThumbs?>" data-fulls="<?=$dataFulls?>" loading="<?= $tid=== (int)$items[0]['id'] ? 'eager' : 'lazy' ?>">
+      <?php if(count($displayUrls)>1): ?>
+        <div class="reel-dots"><?php foreach($displayUrls as $k=>$v): ?><i class="<?=$k===0?'on':''?>"></i><?php endforeach;?></div>
+      <?php endif; ?>
+      <?php if(!empty($t['video_url'])): ?><div class="video-play">▶</div><?php endif; ?>
+    <?php else: ?>
+      <div class="reel-cover" style="width:100%;height:100%;display:grid;place-items:center;color:#fff;font-size:16px;background:linear-gradient(135deg,#0d6b55,#063e37);padding:20px;text-align:center"><?=h($t['title'])?></div>
+    <?php endif; ?>
+  </div>
+  <?php if($locked): ?>
+  <div class="reel-lock">
+    <div class="lk-ic"><?=$t['access_type']==='paid'?'🔒':'💗'?></div>
+    <b><?=$t['access_type']==='paid'?'این قلق پولی است':'این قلق با لایک باز می‌شود'?></b>
+    <p>برای دیدن تصویر اصلی و مراحل کامل تعمیر، <?=$t['access_type']==='paid'?'مبلغ را بپردازید':'یک لایک ثبت کنید'?>.</p>
+    <div class="lk-actions">
+      <button class="lk-btn green" data-act="unlock"><?=$t['access_type']==='paid'?('💳 خرید — '.money($t['price']).' تومان'):'♥ لایک و باز کردن'?></button>
+      <a class="lk-btn" href="<?=url('tip/'.$tid)?>">جزئیات قلق</a>
+    </div>
+  </div>
+  <?php endif; ?>
+  <div class="reel-info">
+    <div class="author-row">
+      <span class="avatar"><?=h(mb_substr($t['author_name']??'؟',0,1))?></span>
+      <span class="author-name"><?=h($t['author_name']??'تعمیرکار')?> <?php if(!empty($t['verified'])): ?><span class="check">✓</span><?php endif; ?></span>
+      <a href="<?=url('tip/'.$tid)?>" style="margin-right:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);padding:4px 10px;border-radius:14px;font-size:10px;pointer-events:auto;text-decoration:none;color:#fff">مشاهده</a>
+    </div>
+    <h3><?=h($t['title'])?></h3>
+    <p><?=h($t['short_description'])?></p>
+    <div class="reel-pills">
+      <span class="pill"><?=h($t['access_type']==='paid'?money($t['price']).' تومان':($t['access_type']==='like'?'با لایک':'رایگان'))?></span>
+      <span class="pill"><?=h(['easy'=>'آسان','medium'=>'متوسط','hard'=>'سخت'][$t['difficulty']??'medium']??'متوسط')?></span>
+      <?php if($rating): ?><span class="pill">★ <?=fa($rating)?></span><?php endif; ?>
+      <span class="pill">◉ <?=fa($t['views'])?></span>
+    </div>
+  </div>
+  <div class="reel-rail">
+    <button class="ra-btn<?=$liked?' liked':''?>" data-act="like" aria-label="لایک"><span><?=$liked?'❤️':'🤍'?></span><small data-count><?=fa($t['likes_count'])?></small></button>
+    <button class="ra-btn" data-act="comments" aria-label="نظرات"><span>💬</span><small><?=fa($ccMap[$tid]??0)?></small></button>
+    <button class="ra-btn" data-act="share" aria-label="اشتراک‌گذاری"><span>➦</span><small>اشتراک</small></button>
+    <?php if($locked && $t['access_type']!=='free'): ?>
+      <button class="ra-btn" data-act="unlock" aria-label="باز کردن"><span class="buy-chip"><?=$t['access_type']==='paid'?('💰 <span class="price">'.fa((int)($t['price']/1000)).'k</span>'):'♥'?><br>باز کردن</span></button>
+    <?php endif; ?>
+  </div>
+  <div class="heart-pop">❤️</div>
+  <div class="comments-sheet" role="dialog" aria-label="نظرات">
+    <div class="cs-head"><span>💬 نظرات</span><button class="cs-close" data-act="csclose" aria-label="بستن">✕</button></div>
+    <div class="cs-list"><div class="cs-item" style="color:#8b98a5;font-size:12px">در حال دریافت…</div></div>
+    <div class="cs-form">
+      <?php if($u): ?>
+        <input type="text" placeholder="نظر خود را بنویسید…" maxlength="500" dir="auto">
+        <button data-act="cssend">ارسال</button>
+      <?php else: ?>
+        <a class="lk-btn green" style="text-decoration:none;width:100%;text-align:center" href="<?=url('login')?>">برای نظر وارد شوید</a>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php endforeach; endif; ?>
+</main>
+<div id="bkToast" class="toast" style="display:none"></div>
+<script>
+// تست صفحه ریلز - نسخه اصلاح‌شده با رفع باگ {{}} و بهبود UX
+var BKC={csrf:<?=json_encode(csrf())?>,guest:<?=json_encode(!$u)?>,base:<?=json_encode(url(''))?>};
+function bkToast(m,link,isError){
+  var t=document.getElementById('bkToast');
+  t.className='toast'+(isError?' error':'');
+  t.innerHTML=m+(link?' <a href="'+link+'">شارژ کیف پول ←</a>':'');
+  t.style.display='block';
+  clearTimeout(t._h);
+  t._h=setTimeout(function(){t.style.display='none';},3800);
+}
+function bkAjax(body){
+  return fetch(window.location.href,{
+    method:'POST',
+    body:body,
+    headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}
+  }).then(function(r){
+    return r.text().then(function(txt){
+      try{return JSON.parse(txt);}catch(e){return {ok:false,error:'پاسخ نامعتبر از سرور: '+txt.slice(0,120)}}
+    });
+  }).catch(function(){return {ok:false,error:'خطای شبکه'}});
+}
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
-document.addEventListener('click',function(e){var b=e.target.closest('[data-act]');if(!b)return;var reel=b.closest('.reel');if(!reel)return;var act=b.dataset.act;if(act==='like'){if(BKC.guest){bkToast('برای لایک وارد شوید.','/login');return;}if(reel.dataset.access==='like'&&reel.dataset.locked==='1'){bkUnlock(reel);}else{bkLike(reel);}}else if(act==='comments'){bkOpenComments(reel);}else if(act==='share'){bkShare(reel);}else if(act==='unlock'){if(BKC.guest){bkToast('برای باز کردن قلق وارد شوید.','/login');return;}bkUnlock(reel);}else if(act==='csclose'){reel.querySelector('.comments-sheet').classList.remove('open');}else if(act==='cssend'){var inp=reel.querySelector('.cs-form input');bkSendComment(reel,inp);}});
-document.addEventListener('dblclick',function(e){var reel=e.target.closest('.reel');if(!reel)return;if(e.target.closest('.reel-rail')||e.target.closest('.reel-info')||e.target.closest('.reel-lock')||e.target.closest('.comments-sheet'))return;if(BKC.guest){bkToast('برای لایک وارد شوید.','/login');return;}if(reel.dataset.access==='like'&&reel.dataset.locked==='1'){bkUnlock(reel);}else{bkLike(reel);}});
-document.addEventListener('click',function(e){var img=e.target.closest('.reel-media img');if(!img)return;if(e.target.closest('.reel-lock')||e.target.closest('.comments-sheet'))return;var reel=img.closest('.reel');if(reel.dataset.locked==='1')return;var list=(img.dataset.imgs||'').split('|').filter(Boolean);if(list.length<2)return;var cur=img.src.split('/').pop();var idx=list.findIndex(function(x){return x.indexOf(cur)!==-1;});idx=(idx+1)%list.length;img.src=list[idx];var dots=reel.querySelectorAll('.reel-dots i');dots.forEach(function(d,i){d.classList.toggle('on',i===idx);});});
-document.addEventListener('contextmenu',function(e){e.preventDefault()});document.addEventListener('dragstart',function(e){e.preventDefault()});
-</script></body></html><?php exit;}
+function parseImgs(reel){
+  var img=reel.querySelector('.reel-media img');
+  if(!img) return {thumbs:[],fulls:[],cur:0};
+  try{
+    var thumbs=JSON.parse(img.getAttribute('data-thumbs')||'[]');
+    var fulls=JSON.parse(img.getAttribute('data-fulls')||'[]');
+    return {thumbs:thumbs,fulls:fulls,el:img};
+  }catch(e){return {thumbs:[],fulls:[],el:img};}
+}
+function currentDisplayList(reel){
+  var p=parseImgs(reel);
+  var locked=reel.dataset.locked==='1';
+  return locked ? p.thumbs : p.fulls;
+}
+function updateDots(reel,idx){
+  var dots=reel.querySelectorAll('.reel-dots i');
+  dots.forEach(function(d,i){d.classList.toggle('on',i===idx);});
+}
+function popHeart(reel,show){
+  var h=reel.querySelector('.heart-pop');
+  if(!h) return;
+  h.classList.remove('show');
+  if(show){void h.offsetWidth;h.classList.add('show');}
+}
+function bkLike(reel){
+  var btn=reel.querySelector('[data-act=like]');
+  var cnt=reel.querySelector('[data-count]');
+  var fd=new FormData();
+  fd.append('csrf',BKC.csrf);
+  fd.append('action','favorite');
+  fd.append('tip_id',reel.dataset.id);
+  btn.disabled=true;
+  bkAjax(fd).then(function(j){
+    btn.disabled=false;
+    if(!j||!j.ok){bkToast(j&&j.error?j.error:'خطا در ثبت لایک.',null,true);return;}
+    var liked=j.liked;
+    reel.dataset.liked=liked?'1':'0';
+    btn.classList.toggle('liked',liked);
+    var span=btn.querySelector('span');
+    if(span) span.textContent=liked?'❤️':'🤍';
+    if(cnt) cnt.textContent=j.likes;
+    popHeart(reel,liked);
+    bkToast(liked?'به علاقه‌مندی‌ها اضافه شد ❤️':'از علاقه‌مندی‌ها حذف شد');
+  });
+}
+function bkUnlock(reel){
+  var fd=new FormData();
+  fd.append('csrf',BKC.csrf);
+  fd.append('action','unlock');
+  fd.append('tip_id',reel.dataset.id);
+  bkToast('⏳ در حال باز کردن…');
+  bkAjax(fd).then(function(j){
+    if(!j){bkToast('پاسخی از سرور دریافت نشد.',null,true);return;}
+    if(j.ok){
+      reel.dataset.locked='0';
+      var lock=reel.querySelector('.reel-lock');
+      if(lock) lock.remove();
+      // حذف دکمه‌های باز کردن اضافی در rail
+      reel.querySelectorAll('.reel-rail [data-act=unlock]').forEach(function(b){b.remove();});
+      var parsed=parseImgs(reel);
+      var img=parsed.el;
+      if(img){
+        img.classList.remove('bk-blur');
+        // سوییچ به تصویر اصلی
+        try{
+          var fulls=JSON.parse(img.getAttribute('data-fulls')||'[]');
+          if(fulls && fulls[0]) img.src=fulls[0];
+        }catch(e){}
+      }
+      bkToast(j.message||'باز شد ✓');
+      popHeart(reel,true);
+    }else{
+      if(j.wallet){bkToast(j.error||'موجودی کافی نیست.','/wallet',true);}
+      else{bkToast(j.error||'باز نشد.',null,true);}
+    }
+  });
+}
+function bkShare(reel){
+  var url=location.origin+'/tip/'+reel.dataset.id;
+  var titleEl=reel.querySelector('.reel-info h3');
+  var text=titleEl?titleEl.textContent:'قلق تعمیراتی بردخان';
+  if(navigator.share){
+    navigator.share({title:text,text:text,url:url}).catch(function(){});
+  }else{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(function(){bkToast('لینک کپی شد ✓');},function(){bkToast('لینک: '+url);});
+    }else{
+      var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy');bkToast('لینک کپی شد ✓');}catch(e){bkToast('لینک: '+url);}
+      ta.remove();
+    }
+  }
+}
+function bkOpenComments(reel){
+  var sheet=reel.querySelector('.comments-sheet');
+  sheet.classList.add('open');
+  var list=sheet.querySelector('.cs-list');
+  list.innerHTML='<div class="cs-item" style="color:#8b98a5;font-size:12px">⏳ در حال دریافت نظرات…</div>';
+  fetch('/ajax-comments?tip_id='+reel.dataset.id,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}})
+    .then(function(r){return r.json().catch(function(){return null;});})
+    .then(function(j){
+      if(!j){list.innerHTML='<div class="cs-item" style="color:#f87171">خطا در دریافت نظرات</div>';return;}
+      if(!j.items||!j.items.length){
+        list.innerHTML='<div class="cs-item" style="color:#8b98a5;font-size:12px">اولین نظر را شما ثبت کنید ✍️</div>';
+        return;
+      }
+      var h='';
+      j.items.forEach(function(c){
+        h+='<div class="cs-item"><span class="av">'+esc((c.name||'?').charAt(0))+'</span><div><b>'+esc(c.name)+'</b><p>'+esc(c.body)+'</p><small>'+esc(c.ago)+'</small></div></div>';
+      });
+      list.innerHTML=h;
+      list.scrollTop=list.scrollHeight;
+    });
+}
+function bkSendComment(reel,input){
+  var v=(input.value||'').trim();
+  if(v.length<2){bkToast('متن نظر کوتاه است.',null,true);return;}
+  var fd=new FormData();
+  fd.append('csrf',BKC.csrf);
+  fd.append('action','comment');
+  fd.append('tip_id',reel.dataset.id);
+  fd.append('body',v);
+  input.disabled=true;
+  bkAjax(fd).then(function(j){
+    input.disabled=false;
+    if(j&&j.ok){
+      input.value='';
+      bkOpenComments(reel);
+      // افزایش شمارنده کامنت
+      var btn=reel.querySelector('[data-act=comments] small');
+      if(btn){
+        var cur=parseInt(btn.textContent.replace(/[^0-9]/g,''))||0;
+        btn.textContent=cur+1;
+      }
+      bkToast('نظر شما ثبت شد ✓');
+    }else{
+      bkToast(j&&j.error?j.error:'خطا در ثبت نظر.',null,true);
+    }
+  });
+}
+// کلیک‌ها
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');
+  if(!b) return;
+  var reel=b.closest('.reel');
+  if(!reel) return;
+  var act=b.dataset.act;
+  if(act==='like'){
+    if(BKC.guest){bkToast('برای لایک وارد شوید.','/login',true);return;}
+    if(reel.dataset.access==='like' && reel.dataset.locked==='1'){bkUnlock(reel);}
+    else{bkLike(reel);}
+  }else if(act==='comments'){bkOpenComments(reel);}
+  else if(act==='share'){bkShare(reel);}
+  else if(act==='unlock'){
+    if(BKC.guest){bkToast('برای باز کردن قلق وارد شوید.','/login',true);return;}
+    bkUnlock(reel);
+  }else if(act==='csclose'){reel.querySelector('.comments-sheet').classList.remove('open');}
+  else if(act==='cssend'){
+    var inp=reel.querySelector('.cs-form input');
+    if(inp) bkSendComment(reel,inp);
+  }
+});
+// دابل‌کلیک / دابل‌تپ برای لایک
+var lastTap=0;
+document.addEventListener('click',function(e){
+  var reel=e.target.closest('.reel');
+  if(!reel) return;
+  if(e.target.closest('.reel-rail')||e.target.closest('.reel-info')||e.target.closest('.reel-lock')||e.target.closest('.comments-sheet')||e.target.closest('[data-act]')) return;
+  var now=Date.now();
+  if(now-lastTap<300){
+    // double tap
+    if(BKC.guest){bkToast('برای لایک وارد شوید.','/login',true);return;}
+    if(reel.dataset.access==='like' && reel.dataset.locked==='1'){bkUnlock(reel);}else{bkLike(reel);}
+  }
+  lastTap=now;
+});
+document.addEventListener('dblclick',function(e){
+  var reel=e.target.closest('.reel');
+  if(!reel) return;
+  if(e.target.closest('.reel-rail')||e.target.closest('.reel-info')||e.target.closest('.reel-lock')||e.target.closest('.comments-sheet')) return;
+  if(BKC.guest){bkToast('برای لایک وارد شوید.','/login',true);return;}
+  if(reel.dataset.access==='like' && reel.dataset.locked==='1'){bkUnlock(reel);}else{bkLike(reel);}
+});
+// تعویض عکس با کلیک روی تصویر
+document.addEventListener('click',function(e){
+  var img=e.target.closest('.reel-media img');
+  if(!img) return;
+  var reel=img.closest('.reel');
+  if(!reel || reel.dataset.locked==='1') return;
+  var list=currentDisplayList(reel);
+  if(list.length<2) return;
+  var curIdx=parseInt(reel.dataset.index||'0');
+  var next=(curIdx+1)%list.length;
+  reel.dataset.index=next;
+  img.src=list[next];
+  updateDots(reel,next);
+});
+// کیبورد: بالا/پایین
+document.addEventListener('keydown',function(e){
+  var feed=document.getElementById('reelsFeed');
+  if(!feed) return;
+  if(e.key==='ArrowDown'){e.preventDefault();feed.scrollBy({top:window.innerHeight*0.9,behavior:'smooth'});}
+  if(e.key==='ArrowUp'){e.preventDefault();feed.scrollBy({top:-window.innerHeight*0.9,behavior:'smooth'});}
+  if(e.key==='Escape'){
+    document.querySelectorAll('.comments-sheet.open').forEach(function(s){s.classList.remove('open');});
+  }
+});
+// پروگرس بار + مشاهده ریل فعلی
+(function(){
+  var feed=document.getElementById('reelsFeed');
+  var bar=document.getElementById('reelsProgress');
+  if(!feed||!bar) return;
+  function upd(){
+    var max=feed.scrollHeight-feed.clientHeight;
+    var pct=max>0 ? (feed.scrollTop/max*100) : 0;
+    bar.style.width=pct+'%';
+  }
+  feed.addEventListener('scroll',upd,{passive:true});
+  upd();
+  // IntersectionObserver برای تست و لاگ
+  if('IntersectionObserver' in window){
+    var obs=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          var id=en.target.dataset.id;
+          // برای تست: لاگ ریل فعلی
+          // console.log('reel in view', id);
+          // می‌توان URL را به‌روز کرد بدون ریلود
+          try{history.replaceState(null,'','#reel-'+id);}catch(e){}
+        }
+      });
+    },{root:feed,threshold:0.6});
+    document.querySelectorAll('.reel').forEach(function(r){obs.observe(r);});
+  }
+})();
+// جلوگیری از کلیک راست فقط روی تصاویر محافظت‌شده
+document.addEventListener('contextmenu',function(e){
+  if(e.target.closest('.reel-media img')) e.preventDefault();
+});
+document.addEventListener('dragstart',function(e){
+  if(e.target.closest('.reel-media img')) e.preventDefault();
+});
+// تست خودکار صفحه ریلز (کنسول)
+console.log('%c[Reels Test] صفحه ریلز بارگذاری شد','color:#10b981;font-weight:bold');
+console.log('[Reels Test] تعداد ریلز:', document.querySelectorAll('.reel').length);
+console.log('[Reels Test] BKC:', BKC);
+setTimeout(function(){
+  var first=document.querySelector('.reel');
+  if(first){
+    console.log('[Reels Test] اولین ریل:', first.dataset.id, 'locked:', first.dataset.locked, 'access:', first.dataset.access);
+  }
+},500);
+</script>
+</body></html><?php exit;}
 if($page==='tour'){header_html('آموزش و امکانات سایت');?><main class="wrap page"><div class="tour-hero"><h1>🎓 آموزش بردخان</h1><p style="color:#d7f5e8">از ثبت اولین قلق تا فروش و درآمد — همه‌چیز را قدم‌به‌قدم یاد بگیرید.</p><a class="btn btn-amber mt" href="<?=url('register')?>">شروع رایگان</a></div>
 
 <div class="section-head"><h2>🚀 شروع سریع در ۴ قدم</h2></div>
