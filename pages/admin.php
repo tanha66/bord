@@ -204,13 +204,36 @@ elseif ($tab === 'orders') {
 }
 
 elseif ($tab === 'tips') {
-    $items = $pdo->query("SELECT t.*,u.name author_name FROM tips t JOIN users u ON u.id=t.author_id ORDER BY FIELD(t.status,'pending','published','draft','rejected','removed'),t.created_at DESC LIMIT 150")->fetchAll();
+    $tf = in_array($_GET['f'] ?? '', ['pending','published','draft','rejected','removed'], true) ? $_GET['f'] : '';
+    $tq = trim($_GET['q'] ?? '');
+    $where = ''; $params = [];
+    if ($tf !== '') { $where = 'WHERE t.status=?'; $params[] = $tf; }
+    if ($tq !== '') { $where .= ($where === '' ? 'WHERE ' : ' AND ') . '(t.title LIKE ? OR t.device_name LIKE ? OR t.brand LIKE ?)'; $params[] = '%'.$tq.'%'; $params[] = '%'.$tq.'%'; $params[] = '%'.$tq.'%'; }
+    $tstmt = $pdo->prepare("SELECT t.*,u.name author_name FROM tips t JOIN users u ON u.id=t.author_id $where ORDER BY FIELD(t.status,'pending','published','draft','rejected','removed'),t.created_at DESC LIMIT 500");
+    $tstmt->execute($params);
+    $items = $tstmt->fetchAll();
     $published=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn();
     $pending=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='pending'")->fetchColumn();
     $draft=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='draft'")->fetchColumn();
+    $rejected=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='rejected'")->fetchColumn();
+    $removed=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='removed'")->fetchColumn();
     $totalViews=(int)$pdo->query('SELECT COALESCE(SUM(views),0) FROM tips')->fetchColumn();
     $totalSales=(int)$pdo->query("SELECT COALESCE(SUM(purchases_count),0) FROM tips")->fetchColumn();
     ?>
+    <div class="flex between items-center mb" style="gap:10px;flex-wrap:wrap">
+      <div class="tip-meta">
+        <a class="pill <?=$tf===''?'green':''?>" href="<?=url('admin',['tab'=>'tips'])?>">همه</a>
+        <a class="pill <?=$tf==='pending'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'pending'])?>">⏳ در انتظار (<?=fa($pending)?>)</a>
+        <a class="pill <?=$tf==='published'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'published'])?>">✅ منتشرشده (<?=fa($published)?>)</a>
+        <a class="pill <?=$tf==='rejected'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'rejected'])?>">ردشده (<?=fa($rejected)?>)</a>
+        <a class="pill <?=$tf==='removed'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'removed'])?>">حذفشده (<?=fa($removed)?>)</a>
+      </div>
+      <form method="get" style="display:flex;gap:6px;max-width:300px">
+        <input type="hidden" name="r" value="admin"><input type="hidden" name="tab" value="tips">
+        <input class="field" style="padding:8px" name="q" value="<?=h($tq)?>" placeholder="جستجوی قلق…">
+        <button class="btn btn-secondary btn-sm">جستجو</button>
+      </form>
+    </div>
     <div class="grid grid-4 mb">
       <div class="card stat-card"><strong><?=fa($published)?></strong><small>منتشرشده</small></div>
       <div class="card stat-card"><strong><?=fa($pending)?></strong><small>در انتظار بررسی</small></div>
@@ -251,12 +274,12 @@ elseif ($tab === 'tips') {
               <button class="btn btn-secondary btn-sm" name="mod_action" value="feature">⭐</button>
               <?php if ($x['status'] !== 'removed'): ?><button class="btn btn-danger btn-sm" name="mod_action" value="remove">حذف</button><?php endif; ?>
               <a class="btn btn-secondary btn-sm" href="<?=url('tip/'.$x['id'])?>" target="_blank">👁</a>
-              <form method="post" style="display:inline" onsubmit="return confirm('حذف نهایی و بدون برگشت؟')">
-                <input type="hidden" name="csrf" value="<?=csrf()?>">
-                <input type="hidden" name="action" value="admin_tip_delete">
-                <input type="hidden" name="tip_id" value="<?=$x['id']?>">
-                <button class="btn btn-danger btn-sm">🗑</button>
-              </form>
+            </form>
+            <form method="post" style="display:inline" onsubmit="return confirm('حذف نهایی و بدون برگشت؟')">
+              <input type="hidden" name="csrf" value="<?=csrf()?>">
+              <input type="hidden" name="action" value="admin_tip_delete">
+              <input type="hidden" name="tip_id" value="<?=$x['id']?>">
+              <button class="btn btn-danger btn-sm">🗑</button>
             </form>
           </td>
         </tr>

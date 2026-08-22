@@ -1,4 +1,4 @@
-const CACHE = 'bordkhan-pwa-v2';
+const CACHE = 'bordkhan-pwa-v3';
 const ASSETS = ['/', '/assets/style.css', '/assets/icon-192.png', '/assets/icon-512.png'];
 
 // صفحاتی که محتوای شخصی دارند یا فرم دارند هرگز کش نمی‌شوند

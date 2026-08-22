@@ -673,6 +673,17 @@ body{padding-bottom:82px !important}
 .file-preview img{border-radius:10px;border:1px solid var(--line)}
 .file-preview:empty{display:none}
 
+/* ---- اعتبارسنجی زنده فرم‌ها ---- */
+.bk-checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:14px}
+.bk-check{font-size:12px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--line);transition:all .2s}
+.bk-check.ok{color:#10b981;border-color:rgba(16,185,129,.45)}
+.bk-check.bad{color:var(--rose);border-color:rgba(244,63,94,.45)}
+.bk-ic{display:inline-block;width:18px;font-weight:bold}
+.bk-summary{font-size:12px;margin:8px 0 12px;font-weight:bold}
+.bk-summary.ok{color:#10b981}.bk-summary.bad{color:#b45309}
+.field.bk-ok{border-color:#10b981 !important;box-shadow:0 0 0 3px rgba(16,185,129,.12) !important}
+.field.bk-bad{border-color:#f43f5e !important;box-shadow:0 0 0 3px rgba(244,63,94,.12) !important}
+
 /* ---- تیکت پشتیبانی و گفتگو ---- */
 .grow{flex:1;min-width:0}
 .flex.center{justify-content:center}
