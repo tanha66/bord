@@ -270,16 +270,11 @@ elseif ($tab === 'tips') {
               <input type="hidden" name="csrf" value="<?=csrf()?>">
               <input type="hidden" name="action" value="admin_tip">
               <input type="hidden" name="tip_id" value="<?=$x['id']?>">
-              <?php if ($x['status'] !== 'published'): ?><button class="btn btn-primary btn-sm" name="mod_action" value="publish">تأیید</button><?php endif; ?>
+              <?php if ($x['status'] !== 'published'): ?><button class="btn btn-primary btn-sm" name="mod_action" value="publish" title="تأیید و انتشار">تأیید</button><?php endif; ?>
               <button class="btn btn-secondary btn-sm" name="mod_action" value="feature">⭐</button>
               <?php if ($x['status'] !== 'removed'): ?><button class="btn btn-danger btn-sm" name="mod_action" value="remove">حذف</button><?php endif; ?>
               <a class="btn btn-secondary btn-sm" href="<?=url('tip/'.$x['id'])?>" target="_blank">👁</a>
-            </form>
-            <form method="post" style="display:inline" onsubmit="return confirm('حذف نهایی و بدون برگشت؟')">
-              <input type="hidden" name="csrf" value="<?=csrf()?>">
-              <input type="hidden" name="action" value="admin_tip_delete">
-              <input type="hidden" name="tip_id" value="<?=$x['id']?>">
-              <button class="btn btn-danger btn-sm">🗑</button>
+              <button class="btn btn-danger btn-sm" name="mod_action" value="delete_forever" onclick="return confirm('حذف نهایی و بدون برگشت؟')" title="حذف برای همیشه">🗑</button>
             </form>
           </td>
         </tr>
