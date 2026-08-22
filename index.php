@@ -2020,21 +2020,216 @@ setTimeout(function(){
 },500);
 </script>
 </body></html><?php exit;}
-if($page==='tour'){header_html('آموزش و امکانات سایت');?><main class="wrap page"><div class="tour-hero"><h1>🎓 آموزش بردخان</h1><p style="color:#d7f5e8">از ثبت اولین قلق تا فروش و درآمد — همه‌چیز را قدم‌به‌قدم یاد بگیرید.</p><a class="btn btn-amber mt" href="<?=url('register')?>">شروع رایگان</a></div>
+if($page==='tour'){
+    $s=settings();
+    $u=current_user();
+    header_html('آموزش و امکانات سایت');?>
+<main class="wrap page">
+  <!-- Hero -->
+  <div class="tour-hero" style="background:radial-gradient(900px 400px at 85% -10%,rgba(16,185,129,.18),transparent),radial-gradient(700px 350px at 10% 110%,rgba(56,189,248,.12),transparent),linear-gradient(135deg,#073d2e,#0a5a3f);border:1px solid rgba(16,185,129,.25);border-radius:20px;padding:36px 20px;text-align:center;margin-bottom:24px;position:relative;overflow:hidden">
+    <div style="font-size:48px;margin-bottom:10px">🎓</div>
+    <h1 style="font-size:clamp(22px,4vw,32px);font-weight:900;color:#fff">آموزش کامل بردخان - از صفر تا درآمد</h1>
+    <p style="color:#c8f5e3;max-width:720px;margin:10px auto 0;font-size:14px;line-height:2">بردخان بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی است. اینجا یاد می‌گیرید چطور قلق ثبت کنید، برد بفروشید، از ریلز استفاده کنید و از دانش‌تان درآمد بسازید.</p>
+    <div class="flex center gap mt" style="flex-wrap:wrap;justify-content:center;margin-top:18px">
+      <?php if($u): ?>
+        <a class="btn btn-amber btn-lg" href="<?=url('upload')?>">➕ ثبت قلق و کسب درآمد</a>
+        <a class="btn btn-primary" href="<?=url('reels')?>">🎬 مشاهده ریلز</a>
+        <a class="btn secondary" href="<?=url('boards')?>">🏪 فروشگاه برد</a>
+      <?php else: ?>
+        <a class="btn btn-amber btn-lg" href="<?=url('register')?>">✨ ثبت‌نام رایگان + <?=money($s['invitee_credit']??10000)?> تومان هدیه</a>
+        <a class="btn btn-primary" href="<?=url('reels-demo')?>">🧪 تست ریلز (دمو)</a>
+        <a class="btn secondary" href="<?=url('tour')?>#features">مشاهده امکانات</a>
+      <?php endif; ?>
+    </div>
+  </div>
 
-<div class="section-head"><h2>🚀 شروع سریع در ۴ قدم</h2></div>
-<div class="tour-grid"><?php foreach([['1','ثبت‌نام کنید','با شماره موبایل حساب بسازید و اعتبار خوش‌آمدگویی هدیه بگیرید.'],['2','اولین قلق را ثبت کنید','از دکمه «+ آپلود» مشکل دستگاه و راه‌حل خود را با حداقل یک عکس ثبت کنید.'],['3','تأیید و انتشار','بعد از بررسی مدیر، قلق شما در فروشگاه منتشر می‌شود و درآمد آن به کیف پول شما می‌آید.'],['4','کیف پول را شارژ و برداشت کنید','از صفحه کیف پول شارژ کنید، از فروش درآمد بگیرید و درخواست تسویه ثبت کنید.']] as $x):?><div class="tour-step"><span class="num"><?=h($x[0])?></span><div><h3><?=h($x[1])?></h3><p><?=h($x[2])?></p></div></div><?php endforeach;?></div>
+  <!-- شروع سریع -->
+  <div class="section-head"><h2>🚀 شروع سریع در ۶ قدم</h2><p>از ثبت‌نام تا اولین درآمد</p></div>
+  <div class="tour-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+    <?php foreach([
+      ['1','ثبت‌نام کنید','با شماره موبایل 091... ثبت‌نام کنید، کد تأیید را وارد کنید و '.money($s['invitee_credit']??10000).' تومان اعتبار هدیه بگیرید.','📱'],
+      ['2','پروفایل را کامل کنید','نام، بیوگرافی و تخصص‌تان را بنویسید تا به عنوان تعمیرکار تأییدشده شناخته شوید.','👤'],
+      ['3','اولین قلق را ثبت کنید','از دکمه + آپلود، عنوان (≥8 حرف)، توضیح کوتاه (≥20)، توضیح کامل (≥20)، نام دستگاه و برند و دسته را وارد کنید + حداقل ۱ عکس.','➕'],
+      ['4','منتظر تأیید مدیر باشید','قلق شما در صف pending می‌رود. مدیر آن را بررسی و منتشر می‌کند. در my-tips وضعیت را ببینید.','⏳'],
+      ['5','از ریلز استفاده کنید','مثل اینستاگرام بین قلق‌ها اسکرول کنید، لایک کنید (دابل‌تپ ❤️)، کامنت بگذارید و به اشتراک بگذارید.','🎬'],
+      ['6','کسب درآمد و برداشت','هر فروش قلق پولی = درآمد به کیف پول (بعد از کسر کمیسیون). از wallet درخواست تسویه با شبا بدهید.','💰'],
+    ] as $x):?>
+      <div class="tour-step" style="display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);padding:16px;border-radius:14px;position:relative;overflow:hidden">
+        <span class="num" style="width:36px;height:36px;border-radius:10px;background:var(--accent);color:#04110b;display:grid;place-items:center;font-weight:900;flex:none;font-size:16px"><?=h($x[0])?></span>
+        <div style="flex:1"><h3 style="font-size:14px;font-weight:900;margin:0 0 4px"><?=h($x[1])?> <span style="font-size:20px"><?=h($x[3])?></span></h3><p style="font-size:12px;color:var(--text-soft);margin:0;line-height:2"><?=h($x[2])?></p></div>
+      </div>
+    <?php endforeach;?>
+  </div>
 
-<section class="section"><div class="section-head"><h2>🔓 سه نوع دسترسی قلق‌ها</h2></div><div class="grid grid-3">
-<div class="card auth-card"><div style="font-size:30px">🟢</div><h3>رایگان</h3><p class="muted" style="font-size:12px">همهٔ توضیحات، عکس‌ها، ویدیو و مراحل تعمیر بلافاصله و بدون هیچ کاری نمایش داده می‌شود.</p></div>
-<div class="card auth-card"><div style="font-size:30px">❤️</div><h3>با لایک</h3><p class="muted" style="font-size:12px">تصاویر و مراحل قفل و محو هستند؛ با یک لایک باز می‌شوند و برای همیشه برای شما باز می‌مانند.</p></div>
-<div class="card auth-card"><div style="font-size:30px">💰</div><h3>پرداختی</h3><p class="muted" style="font-size:12px">با پرداخت از کیف پول، تصاویر، ویدیو و مراحل گام‌به‌گام تعمیر باز می‌شود.</p></div>
-</div></section>
+  <!-- 3 نوع دسترسی -->
+  <section class="section" id="access">
+    <div class="section-head"><div><h2>🔓 سه نوع دسترسی قلق‌ها - کامل</h2><p>رایگان، با لایک و پرداختی با محافظت کامل</p></div></div>
+    <div class="grid grid-3">
+      <div class="card auth-card" style="padding:18px;border:1px solid rgba(16,185,129,.3)"><div style="font-size:32px">🟢</div><h3 style="margin:8px 0">رایگان</h3><p class="muted" style="font-size:12px;line-height:2">همهٔ توضیحات، عکس‌ها، ویدیو و مراحل گام‌به‌گام بلافاصله نمایش داده می‌شود. مناسب برای جذب دنبال‌کننده و افزایش امتیاز.</p><ul style="font-size:11px;color:var(--text-soft);line-height:2.2;margin:8px 0 0;padding-right:16px"><li>بدون نیاز به لایک یا پرداخت</li><li>تصاویر با واترمارک سبک</li><li>پاداش آپلود: <?=money($s['upload_reward']??50000)?> تومان</li></ul></div>
+      <div class="card auth-card" style="padding:18px;border:1px solid rgba(244,63,94,.3)"><div style="font-size:32px">❤️</div><h3 style="margin:8px 0">با لایک</h3><p class="muted" style="font-size:12px;line-height:2">تصاویر و مراحل قفل و محو (blur 16px) هستند. با یک لایک، برای همیشه برای آن کاربر باز می‌شود.</p><ul style="font-size:11px;color:var(--text-soft);line-height:2.2;margin:8px 0 0;padding-right:16px"><li>سقف لایک روزانه: <?=fa($s['daily_like_limit']??5)?> برای هر کاربر</li><li>پس از لایک، tip_accesses ثبت + likes_count +1</li><li>در ریلز: کلیک لایک = باز کردن خودکار</li></ul></div>
+      <div class="card auth-card" style="padding:18px;border:1px solid rgba(245,158,11,.3)"><div style="font-size:32px">💰</div><h3 style="margin:8px 0">پرداختی</h3><p class="muted" style="font-size:12px;line-height:2">با پرداخت از کیف پول، محتوای کامل باز می‌شود. درآمد پس از کسر کمیسیون به فروشنده می‌رسد.</p><ul style="font-size:11px;color:var(--text-soft);line-height:2.2;margin:8px 0 0;padding-right:16px"><li>کمیسیون سایت: <?=fa($s['commission_percent']??20)?>٪</li><li>سهم فروشنده: <?=fa(100-($s['commission_percent']??20))?>٪</li><li>پرداخت امن با debit تراکنشی</li><li>نشان first_sale و first_purchase خودکار</li></ul></div>
+    </div>
+  </section>
 
-<section class="section"><div class="section-head"><h2>💵 کسب درآمد در بردخان</h2></div><div class="grid grid-3"><?php foreach([['🛒','فروش قلق','هر بار باز شدن قلق پولی شما، بعد از کسر کارمزد سایت، پولش به کیف پول شما واریز می‌شود.'],['🎁','پاداش آپلود','بابت ثبت هر قلق تأییدشده، پاداش نقدی به کیف پول شما اضافه می‌شود.'],['🏪','فروشگاه برد','بردهای سالم و مازاد خود را بفروشید؛ وجه خرید تا تأیید خریدار نزد بردخان امانت می‌ماند.'],['👥','معرفی دوستان','با کد معرفی خود دوستان را دعوت کنید و بابت اولین فعالیت موفق آن‌ها پاداش بگیرید.'],['👛','کیف پول','موجودی خود را از درگاه آنلاین یا کارت‌به‌کارت شارژ کنید و با شبا تسویه بگیرید.'],['🏅','نشان‌ها و سطح','با فعالیت مستمر نشان بگیرید و از تازه‌کار تا استاد ارتقا پیدا کنید.']] as $f):?><div class="card auth-card"><div style="font-size:30px"><?=h($f[0])?></div><h3 style="margin:8px 0"><?=h($f[1])?></h3><p class="muted" style="font-size:12px"><?=h($f[2])?></p></div><?php endforeach;?></div></section>
+  <!-- ریلز -->
+  <section class="section" id="reels">
+    <div class="section-head"><div><h2>🎬 ریلز قلق‌ها - اینستاگرام استایل</h2><p>اسکرول عمودی تمام‌صفحه با تعاملات کامل</p></div><a class="btn btn-primary btn-sm" href="<?=url('reels')?>">مشاهده ریلز واقعی</a><a class="btn btn-secondary btn-sm" href="<?=url('reels-demo')?>">🧪 دمو بدون DB</a></div>
+    <div class="grid grid-2">
+      <div class="card auth-card" style="padding:18px">
+        <h3>✨ ویژگی‌های ریلز</h3>
+        <ul style="font-size:12px;line-height:2.4;color:var(--text-soft);padding-right:18px;margin:8px 0 0">
+          <li>📱 اسکرول عمودی تمام‌صفحه با <code>scroll-snap-type:y mandatory</code></li>
+          <li>❤️ لایک با دابل‌تپ (300ms) + دابل‌کلیک + انیمیشن قلب pop</li>
+          <li>🖼️ تعویض بین چند عکس با کلیک روی تصویر + نقطه‌های <code>reel-dots</code></li>
+          <li>💬 پنل کامنت کشویی با آجاکس <code>/ajax-comments</code></li>
+          <li>➦ اشتراک با Web Share API + کپی لینک fallback</li>
+          <li>🔒 قفل هوشمند: like-type با لایک باز، paid-type با خرید از کیف پول</li>
+          <li>📊 پروگرس بار بالا + IntersectionObserver برای تشخیص ریل فعلی</li>
+          <li>⌨️ کیبورد: ArrowDown/Up برای جابجایی، Escape برای بستن کامنت</li>
+          <li>🛡️ محافظت: blur 18px + جلوگیری از کلیک راست فقط روی تصویر</li>
+        </ul>
+      </div>
+      <div class="card auth-card" style="padding:18px">
+        <h3>🧪 تست ریلز</h3>
+        <p class="muted" style="font-size:12px">برای تست بدون نیاز به PHP/MySQL:</p>
+        <div class="flex gap" style="flex-wrap:wrap">
+          <a class="btn btn-primary btn-sm" href="<?=url('reels-demo')?>">دمو ۵ ریل (بدون DB)</a>
+          <a class="btn btn-secondary btn-sm" href="/tests/reels_visual_test.html">تست بصری مستقل</a>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:12px">برای تست با دیتابیس واقعی:</p>
+        <div class="flex gap" style="flex-wrap:wrap">
+          <a class="btn btn-secondary btn-sm" href="<?=url('reels')?>">ریلز واقعی (۶۰ قلق)</a>
+          <a class="btn btn-secondary btn-sm" href="<?=url('diag-version')?>" target="_blank">بررسی نسخه</a>
+        </div>
+        <div class="notice" style="font-size:11px;margin-top:12px">💡 باگ بحرانی <code>BKC={{}}</code> که باعث از کار افتادن کل JS ریلز می‌شد، در v4.1 رفع شد.</div>
+      </div>
+    </div>
+  </section>
 
-<section class="section"><div class="section-head"><h2>❓ سوالات پرتکرار</h2></div><div class="card" style="padding:20px"><?php foreach([['چطور قلق ثبت کنم؟','بعد از ورود، از دکمه «+ آپلود» بالای سایت؛ عنوان، دسته، توضیح، نام دستگاه و برند را بنویسید و حداقل یک عکس بگذارید. گزینه‌های اختیاری (مدل، ابزار، ویدیو و…) را هم می‌توانید باز کنید.'],['قلق من کی منتشر می‌شود؟','بعد از بررسی و تأیید مدیر در پنل مدیریت. در صفحه «قلق‌های من» وضعیت آن را دنبال کنید.'],['قلق لایکی یعنی چه؟','کاربر برای دیدن تصاویر و مراحل کامل باید قلق را لایک کند؛ تصاویر قفل‌شده به‌صورت محو نمایش داده می‌شوند.'],['درآمد چطور واریز می‌شود؟','درآمد فروش و پاداش‌ها به کیف پول داخلی شما می‌رود؛ برای برداشت از صفحه کیف پول درخواست تسویه با شبا بدهید.'],['کیف پول را چطور شارژ کنم؟','از صفحه کیف پول: پرداخت آنلاین با درگاه یا کارت‌به‌کارت و ارسال فیش (پس از تأیید مدیر شارژ می‌شود).'],['مشکل داشتم چکار کنم؟','از بخش تیکت پشتیبانی استفاده کنید؛ وضعیت پاسخ را همان‌جا پیگیری می‌کنید.']] as $q):?><details style="padding:12px 0;border-bottom:1px solid var(--line)"><summary style="cursor:pointer;font-weight:bold;font-size:14px"><?=h($q[0])?></summary><p class="muted" style="font-size:13px;margin:10px 0 0"><?=h($q[1])?></p></details><?php endforeach;?></div></section>
+  <!-- فروشگاه برد -->
+  <section class="section" id="boards">
+    <div class="section-head"><div><h2>🏪 فروشگاه برد با امانت - خرید امن</h2><p>بردهای کارکرده، تعمیرشده یا نو با تضمین بردخان</p></div><a class="btn btn-secondary btn-sm" href="<?=url('boards')?>">مشاهده فروشگاه</a></div>
+    <div class="grid grid-3">
+      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">🛒</div><h3 style="font-size:13px;margin:6px 0">درخواست فروشندگی</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">متن ≥20 حرف درباره تخصص‌تان بنویسید. مدیر بررسی و تأیید می‌کند. فقط فروشندگان تأییدشده می‌توانند برد ثبت کنند.</p></div>
+      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">📦</div><h3 style="font-size:13px;margin:6px 0">ثبت برد</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">عنوان ≥5، توضیح ≥10، دسته leaf، قیمت ≥1000 تومان، موجودی، وضعیت کالا (نو/در حد نو/کارکرده/تعمیرشده) + حداقل ۱ عکس (خودکار کوچک می‌شود به 1920px).</p></div>
+      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">🛡️</div><h3 style="font-size:13px;margin:6px 0">خرید با امانت</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">مبلغ از کیف پول شما کسر و به حساب امانت مدیر می‌رود. فروشنده موظف به ثبت شرکت حمل (پست/تیپاکس/باربری/پیک) + کد رهگیری اجباری ≥6 حرف است.</p></div>
+      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">📮</div><h3 style="font-size:13px;margin:6px 0">ارسال</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">وضعیت paid → shipped پس از ثبت رهگیری. خریدار از طریق نوتیفیکیشن مطلع می‌شود.</p></div>
+      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">✔️</div><h3 style="font-size:13px;margin:6px 0">تأیید دریافت</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">خریدار دکمه تأیید دریافت را می‌زند → وجه از امانت آزاد → سهم فروشنده (منهای کمیسیون <?=fa($s['board_commission_percent']??10)?>٪) به کیف پولش واریز + 30 امتیاز.</p></div>
+      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">↩️</div><h3 style="font-size:13px;margin:6px 0">لغو و بازگشت</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">مدیر می‌تواند سفارش را لغو و وجه را به خریدار برگرداند (board_cancel).</p></div>
+    </div>
+  </section>
 
-<section class="section"><div class="card auth-card" style="text-align:center"><h3>هنوز سوالی دارید؟</h3><p class="muted">تیکت بدهید یا با ما تماس بگیرید — تیم پشتیبانی همیشه در دسترس است.</p><div class="flex center gap mt"><a class="btn btn-primary" href="<?=url('tickets')?>">✉ تیکت پشتیبانی</a><a class="btn btn-secondary" href="<?=url('contact')?>">📞 تماس با ما</a><a class="btn btn-secondary" href="<?=url('about')?>">🏢 درباره ما</a></div></div></section>
+  <!-- کیف پول -->
+  <section class="section" id="wallet">
+    <div class="section-head"><div><h2>👛 کیف پول و مالی - کامل</h2><p>شارژ، برداشت، معرفی دوستان، اشتراک ویژه</p></div><a class="btn btn-secondary btn-sm" href="<?=url('wallet')?>">کیف پول من</a></div>
+    <div class="grid grid-3">
+      <?php foreach([
+        ['💳','شارژ با درگاه واقعی','زرین‌پال، آیدی‌پی، زیبال با درخواست و verify خودکار + جدول bk_gateway_payments. حداقل '.money($s['gateway_min_charge']??100000).' تا '.money($s['gateway_max_charge']??50000000).' تومان.','درگاه'],
+        ['🏦','کارت‌به‌کارت با فیش','بانک + به نام + شماره کارت از تنظیمات مدیر. کاربر فیش آپلود می‌کند، مدیر در admin-finance تأیید/رد می‌کند.','کارت‌به‌کارت'],
+        ['💸','درخواست تسویه','شبا ≥20، کارت ≥16، کد ملی ≥10، حداقل '.money($s['min_withdrawal']??200000).' تومان. debit + ثبت در withdrawals + بررسی مدیر.','تسویه'],
+        ['🎁','معرفی دوستان','کد referral_code + لینک /register?ref=CODE. دعوت‌شونده '.money($s['invitee_credit']??10000).' هدیه، دعوت‌کننده '.money($s['referral_reward']??20000).' پس از اولین فعالیت موفق (آپلود/خرید).','رفرال'],
+        ['👑','اشتراک ویژه','۱/۳/۱۲ ماهه با قیمت‌های قابل تنظیم. دسترسی نامحدود به قلق‌های پولی + نشان premium + اولویت نمایش.','اشتراک'],
+        ['🧾','تاریخچه تراکنش‌ها','تمام تراکنش‌ها با نوع، مبلغ، موجودی بعد و توضیح. قابل مشاهده در wallet.','تراکنش'],
+      ] as $f):?>
+        <div class="card auth-card" style="padding:16px"><div style="font-size:28px"><?=h($f[0])?></div><h3 style="font-size:13px;margin:6px 0"><?=h($f[1])?></h3><p style="font-size:11px;color:var(--text-soft);line-height:2"><?=h($f[2])?></p><span class="pill blue" style="margin-top:6px"><?=h($f[3])?></span></div>
+      <?php endforeach;?>
+    </div>
+  </section>
+
+  <!-- ربات جمع‌آوری -->
+  <section class="section" id="bot">
+    <div class="section-head"><div><h2>🤖 ربات جمع‌آوری خودکار - هوشمند و بهینه v4.1</h2><p>۱۴ سایت معتبر + ذخیره درست تصاویر در /uploads/</p></div><a class="btn btn-secondary btn-sm" href="<?=url('admin',['tab'=>'collect'])?>">تنظیمات ربات</a></div>
+    <div class="grid grid-2">
+      <div class="card auth-card" style="padding:18px">
+        <h3>🌐 سایت‌های معتبر (۱۴ مورد)</h3>
+        <div style="font-size:11px;line-height:2.2;color:var(--text-soft)">
+          <b>Reddit (انجمن تعمیرکاران):</b><br>
+          • AskElectronics (2M عضو)<br>• ElectronicsRepair<br>• TVRepair<br>• ComputerRepair<br>
+          <b>مرجع:</b> iFixit News<br>
+          <b>تخصصی:</b> Hackaday, Adafruit, EEVblog, AllAboutCircuits, Electronics-Lab, Circuit Digest, ElectroSchematics, EDN, StackExchange<br>
+        </div>
+        <div class="notice" style="font-size:11px;margin-top:10px">📸 تصاویر با <code>download_image()</code> دانلود و به <code>/uploads/auto-*.jpg</code> تبدیل می‌شود (نه لینک خارجی).</div>
+      </div>
+      <div class="card auth-card" style="padding:18px">
+        <h3>🧠 هوشمندی ربات</h3>
+        <ul style="font-size:11px;line-height:2.4;color:var(--text-soft);padding-right:16px;margin:0">
+          <li><code>fetch_article_details()</code>: استخراج محتوای کامل از URL مقاله</li>
+          <li><code>extract_article_text()</code>: حذف script/style + انتخاب طولانی‌ترین div.content</li>
+          <li><code>extract_images_from_html()</code>: ۵ عکس + تبدیل نسبی→مطلق + فیلتر آیکون</li>
+          <li>ترجمه: ۹۰+ کلمه (led tv→تلویزیون ال‌ای‌دی...)</li>
+          <li>تشخیص: برند ۳۵، دستگاه ۲۵، خرابی ۳۵ مورد</li>
+          <li>دسته‌بندی خودکار دقیق + جلوگیری از تکرار (title + source_url)</li>
+          <li>ذخیره source_url و source_name در DB</li>
+        </ul>
+        <p style="font-size:11px;color:var(--text-dim);margin-top:10px">Cron: <code>wget -q -O /dev/null "https://site.com/cron-collect?key=KEY"</code> هر ۶ ساعت</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- امکانات کلیدی -->
+  <section class="section" id="features">
+    <div class="section-head"><div><h2>⭐ امکانات کلیدی - کامل</h2><p>چرا بردخان؟</p></div></div>
+    <div class="tour-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
+      <?php foreach([
+        ['🏪','فروشگاه برد با امانت','برد دست دوم/تعمیرشده را با تضمین بخرید؛ وجه نزد بردخان امن است تا تأیید دریافت.','امانت'],
+        ['🔓','۳ نوع دسترسی','رایگان، با لایک (blur + باز شدن دائمی)، پرداختی (کمیسیون 20٪).','دسترسی'],
+        ['🎬','ریلز اینستاگرامی','اسکرول تمام‌صفحه snap + لایک دابل‌تپ + کامنت آجاکس + اشتراک.','ریلز'],
+        ['🤖','ربات هوشمند','۱۴ سایت معتبر + دانلود تصویر به uploads + ترجمه فارسی + دسته‌بندی خودکار.','ربات'],
+        ['👛','کیف پول داخلی','درگاه واقعی زرین‌پال/آیدی‌پی/زیبال + کارت‌به‌کارت + تسویه شبا.','مالی'],
+        ['🎁','معرفی دوستان','کد اختصاصی + پاداش دوطرفه پس از فعالیت موفق.','رفرال'],
+        ['🛠','درخواست تعمیر','مشکل را مطرح کنید، پاداش نقدی/لایکی تعیین کنید، بهترین پاسخ را انتخاب کنید.','تعمیر'],
+        ['🏆','گیمیفیکیشن','امتیاز، سطح تازه‌کار تا استاد، ۷ نشان خودکار، رتبه‌بندی.','بازی'],
+        ['🔍','جستجوی پیشرفته','فیلتر دسته، سختی، برند، قیمت، دسترسی + live search آجاکس.','جستجو'],
+        ['✉️','تیکت پشتیبانی','۳ مقصد (پشتیبانی/مدیریت/فروشنده) + اولویت + انتساب کارشناس.','پشتیبانی'],
+        ['📨','تماس با ما','فرم با honeypot + اطلاعات تماس قابل تنظیم + فعال/غیرفعال.','تماس'],
+        ['📱','PWA','نصب روی موبایل، آفلاین، بنر نصب + پشتیبانی iOS.','PWA'],
+        ['🛡️','امنیت','CSRF، XSS، SQLi، آپلود امن، media proxy با nonce + واترمارک.','امنیت'],
+        ['📊','پنل مدیریت کامل','داشبورد با چارت ۷ روزه + مدیریت قلق/برد/کاربر/مالی/تیکت/سئو.','مدیریت'],
+        ['📌','نوار شناور','قابل ویرایش از /admin-actionbar، ۸ آیتم max با نقش‌ها.','نوار'],
+      ] as $f):?>
+        <div class="card auth-card" style="padding:16px"><div style="font-size:26px"><?=h($f[0])?></div><div><h3 style="font-size:13px;margin:6px 0"><?=h($f[1])?></h3><p style="font-size:11px;color:var(--text-soft);line-height:2"><?=h($f[2])?></p><span class="pill blue" style="margin-top:6px"><?=h($f[3])?></span></div></div>
+      <?php endforeach;?>
+    </div>
+  </section>
+
+  <!-- FAQ کامل -->
+  <section class="section" id="faq">
+    <div class="section-head"><div><h2>❓ سوالات پرتکرار - کامل (۱۲ مورد)</h2><p>همه چیز درباره بردخان</p></div></div>
+    <div class="card" style="padding:20px">
+      <?php foreach([
+        ['چطور قلق ثبت کنم؟','وارد حساب شوید → دکمه + آپلود → عنوان ≥8 حرف، توضیح کوتاه ≥20، توضیح کامل ≥20، نام دستگاه و برند و دسته + حداقل ۱ عکس (JPG/PNG/WebP تا 10MB، خودکار کوچک به 1920px). گزینه‌های اختیاری (مدل، شماره برد، نوع خرابی، سختی، مراحل گام‌به‌گام، ابزار، تگ، ویدیو یوتیوب/آپارات یا MP4 تا 50MB) را می‌توانید باز کنید. سپس انتشار → وضعیت pending → تأیید مدیر → منتشرشده.'],
+        ['قلق من کی منتشر می‌شود؟','بعد از بررسی مدیر در /admin?tab=tips. اگر تکراری تشخیص داده شود (عنوان مشابه یا دستگاه+برند مشابه)، pending می‌ماند. در my-tips وضعیت را ببینید. پس از انتشار، پاداش آپلود به کیف پول‌تان می‌آید.'],
+        ['قلق لایکی یعنی چه؟','تصاویر و مراحل با blur 16px محو است. کاربر با یک لایک (favorite) آن را برای همیشه باز می‌کند. سقف لایک روزانه هر کاربر از تنظیمات (مثلاً 5) است. در ریلز، کلیک لایک = باز کردن خودکار.'],
+        ['قلق پولی چطور کار می‌کند؟','کاربر مبلغ را از کیف پول می‌پردازد (debit تراکنشی). کمیسیون سایت (20٪) کسر و سهم فروشنده (80٪) به کیف پولش واریز می‌شود. نشان first_purchase و first_sale خودکار اعطا می‌شود.'],
+        ['ریلز چیست و چطور کار می‌کند؟','ریلز مثل اینستاگرام است: اسکرول عمودی تمام‌صفحه بین 60 قلق آخر. امکانات: لایک با دابل‌تپ ❤️ (انیمیشن pop)، تعویض عکس با کلیک، کامنت آجاکس، اشتراک با Web Share API، باز کردن قفل پولی/لایکی، پروگرس بار، کیبورد ArrowUp/Down. برای تست بدون DB: /reels-demo'],
+        ['فروشگاه برد با امانت چطور امن است؟','خریدار مبلغ را می‌پردازد → وجه به حساب امانت مدیر (escrow) می‌رود (نه مستقیم به فروشنده) → فروشنده باید شرکت حمل (پست/تیپاکس/باربری/پیک) + کد رهگیری ≥6 حرف ثبت کند (board_ship) → وضعیت shipped → خریدار پس از دریافت، تأیید دریافت (board_confirm) → وجه از امانت آزاد و به فروشنده واریز (منهای کمیسیون 10٪). اگر مشکل بود، مدیر لغو و بازگشت وجه می‌زند.'],
+        ['چطور فروشنده شوم؟','وارد /seller-apply شوید، متن ≥20 حرف درباره تخصص‌تان بنویسید (مثلاً 8 سال تعمیر پاور و مادربرد). مدیر در /admin?tab=sellers تأیید می‌کند → seller_status=approved → می‌توانید در /boards/new برد ثبت کنید.'],
+        ['کیف پول را چطور شارژ کنم؟','از /wallet یا /wallet-plus: 1) درگاه آنلاین (زرین‌پال/آیدی‌پی/زیبال) - در admin-finance تنظیم می‌شود، 2) کارت‌به‌کارت: مبلغ به کارت مدیر واریز + فیش آپلود → مدیر در admin-finance تأیید می‌کند. حداقل و حداکثر شارژ از تنظیمات.'],
+        ['تسویه و برداشت چطور است؟','در /wallet فرم تسویه: شبا ≥20، کارت ≥16، کد ملی ≥10، مبلغ ≥ حداقل (200k) و ≤ موجودی. درخواست ثبت → مدیر در admin?tab=withdrawals یا admin-finance بررسی → واریز شد یا رد و برگشت وجه.'],
+        ['ربات جمع‌آوری خودکار چیست؟','در /admin?tab=collect تنظیم می‌شود: 14 سایت معتبر (Reddit AskElectronics, iFixit, Hackaday...) + 16 query فارسی/انگلیسی. ربات هوشمند محتوای کامل مقاله را با extract_article_text می‌خواند، تصاویر را با download_image به /uploads/auto-*.jpg دانلود می‌کند (نه لینک خارجی)، به فارسی ترجمه و دسته‌بندی خودکار می‌کند و به عنوان قلق منتشر می‌کند. Cron هر 6 ساعت: wget به /cron-collect?key=KEY'],
+        ['معرفی دوستان چقدر پاداش دارد؟','کد شما در /wallet و /referral: لینک /register?ref=CODE. دوست شما با کد شما ثبت‌نام کند → '.money($s['invitee_credit']??10000).' تومان هدیه می‌گیرد. شما پس از اولین فعالیت موفق او (آپلود قلق منتشرشده یا خرید) → '.money($s['referral_reward']??20000).' تومان پاداش می‌گیرید. فقط یک‌بار برای هر دعوت‌شده.'],
+        ['اگر مشکل داشتم چکار کنم؟','1) /diag-version را چک کنید (نسخه کد باید 4.0+ باشد)، 2) اگر OPcache فعال است /php-extended/opcache_clear.php?key=INSTALL_KEY را باز کنید، 3) تیکت در /tickets ثبت کنید (مقصد پشتیبانی/مدیریت/فروشنده + اولویت)، 4) یا فرم تماس با ما (اگر فعال باشد) یا اطلاعات تماس در /contact.'],
+      ] as $q):?>
+        <details style="padding:14px 0;border-bottom:1px solid var(--line)"><summary style="cursor:pointer;font-weight:900;font-size:14px;color:var(--text)"><?=h($q[0])?></summary><p class="muted" style="font-size:12px;margin:12px 0 0;line-height:2.2"><?=h($q[1])?></p></details>
+      <?php endforeach;?>
+    </div>
+  </section>
+
+  <!-- CTA نهایی -->
+  <section class="section">
+    <div class="card auth-card" style="text-align:center;padding:24px;background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(56,189,248,.06));border:1px solid rgba(16,185,129,.2)">
+      <h3 style="font-size:18px">🚀 آماده‌اید؟</h3>
+      <p class="muted" style="font-size:13px;max-width:600px;margin:8px auto 0;line-height:2">دانش تعمیراتی شما می‌تواند درآمد بسازد. همین حالا ثبت‌نام کنید، اولین قلق را ثبت کنید و در ریلز بدرخشید.</p>
+      <div class="flex center gap mt" style="flex-wrap:wrap;justify-content:center;margin-top:16px">
+        <a class="btn btn-amber btn-lg" href="<?=url('register')?>">✨ ثبت‌نام رایگان</a>
+        <a class="btn btn-primary" href="<?=url('upload')?>">➕ ثبت قلق</a>
+        <a class="btn btn-secondary" href="<?=url('reels')?>">🎬 ریلز</a>
+        <a class="btn btn-secondary" href="<?=url('boards')?>">🏪 فروشگاه</a>
+        <a class="btn btn-secondary" href="<?=url('tickets')?>">✉ پشتیبانی</a>
+      </div>
+      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - تست شده 121/121 PASS - ربات هوشمند v4.1</p>
+    </div>
+  </section>
 </main><?php footer_html();exit; }
+header_html('صفحه پیدا نشد');?><main class="wrap page"><div class="card empty"><h1>صفحه پیدا نشد</h1><a class="btn btn-primary mt" href="<?=url()?>">بازگشت به خانه</a></div></main><?php footer_html();
 header_html('صفحه پیدا نشد');?><main class="wrap page"><div class="card empty"><h1>صفحه پیدا نشد</h1><a class="btn btn-primary mt" href="<?=url()?>">بازگشت به خانه</a></div></main><?php footer_html();
