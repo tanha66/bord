@@ -120,7 +120,70 @@ function admin_user(?array $u): bool { return $u && in_array($u['role'], ['admin
 function current_user(): ?array { static $user = false; if ($user !== false) return $user; $id = (int)($_SESSION['user_id'] ?? 0); if (!$id) return $user = null; $s = db()->prepare('SELECT * FROM users WHERE id=? LIMIT 1'); $s->execute([$id]); $u = $s->fetch() ?: null; if ($u && !empty($u['is_deleted'])) $u = null; return $user = $u; }
 function require_login(): array { $u = current_user(); if (!$u) { flash('برای انجام این عملیات ابتدا وارد شوید.', 'error'); redirect_to('login'); } if ((int)$u['is_banned']) exit('حساب کاربری شما مسدود شده است.'); return $u; }
 function require_admin(): array { $u = require_login(); if (!admin_user($u)) { http_response_code(403); exit('دسترسی غیرمجاز'); } return $u; }
-function settings(): array { static $s = null; if ($s !== null) return $s; $s = db()->query('SELECT * FROM settings WHERE id=1 LIMIT 1')->fetch() ?: ['site_title'=>SITE_NAME,'hero_title'=>'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی','hero_subtitle'=>'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.','upload_reward'=>50000,'commission_percent'=>20,'min_withdrawal'=>200000,'daily_like_limit'=>5,'referral_reward'=>20000,'invitee_credit'=>10000,'repair_deadline_days'=>7,'daily_free_tip_id'=>null,'premium_1'=>149000,'premium_3'=>399000,'premium_12'=>1299000,'board_commission_percent'=>10,'auto_collect_enabled'=>0,'auto_collect_count'=>10,'auto_collect_category'=>null,'auto_collect_access'=>'free','auto_collect_sources'=>'[]','auto_collect_queries'=>'','auto_collect_cron_key'=>'','contact_form_enabled'=>0]; return $s; }
+function settings(): array { 
+    static $s = null; 
+    if ($s !== null) return $s; 
+    try {
+        $s = db()->query('SELECT * FROM settings WHERE id=1 LIMIT 1')->fetch();
+    } catch(Throwable $e) {
+        $s = null;
+    }
+    $defaults = [
+        'site_title'=>SITE_NAME,
+        'hero_title'=>'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی',
+        'hero_subtitle'=>'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.',
+        'announcement'=>'',
+        'upload_reward'=>50000,
+        'like_points_reward'=>5,
+        'like_wallet_reward'=>0,
+        'commission_percent'=>20,
+        'min_withdrawal'=>200000,
+        'daily_like_limit'=>5,
+        'referral_reward'=>20000,
+        'invitee_credit'=>10000,
+        'repair_deadline_days'=>7,
+        'daily_free_tip_id'=>null,
+        'premium_1'=>149000,
+        'premium_3'=>399000,
+        'premium_12'=>1299000,
+        'board_commission_percent'=>10,
+        'auto_collect_enabled'=>0,
+        'auto_collect_count'=>10,
+        'auto_collect_category'=>null,
+        'auto_collect_access'=>'free',
+        'auto_collect_sources'=>'[]',
+        'auto_collect_queries'=>'',
+        'auto_collect_cron_key'=>'',
+        'contact_form_enabled'=>0,
+        'contact_email'=>'',
+        'contact_phone'=>'',
+        'contact_telegram'=>'',
+        'contact_instagram'=>'',
+        'contact_address'=>'',
+        'contact_text'=>'',
+        'terms_text'=>'',
+        'about_text'=>'',
+        'privacy_text'=>'',
+        'meta_description'=>'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی',
+        'meta_keywords'=>'',
+        'og_image'=>'',
+        'google_analytics'=>'',
+        'gateway_enabled'=>0,
+        'gateway_type'=>'zarinpal',
+        'gateway_merchant_id'=>'',
+        'gateway_api_key'=>'',
+        'gateway_sandbox'=>1,
+        'gateway_min_charge'=>100000,
+        'gateway_max_charge'=>50000000,
+        'z2c_bank_name'=>'',
+        'z2c_account_name'=>'',
+        'z2c_card_number'=>'',
+        'actionbar_json'=>'',
+    ];
+    if (!$s) return $s = $defaults;
+    // ترکیب با پیش‌فرض برای جلوگیری از undefined index بعد از نصب
+    return $s = array_merge($defaults, $s);
+}
 function category_tree(): array { $rows = db()->query("SELECT * FROM categories WHERE status='active' ORDER BY parent_id IS NOT NULL, sort_order, name")->fetchAll(); $parents=[]; foreach($rows as $r) { if (!$r['parent_id']) { $r['children']=[]; $parents[$r['id']]=$r; } } foreach($rows as $r) if($r['parent_id'] && isset($parents[$r['parent_id']])) $parents[$r['parent_id']]['children'][]=$r; return array_values($parents); }
 function level_name(int $points): string { if ($points >= 5000) return 'استاد'; if ($points >= 2000) return 'متخصص'; if ($points >= 500) return 'تعمیرکار'; return 'تازه‌کار'; }
 function access_label(string $type, int $price=0): string { return $type==='paid' ? money($price).' تومان' : ($type==='like' ? 'با لایک' : 'رایگان'); }
@@ -872,7 +935,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
 
     return ['created' => $created, 'scanned' => $scanned, 'errors' => $errors];
 }
-function escrow_admin_id(): int {function escrow_admin_id(): int { static $id = null; if ($id === null) { $q = db()->query("SELECT id FROM users WHERE role IN ('superadmin','admin') ORDER BY id LIMIT 1"); $id = (int)($q->fetchColumn() ?: 0); } return $id; }
+function escrow_admin_id(): int { static $id = null; if ($id === null) { $q = db()->query("SELECT id FROM users WHERE role IN ('superadmin','admin') ORDER BY id LIMIT 1"); $id = (int)($q->fetchColumn() ?: 0); } return $id; }
 function is_seller(array $u): bool { return ($u['seller_status'] ?? 'none') === 'approved' || in_array($u['role'] ?? '', ['admin','superadmin'], true); }
 function board_condition_label(string $c): string { return ['new'=>'نو','like_new'=>'در حد نو','used'=>'کارکرده','repair'=>'تعمیرشده'][$c] ?? 'کارکرده'; }
 function board_status_label(string $s): string { return ['pending'=>'در انتظار تأیید','approved'=>'فعال','rejected'=>'رد شده','sold'=>'فروخته شد','archived'=>'بایگانی'][$s] ?? $s; }
@@ -880,7 +943,7 @@ function order_status_label(string $s): string { return ['paid'=>'پرداخت �
 function leaf_categories(): array { $rows = db()->query("SELECT id,parent_id,name FROM categories WHERE status='active' ORDER BY sort_order,name")->fetchAll(); $byParent=[]; $byId=[]; foreach($rows as $r){ $byParent[(int)$r['parent_id']][]=$r; $byId[(int)$r['id']]=$r; } $out=[]; foreach($rows as $r){ $hasKids = !empty($byParent[(int)$r['id']]); if(!$hasKids){ $path=[]; $cur=$r; while($cur && ($cur['parent_id'])){ $path[]= $cur['name']; $cur = $byId[(int)$cur['parent_id']] ?? null; } if($cur){$path[]=$cur['name'];} $out[]=['id'=>(int)$r['id'],'label'=>implode(' ← ',array_reverse($path))]; } } return $out; }
 function board_card(array $b): void { $imgs = json_decode_array($b['images_json'] ?? '[]'); ?><a class="card tcard" href="<?=url('board/'.(int)$b['id'])?>"><div class="timg"><?php if($imgs):?><img loading="lazy" src="<?=h($imgs[0])?>" alt="<?=h($b['title'])?>"><?php else:?><div style="height:100%;display:grid;place-items:center;font-size:42px">🔩</div><?php endif;?><div class="badges"><span class="pill green"><?=h(board_condition_label($b['condition_status']))?></span><?php if($b['status']==='sold'):?><span class="pill rose">فروخته شد</span><?php endif;?></div></div><div class="tbody"><h3><?=h($b['title'])?></h3><div class="tmeta"><?php if(!empty($b['brand'])):?><span class="pill"><?=h($b['brand'])?></span><?php endif;?><?php if(!empty($b['model'])):?><span class="pill"><?=h($b['model'])?></span><?php endif;?></div><div class="tfoot"><strong style="color:var(--accent);font-size:16px"><?=money($b['price'])?> تومان</strong><span class="muted" style="margin-right:auto;font-size:11px">👁 <?=fa($b['views'])?></span></div></div></a><?php }
 function tip_card(array $t): void { $imgs=tip_images($t); $rating=((int)$t['rating_count']>0)?round((int)$t['rating_sum']/(int)$t['rating_count'],1):0; $locked=!tip_has_access($t,current_user()); ?><a class="card tip-card" href="<?=url('tip/'.$t['id'])?>"><div class="tip-img"><?php if($imgs):?><img loading="lazy" src="<?=h(media_url($imgs[0], 'thumb', (int)$t['id']))?>" alt="<?=h($t['title'])?>" class="<?=$locked?'bk-blur':''?>"><?php if($locked):?><span class="bk-lockbadge" title="<?=h($t['access_type']==='paid'?'پس از خرید نمایش داده می‌شود':'پس از لایک نمایش داده می‌شود')?>"><?=$t['access_type']==='paid'?'💰':'♥'?></span><?php endif;?><?php else:?><div style="height:100%;display:grid;place-items:center;font-size:45px">🔧</div><?php endif;?><div class="badges"><span class="pill <?=h($t['access_type']==='paid'?'amber':($t['access_type']==='like'?'rose':'green'))?>"><?=h(access_label($t['access_type'],(int)$t['price']))?></span><?php if((int)$t['featured']):?><span class="pill amber">★ منتخب</span><?php endif;?></div></div><div class="tip-body"><h3><?=h($t['title'])?></h3><p><?=h($t['short_description'])?></p><div class="tip-meta"><span class="pill"><?=h(['easy'=>'آسان','medium'=>'متوسط','hard'=>'سخت'][$t['difficulty']??'medium']??'متوسط')?></span><span class="pill">◉ <?=fa($t['views'])?></span><?php if($rating):?><span class="pill amber">★ <?=fa($rating)?></span><?php endif;?></div><div class="tip-footer"><span class="avatar small"><?=h(mb_substr($t['author_name']??'؟',0,1))?></span><small class="muted"><?=h($t['author_name']??'تعمیرکار')?></small><?php if(!empty($t['verified'])):?><span class="check">✓</span><?php endif;?><?php if(has_favorite((int)$t['id'], current_user())):?><span title="علاقه‌مندی من" style="margin-right:auto;color:#d94258">♥</span><?php endif;?></div></div></a><?php }
-function header_html(string $title=''): void { $u=current_user(); $s=settings(); $active=bk_route(); ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="<?=h($s['meta_description'] ?: 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی')?>"><?php if(!empty($s['meta_keywords'])):?><meta name="keywords" content="<?=h($s['meta_keywords'])?>"><?php endif;?><meta name="theme-color" content="#078659"><meta property="og:type" content="website"><meta property="og:site_name" content="<?=h($s['site_title'] ?: SITE_NAME)?>"><meta property="og:title" content="<?=h($title ?: ($s['site_title'] ?: SITE_NAME))?>"><meta property="og:description" content="<?=h($s['meta_description'] ?: 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی')?>"><?php if(!empty($s['og_image'])):?><meta property="og:image" content="<?=h($s['og_image'])?>"><?php endif;?><meta name="twitter:card" content="summary_large_image"><link rel="manifest" href="<?=url('manifest.webmanifest')?>"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="<?=h($s['site_title'] ?: SITE_NAME)?>"><link rel="apple-touch-icon" href="<?=url('assets/icon-192.png')?>"><title><?=h($title ? $title.' | '.($s['site_title'] ?: SITE_NAME) : ($s['site_title'] ?: SITE_NAME).' — بازار قلق‌های تعمیراتی')?></title><script>
+function header_html(string $title=''): void { $u=current_user(); $s=settings(); $active=bk_route(); ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="<?=h(($s['meta_description'] ?? 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی'))?>"><?php if(!empty($s['meta_keywords'])):?><meta name="keywords" content="<?=h($s['meta_keywords'])?>"><?php endif;?><meta name="theme-color" content="#078659"><meta property="og:type" content="website"><meta property="og:site_name" content="<?=h($s['site_title'] ?? SITE_NAME)?>"><meta property="og:title" content="<?=h($title ?: ($s['site_title'] ?? SITE_NAME))?>"><meta property="og:description" content="<?=h(($s['meta_description'] ?? 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی'))?>"><?php if(!empty($s['og_image'])):?><meta property="og:image" content="<?=h($s['og_image'])?>"><?php endif;?><meta name="twitter:card" content="summary_large_image"><link rel="manifest" href="<?=url('manifest.webmanifest')?>"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="<?=h($s['site_title'] ?? SITE_NAME)?>"><link rel="apple-touch-icon" href="<?=url('assets/icon-192.png')?>"><title><?=h($title ? $title.' | '.($s['site_title'] ?? SITE_NAME) : ($s['site_title'] ?? SITE_NAME).' — بازار قلق‌های تعمیراتی')?></title><script>
 (function(){
   try{
     if(localStorage.getItem('bk_theme')==='light'){document.documentElement.setAttribute('data-theme','light')}
@@ -2231,5 +2294,4 @@ if($page==='tour'){
     </div>
   </section>
 </main><?php footer_html();exit; }
-header_html('صفحه پیدا نشد');?><main class="wrap page"><div class="card empty"><h1>صفحه پیدا نشد</h1><a class="btn btn-primary mt" href="<?=url()?>">بازگشت به خانه</a></div></main><?php footer_html();
 header_html('صفحه پیدا نشد');?><main class="wrap page"><div class="card empty"><h1>صفحه پیدا نشد</h1><a class="btn btn-primary mt" href="<?=url()?>">بازگشت به خانه</a></div></main><?php footer_html();
