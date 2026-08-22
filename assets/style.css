@@ -668,6 +668,11 @@ a{color:inherit}
 /* فاصله برای نوار شناور */
 body{padding-bottom:82px !important}
 
+/* ---- پیش‌نمایش آپلود و نوار پیشرفت ---- */
+.file-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.file-preview img{border-radius:10px;border:1px solid var(--line)}
+.file-preview:empty{display:none}
+
 /* ---- تیکت پشتیبانی و گفتگو ---- */
 .grow{flex:1;min-width:0}
 .flex.center{justify-content:center}

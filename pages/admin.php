@@ -357,6 +357,8 @@ elseif ($tab === 'categories') {
       <p class="muted" style="font-size:11px;margin:0">اگر نامی را دوبار (با والد یکسان) می‌بینید، با دکمهٔ «حذف موارد تکراری» یک‌باره پاک‌سازی کنید.</p>
       <form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="admin_category"><input type="hidden" name="op" value="dedupe"><button class="btn btn-secondary btn-sm" onclick="return confirm('دسته‌های تکراری (نام + والد یکسان) حذف شوند؟')">🧹 حذف موارد تکراری</button></form>
     </div>
+    <div class="form-group mb" style="max-width:340px"><label class="field-label">🔍 جستجوی زندهٔ دسته‌ها (آجاکس)</label><input class="field" id="catSearch" type="text" placeholder="مثلاً: سامسونگ، موبایل، هواوی…"></div>
+    <div id="catResults"></div>
     <div class="grid grid-2">
       <div class="card" style="padding:18px">
         <h3 style="margin-bottom:12px">افزودن دسته جدید</h3>
@@ -374,7 +376,7 @@ elseif ($tab === 'categories') {
           <button class="btn btn-primary btn-full">افزودن دسته</button>
         </form>
       </div>
-      <div class="card table-wrap">
+      <div class="card table-wrap" id="catStatic">
         <table class="table">
           <tr><th>دسته</th><th>والد</th><th>وضعیت</th><th>عملیات</th></tr>
           <?php foreach ($items as $x): ?>
@@ -396,6 +398,9 @@ elseif ($tab === 'categories') {
         </table>
       </div>
     </div>
+    <script>
+(function(){var inp=document.getElementById('catSearch');if(!inp)return;var out=document.getElementById('catResults');var stat=document.getElementById('catStatic');var csrf=<?=json_encode(csrf())?>;var timer=null;function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}function render(rows){if(!rows.length){out.innerHTML='<div class="card empty">دسته‌ای با این عبارت پیدا نشد.</div>';return;}var h='<div class="card table-wrap"><table class="table"><tr><th>دسته</th><th>والد</th><th>وضعیت</th><th>عملیات</th></tr>';rows.forEach(function(x){h+='<tr><td>'+esc((x.icon||'📁')+' '+x.name)+((+x.child_count)>0?'<small class="muted" style="display:block">'+x.child_count+' زیرمجموعه</small>':'')+'</td><td>'+esc(x.parent_name||'اصلی')+'</td><td><span class="pill '+(x.status==='active'?'green':'amber')+'">'+esc(x.status==='active'?'فعال':'پیشنهادی')+'</span></td><td><form method="post" style="display:flex;gap:4px"><input type="hidden" name="csrf" value="'+esc(csrf)+'"><input type="hidden" name="action" value="admin_category"><input type="hidden" name="category_id" value="'+x.id+'">'+(x.status!=='active'?'<button class="btn btn-primary btn-sm" name="op" value="approve">تأیید</button>':'')+'<button class="btn btn-danger btn-sm" name="op" value="delete" onclick="return confirm(\'این دسته حذف شود؟\')">حذف</button></form></td></tr>';});h+='</table></div>';out.innerHTML=h;}inp.addEventListener('input',function(){clearTimeout(timer);var q=inp.value.trim();if(q===''){out.innerHTML='';if(stat)stat.style.display='';return;}timer=setTimeout(function(){fetch('/ajax-categories?q='+encodeURIComponent(q),{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json();}).then(function(j){if(j&&j.rows){if(stat)stat.style.display='none';render(j.rows);}}).catch(function(){out.innerHTML='<div class="notice error">خطا در دریافت نتایج.</div>';});},250);});})();
+</script>
     <?php
 }
 
