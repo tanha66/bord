@@ -183,16 +183,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $pdo->prepare("INSERT INTO users (phone,email,password_hash,name,role,points,balance,referral_code,phone_verified,verified,bio) VALUES ('09100000000','bot@bordkhan.local',?,'سامانه جمع‌آوری هوشمند','admin',0,0,'BOT0001',1,1,'گردآوری خودکار قلق‌های تعمیراتی') ON DUPLICATE KEY UPDATE role='admin'")
                         ->execute([$botHash]);
 
-                    // 6) Settings
+                    // 6) Settings - ربات بهینه با سایت‌های معتبر + ذخیره درست تصاویر
                     $defaultSources = json_encode([
+                        // Reddit - معتبرترین انجمن تعمیرکاران
                         'https://www.reddit.com/r/AskElectronics/.rss',
                         'https://www.reddit.com/r/ElectronicsRepair/.rss',
+                        'https://www.reddit.com/r/TVRepair/.rss',
+                        'https://www.reddit.com/r/computerrepair/.rss',
+                        // مرجع تعمیرات
+                        'https://www.ifixit.com/News/rss',
+                        // سایت‌های تخصصی الکترونیک معتبر
                         'https://hackaday.com/feed/',
                         'https://blog.adafruit.com/feed/',
-                        'https://www.ifixit.com/News/rss',
+                        'https://www.eevblog.com/feed/',
+                        'https://www.allaboutcircuits.com/new/rss/',
+                        'https://www.electronics-lab.com/feed/',
+                        'https://www.circuitdigest.com/feed',
+                        'https://www.electroschematics.com/feed/',
+                        'https://www.edn.com/feed/',
+                        'https://electronics.stackexchange.com/feeds',
                     ], JSON_UNESCAPED_UNICODE);
                     $cronKey = bin2hex(random_bytes(8));
-                    $defaultQueries = "تعمیر مادربرد\nرفع مشکل روشن نشدن لپ‌تاپ\nتعمیر پاور سوئیچینگ\nعیب‌یابی کارت گرافیک\nتعمیر موبایل شارژ نمی‌شود\nmotherboard repair\nlaptop no power fix\ngraphics card artifact fix\npower supply repair";
+                    $defaultQueries = "تعمیر مادربرد سامسونگ\nرفع مشکل روشن نشدن لپ‌تاپ ایسوس\nتعمیر پاور سوئیچینگ\nعیب‌یابی کارت گرافیک\nتعمیر تلویزیون ال‌جی تصویر ندارد\nتعمیر موبایل شارژ نمی‌شود\nتعویض خازن مادربرد\nتست ماسفت با مولتی‌متر\nmotherboard no power repair\nlaptop no boot fix\ntv backlight repair\npower supply short circuit fix\nsamsung tv repair\ncapacitor replacement guide\nmosfet testing tutorial";
                     $pdo->prepare("INSERT INTO settings (id,site_title,hero_title,hero_subtitle,meta_description,auto_collect_sources,auto_collect_queries,auto_collect_cron_key) VALUES (1,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE site_title=VALUES(site_title), meta_description=VALUES(meta_description)")
                         ->execute([$siteName, 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی', 'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.', 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی؛ راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای.', $defaultSources, $defaultQueries, $cronKey]);
 

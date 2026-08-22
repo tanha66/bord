@@ -621,6 +621,22 @@ elseif ($tab === 'collect') {
     $queries = $cs['auto_collect_queries'] ?? '';
     $cats = category_tree();
     $cronUrl = url('cron-collect', ['key' => $cs['auto_collect_cron_key'] ?? 'KEY']);
+    // لیست معتبر پیش‌فرض برای نمایش در UI اگر خالی بود
+    $defaultReputable = [
+        'https://www.reddit.com/r/AskElectronics/.rss',
+        'https://www.reddit.com/r/ElectronicsRepair/.rss',
+        'https://www.reddit.com/r/TVRepair/.rss',
+        'https://www.ifixit.com/News/rss',
+        'https://hackaday.com/feed/',
+        'https://blog.adafruit.com/feed/',
+        'https://www.eevblog.com/feed/',
+        'https://www.allaboutcircuits.com/new/rss/',
+        'https://www.electronics-lab.com/feed/',
+        'https://electronics.stackexchange.com/feeds',
+    ];
+    $displaySources = !empty($srcs) ? implode("\n", $srcs) : implode("\n", $defaultReputable);
+    $defaultQueries = "تعمیر مادربرد سامسونگ\nرفع مشکل روشن نشدن لپ‌تاپ ایسوس\nتعمیر پاور سوئیچینگ\nعیب‌یابی کارت گرافیک\nتعمیر تلویزیون ال‌جی تصویر ندارد\nتعمیر موبایل شارژ نمی‌شود\nتعویض خازن مادربرد\nتست ماسفت با مولتی‌متر\nmotherboard no power repair\nlaptop no boot fix\ntv backlight repair\npower supply short circuit fix";
+    $displayQueries = trim($queries) !== '' ? $queries : $defaultQueries;
     ?>
     <div class="grid grid-2">
       <div class="card" style="padding:18px">
@@ -648,8 +664,19 @@ elseif ($tab === 'collect') {
               <?php foreach ($cats as $c): ?><optgroup label="<?=h($c['name'])?>"><?php foreach ($c['children'] as $ch): ?><option value="<?=$ch['id']?>" <?=(int)($cs['auto_collect_category'] ?? 0) === $ch['id'] ? 'selected' : ''?>><?=h($ch['name'])?></option><?php endforeach; ?></optgroup><?php endforeach; ?>
             </select>
           </div>
-          <div class="form-group"><label class="field-label">کلمات جستجو (هر خط یک عبارت — فارسی و انگلیسی)</label><textarea class="field" name="queries" rows="6" placeholder="تعمیر مادربرد&#10;رفع مشکل روشن نشدن لپ‌تاپ&#10;motherboard repair"><?=h($queries)?></textarea><p class="muted" style="font-size:10px">سیستم با این کلمات در ردیت و موتورهای جستجو دنبال مطالب تعمیراتی می‌گردد. خالی بگذارید تا کلمات پیش‌فرض استفاده شود.</p></div>
-          <div class="form-group"><label class="field-label">منابع RSS اضافی (اختیاری — هر خط یک آدرس)</label><textarea class="field" name="sources" rows="5" dir="ltr" placeholder="https://example.com/feed"><?=h(implode("\n", $srcs))?></textarea></div>
+          <div class="form-group"><label class="field-label">کلمات جستجو (هر خط یک عبارت — فارسی و انگلیسی) - هوشمند</label><textarea class="field" name="queries" rows="8" placeholder="تعمیر مادربرد&#10;رفع مشکل روشن نشدن لپ‌تاپ&#10;motherboard repair"><?=h($displayQueries)?></textarea><p class="muted" style="font-size:10px">🤖 ربات هوشمند با این کلمات در ردیت و وب جستجو می‌کند. اگر خالی باشد، از لیست پیش‌فرض معتبر (۱۶ عبارت فارسی/انگلیسی) استفاده می‌شود. فقط مطالب مرتبط با تعمیرات (repair/fix/board/power/display...) جمع‌آوری می‌شود.</p></div>
+          <div class="form-group"><label class="field-label">منابع RSS معتبر (هر خط یک آدرس) - بهینه‌شده</label><textarea class="field" name="sources" rows="10" dir="ltr" placeholder="https://example.com/feed"><?=h($displaySources)?></textarea>
+            <div class="notice" style="font-size:11px;line-height:2;margin-top:8px">
+              ✅ <b>سایت‌های معتبر پیش‌فرض (۱۰ مورد):</b><br>
+              • Reddit AskElectronics, ElectronicsRepair, TVRepair, ComputerRepair (معتبرترین انجمن تعمیرکاران)<br>
+              • iFixit News (مرجع تعمیرات)<br>
+              • Hackaday, Adafruit Blog, EEVblog, AllAboutCircuits, Electronics-Lab (تخصصی الکترونیک)<br>
+              • Electronics StackExchange (پرسش و پاسخ مهندسی)<br>
+              📸 تصاویر به‌صورت خودکار دانلود و در <code>/uploads/</code> با نام <code>auto-*.jpg</code> ذخیره می‌شود (نه لینک خارجی).<br>
+              📝 محتوا با <code>extract_article_text</code> هوشمند استخراج و با دیکشنری فارسی ترجمه می‌شود.<br>
+              🏷 دسته‌بندی خودکار بر اساس دستگاه/برند/خرابی با <code>category_for_device</code>.
+            </div>
+          </div>
           <div class="form-group"><label class="field-label">کلید اجرای خودکار (Cron)</label><input class="field" dir="ltr" name="cron_key" value="<?=h($cs['auto_collect_cron_key'] ?? '')?>" placeholder="خالی = ساخت خودکار"></div>
           <div class="flex gap">
             <button class="btn btn-primary" name="run_now" value="1">⚡ اجرای فوری جمع‌آوری</button>

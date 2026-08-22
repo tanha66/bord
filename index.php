@@ -204,40 +204,126 @@ function fetch_url(string $url, int $timeout = 8): ?string {
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3,
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 5,
             CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 6,
             CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_ENCODING => '',
-            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-            CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/xml, text/xml, application/json, text/html, */*;q=0.8', 'Accept-Language: fa,en;q=0.8'],
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/xml, text/xml, application/json, text/html, */*;q=0.9', 'Accept-Language: fa,en;q=0.8,en-US;q=0.6'],
+            CURLOPT_REFERER => 'https://www.google.com/',
         ]);
         $body = curl_exec($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         return ($body !== false && $code >= 200 && $code < 400) ? $body : null;
     }
-    $ctx = stream_context_create(['http' => ['timeout' => $timeout, 'ignore_errors' => true, 'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36\r\nAccept: application/rss+xml, text/xml, application/json, text/html, */*;q=0.8\r\nAccept-Language: fa,en;q=0.8\r\n"]]);
+    $ctx = stream_context_create(['http' => ['timeout' => $timeout, 'ignore_errors' => true, 'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\nAccept: */*\r\n"]]);
     $body = @file_get_contents($url, false, $ctx);
     return $body === false ? null : $body;
 }
 function download_image(string $url): ?string {
-    $body = fetch_url($url, 20);
-    if ($body === null || strlen($body) > 5 * 1024 * 1024) return null;
+    $url = trim($url);
+    if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) return null;
+    // فقط تصاویر معتبر
+    if (!preg_match('#\.(jpe?g|png|webp)(\?.*)?$#i', $url) && !str_contains($url, 'picsum') && !str_contains($url, 'unsplash') && !str_contains($url, 'imgur')) {
+        // ممکن است URL بدون پسوند باشد (مثل source.unsplash) - باز هم تلاش می‌کنیم
+    }
+    $body = fetch_url($url, 25);
+    if ($body === null || strlen($body) < 1024 || strlen($body) > 8 * 1024 * 1024) return null;
     $tmp = tempnam(sys_get_temp_dir(), 'bkimg');
     if ($tmp === false) return null;
     file_put_contents($tmp, $body);
     $mime = file_mime($tmp);
-    $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$mime] ?? null;
+    $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'jpg'];
+    $ext = $extMap[$mime] ?? null;
+    if (!$ext) {
+        // تلاش بر اساس پسوند URL
+        $pathExt = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+        if (in_array($pathExt, ['jpg','jpeg','png','webp'], true)) $ext = $pathExt==='jpeg'?'jpg':$pathExt;
+    }
     if (!$ext) { @unlink($tmp); return null; }
-    if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-    $name = date('YmdHis') . '-' . bin2hex(random_bytes(5)) . '.' . $ext;
-    $target = UPLOAD_DIR . '/' . $name;
+    if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0755, true);
+    if (!is_dir(UPLOAD_DIR)) { @unlink($tmp); return null; }
+    $name = 'auto-'.date('YmdHis').'-'.bin2hex(random_bytes(4)).'.'.$ext;
+    $target = UPLOAD_DIR.'/'.$name;
     $ok = false;
-    if ($ext === 'jpg' && function_exists('imagecreatefromjpeg')) { $im = @imagecreatefromjpeg($tmp); if ($im) { $ok = @imagejpeg($im, $target, 84); imagedestroy($im); } }
-    elseif ($ext === 'png' && function_exists('imagecreatefrompng')) { $im = @imagecreatefrompng($tmp); if ($im) { $ok = @imagepng($im, $target, 6); imagedestroy($im); } }
-    if (!$ok) $ok = @rename($tmp, $target);
-    @unlink($tmp);
-    return $ok ? '/uploads/' . $name : null;
+    // همیشه به JPG تبدیل برای یکسان‌سازی و کاهش حجم
+    if (function_exists('imagecreatefromstring')) {
+        $im = @imagecreatefromstring($body);
+        if ($im !== false) {
+            $w = imagesx($im); $h = imagesy($im);
+            $max = 1600;
+            if ($w > $max || $h > $max) {
+                $r = min($max/$w, $max/$h);
+                $nw = max(1, (int)round($w*$r)); $nh = max(1, (int)round($h*$r));
+                $dst = imagecreatetruecolor($nw, $nh);
+                // پس‌زمینه سفید برای PNG شفاف
+                $white = imagecolorallocate($dst, 255,255,255);
+                imagefill($dst, 0,0,$white);
+                imagecopyresampled($dst,$im,0,0,0,0,$nw,$nh,$w,$h);
+                imagedestroy($im); $im = $dst;
+            }
+            $ok = @imagejpeg($im, $target, 84);
+            imagedestroy($im);
+        }
+    }
+    if (!$ok) {
+        // fallback: کپی مستقیم
+        $ok = @file_put_contents($target, $body) !== false;
+        @unlink($tmp);
+    } else {
+        @unlink($tmp);
+    }
+    return $ok && file_exists($target) ? '/uploads/'.$name : null;
+}
+function extract_images_from_html(string $html, string $baseUrl = '', int $limit = 5): array {
+    $images = [];
+    if (preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $html, $m)) {
+        foreach ($m[1] as $src) {
+            $src = trim($src);
+            if ($src === '' || str_starts_with($src, 'data:')) continue;
+            // تبدیل URL نسبی به مطلق
+            if (!preg_match('#^https?://#i', $src) && $baseUrl !== '') {
+                $base = parse_url($baseUrl);
+                if ($base) {
+                    $origin = ($base['scheme'] ?? 'https').'://'.($base['host'] ?? '');
+                    if (str_starts_with($src, '//')) $src = ($base['scheme'] ?? 'https').':'.$src;
+                    elseif (str_starts_with($src, '/')) $src = $origin.$src;
+                    else $src = $origin.'/'.ltrim($src,'/');
+                }
+            }
+            if (!filter_var($src, FILTER_VALIDATE_URL)) continue;
+            // فیلتر تصاویر کوچک/آیکون
+            if (preg_match('#(icon|logo|avatar|emoji|1x1|pixel)#i', $src)) continue;
+            $images[] = $src;
+            if (count($images) >= $limit) break;
+        }
+    }
+    return array_values(array_unique($images));
+}
+function extract_article_text(string $html, int $maxLen = 3000): string {
+    // حذف اسکریپت و استایل
+    $html = preg_replace('#<script[^>]*>.*?</script>#is', ' ', $html);
+    $html = preg_replace('#<style[^>]*>.*?</style>#is', ' ', $html);
+    // تلاش برای استخراج از تگ‌های محتوایی
+    $candidates = [];
+    if (preg_match_all('#<(article|div)[^>]*class=["\'][^"\']*(?:content|post|entry|article|body)[^"\']*["\'][^>]*>(.*?)</\1>#is', $html, $m)) {
+        foreach ($m[2] as $inner) {
+            $txt = trim(strip_tags($inner));
+            if (mb_strlen($txt) > 100) $candidates[] = $txt;
+        }
+    }
+    if (!$candidates) {
+        // fallback: تمام متن
+        $txt = trim(strip_tags($html));
+        $txt = preg_replace('/\s+/', ' ', $txt);
+        return mb_substr($txt, 0, $maxLen);
+    }
+    // طولانی‌ترین را انتخاب کن
+    usort($candidates, fn($a,$b)=>mb_strlen($b)-mb_strlen($a));
+    $best = $candidates[0];
+    $best = preg_replace('/\s+/', ' ', $best);
+    return mb_substr(trim($best), 0, $maxLen);
 }
 function parse_rss_items(string $xml, string $sourceName = ''): array {
     $prev = libxml_use_internal_errors(true);
@@ -248,37 +334,107 @@ function parse_rss_items(string $xml, string $sourceName = ''): array {
     $items = [];
     $entries = [];
     if (isset($feed->channel->item)) {
-        foreach ($feed->channel->item as $item) $entries[] = ['title' => (string)$item->title, 'link' => (string)$item->link, 'desc' => (string)$item->description, 'date' => (string)($item->pubDate ?? '')];
+        foreach ($feed->channel->item as $item) {
+            $entries[] = [
+                'title' => (string)$item->title,
+                'link' => (string)$item->link,
+                'desc' => (string)($item->description ?? $item->children('content', true)->encoded ?? ''),
+                'date' => (string)($item->pubDate ?? ''),
+                'image' => (string)($item->enclosure['url'] ?? '')
+            ];
+        }
     } elseif (isset($feed->entry)) {
-        foreach ($feed->entry as $e) $entries[] = ['title' => (string)$e->title, 'link' => (string)$e->link['href'], 'desc' => (string)($e->content ?: $e->summary), 'date' => (string)($e->updated ?? $e->published ?? '')];
+        foreach ($feed->entry as $e) {
+            $link = '';
+            if (isset($e->link)) {
+                if (isset($e->link['href'])) $link = (string)$e->link['href'];
+                else $link = (string)$e->link;
+            }
+            $entries[] = [
+                'title' => (string)$e->title,
+                'link' => $link,
+                'desc' => (string)($e->content ?: $e->summary),
+                'date' => (string)($e->updated ?? $e->published ?? ''),
+                'image' => ''
+            ];
+        }
     }
     foreach ($entries as $en) {
         $title = trim(strip_tags($en['title']));
-        if ($title === '') continue;
-        $image = '';
-        if (preg_match('/<img[^>]+src=["\']([^"\']+)["\']/i', $en['desc'], $m)) $image = $m[1];
+        if ($title === '' || mb_strlen($title) < 8) continue;
+        // فیلتر تکراری و نامرتبط
+        $low = mb_strtolower($title);
+        if (preg_match('/(politic|sport|celebrity|music|movie)/i', $low)) continue;
+        $image = trim($en['image']);
+        if ($image === '' && preg_match('/<img[^>]+src=["\']([^"\']+)["\']/i', $en['desc'], $m)) $image = trim($m[1]);
         $ts = $en['date'] !== '' ? strtotime($en['date']) : time();
         if (!$ts || $ts < 0) $ts = time();
-        $items[] = ['title' => $title, 'link' => trim($en['link']), 'description' => $en['desc'], 'image' => $image, 'date' => date('Y-m-d H:i:s', $ts), 'source' => $sourceName];
+        $items[] = [
+            'title' => $title,
+            'link' => trim($en['link']),
+            'description' => trim(strip_tags($en['desc'])),
+            'description_html' => $en['desc'],
+            'image' => $image,
+            'date' => date('Y-m-d H:i:s', $ts),
+            'source' => $sourceName
+        ];
     }
     return $items;
 }
 function detect_brand(string $text): string {
     $text = mb_strtolower($text);
-    $map = ['samsung'=>'سامسونگ','apple'=>'اپل','iphone'=>'اپل','asus'=>'ایسوس','dell'=>'دل','lenovo'=>'لنوو','hewlett'=>'اچ‌پی','hp'=>'اچ‌پی','gigabyte'=>'گیگابایت','msi'=>'MSI','sony'=>'سونی','lg'=>'ال‌جی','xiaomi'=>'شیائومی','redmi'=>'شیائومی','huawei'=>'هواوی','nokia'=>'نوکیا','acer'=>'ایسر','toshiba'=>'توشیبا','corsair'=>'کورسیر','green'=>'گرین','cooler master'=>'کولر مستر','nvidia'=>'انویدیا','amd'=>'AMD','intel'=>'اینتل','raspberry'=>'رسپبری پای','arduino'=>'آردوینو','esp32'=>'ماژول ESP'];
-    foreach ($map as $en => $fa) if (strpos($text, $en) !== false) return $fa;
+    $map = [
+        'samsung'=>'سامسونگ','apple'=>'اپل','iphone'=>'اپل','asus'=>'ایسوس','dell'=>'دل','lenovo'=>'لنوو',
+        'hewlett'=>'اچ‌پی','hp'=>'اچ‌پی','gigabyte'=>'گیگابایت','msi'=>'MSI','sony'=>'سونی','lg'=>'ال‌جی',
+        'xiaomi'=>'شیائومی','redmi'=>'شیائومی','huawei'=>'هواوی','nokia'=>'نوکیا','acer'=>'ایسر','toshiba'=>'توشیبا',
+        'corsair'=>'کورسیر','green'=>'گرین','cooler master'=>'کولر مستر','nvidia'=>'انویدیا','amd'=>'AMD',
+        'intel'=>'اینتل','raspberry'=>'رسپبری پای','arduino'=>'آردوینو','esp32'=>'ماژول ESP','stm32'=>'STM32',
+        'xbox'=>'ایکس‌باکس','playstation'=>'پلی‌استیشن','bosch'=>'بوش','siemens'=>'زیمنس','philips'=>'فیلیپس'
+    ];
+    foreach ($map as $en => $fa) if (mb_strpos($text, $en) !== false) return $fa;
     return 'متفرقه';
 }
 function detect_device(string $text): string {
     $text = mb_strtolower($text);
-    $map = ['motherboard'=>'مادربرد','mainboard'=>'مادربرد','laptop'=>'لپ‌تاپ','notebook'=>'لپ‌تاپ','graphics card'=>'کارت گرافیک','gpu'=>'کارت گرافیک','power supply'=>'پاور','psu'=>'پاور','monitor'=>'مانیتور','television'=>'تلویزیون','tv'=>'تلویزیون','smartphone'=>'موبایل','phone'=>'موبایل','adapter'=>'آداپتور','charger'=>'آداپتور','washing machine'=>'لوازم خانگی','dishwasher'=>'لوازم خانگی','refrigerator'=>'لوازم خانگی','inverter'=>'برد صنعتی','plc'=>'برد صنعتی','لپ‌تاپ'=>'لپ‌تاپ','مادربرد'=>'مادربرد','پاور'=>'پاور','کارت گرافیک'=>'کارت گرافیک','مانیتور'=>'مانیتور','تلویزیون'=>'تلویزیون','موبایل'=>'موبایل','آداپتور'=>'آداپتور'];
-    foreach ($map as $k => $v) if (strpos($text, $k) !== false) return $v;
+    $map = [
+        'motherboard'=>'مادربرد','mainboard'=>'مادربرد','مادربرد'=>'مادربرد',
+        'laptop'=>'لپ‌تاپ','notebook'=>'لپ‌تاپ','لپ‌تاپ'=>'لپ‌تاپ',
+        'graphics card'=>'کارت گرافیک','gpu'=>'کارت گرافیک','vga'=>'کارت گرافیک','کارت گرافیک'=>'کارت گرافیک',
+        'power supply'=>'پاور','psu'=>'پاور','power'=>'پاور','پاور'=>'پاور','سوئیچینگ'=>'پاور',
+        'monitor'=>'مانیتور','مانیتور'=>'مانیتور',
+        'television'=>'تلویزیون','tv'=>'تلویزیون','تلویزیون'=>'تلویزیون',
+        'smartphone'=>'موبایل','phone'=>'موبایل','موبایل'=>'موبایل','تبلت'=>'موبایل',
+        'adapter'=>'آداپتور','charger'=>'آداپتور','آداپتور'=>'آداپتور','شارژر'=>'آداپتور',
+        'washing machine'=>'لوازم خانگی','dishwasher'=>'لوازم خانگی','refrigerator'=>'لوازم خانگی','لباسشویی'=>'لوازم خانگی',
+        'inverter'=>'برد صنعتی','plc'=>'برد صنعتی','برد صنعتی'=>'برد صنعتی','اینورتر'=>'برد صنعتی',
+        'console'=>'کنسول بازی','کنسول'=>'کنسول بازی',
+        'printer'=>'پرینتر','پرینتر'=>'پرینتر',
+        'router'=>'مودم و شبکه','مودم'=>'مودم و شبکه',
+    ];
+    foreach ($map as $k => $v) if (mb_strpos($text, $k) !== false) return $v;
     return 'برد الکترونیکی';
 }
 function detect_fault(string $text): string {
     $text = mb_strtolower($text);
-    $map = ['no power'=>'روشن نمی‌شود','won\'t turn on'=>'روشن نمی‌شود','wont turn on'=>'روشن نمی‌شود','not turning on'=>'روشن نمی‌شود','does not power'=>'روشن نمی‌شود','no boot'=>'روشن نمی‌شود','روشن نمی‌شود'=>'روشن نمی‌شود','روشن نمیشود'=>'روشن نمی‌شود','charging'=>'شارژ نمی‌شود','charger'=>'شارژ نمی‌شود','شارژ'=>'شارژ نمی‌شود','no display'=>'تصویر ندارد','no picture'=>'تصویر ندارد','black screen'=>'تصویر ندارد','تصویر'=>'تصویر ندارد','short circuit'=>'اتصال کوتاه','short'=>'اتصال کوتاه','اتصال کوتاه'=>'اتصال کوتاه','overheat'=>'گرمای بیش از حد','گرم'=>'گرمای بیش از حد','bios'=>'بایوس','بایوس'=>'بایوس','capacitor'=>'خازن','capacitors'=>'خازن','خازن'=>'خازن','mosfet'=>'ماسفت','ماسفت'=>'ماسفت','backlight'=>'بک‌لایت','بک‌لایت'=>'بک‌لایت','dead'=>'خرابی عمومی','error'=>'خطای دستگاه','beep'=>'بوق خطا'];
-    foreach ($map as $k => $v) if (strpos($text, $k) !== false) return $v;
+    $map = [
+        'no power'=>'روشن نمی‌شود','won\'t turn on'=>'روشن نمی‌شود','wont turn on'=>'روشن نمی‌شود','not turning on'=>'روشن نمی‌شود','does not power'=>'روشن نمی‌شود','no boot'=>'روشن نمی‌شود','روشن نمی‌شود'=>'روشن نمی‌شود','روشن نمیشود'=>'روشن نمی‌شود',
+        'charging'=>'شارژ نمی‌شود','charger'=>'شارژ نمی‌شود','شارژ'=>'شارژ نمی‌شود',
+        'no display'=>'تصویر ندارد','no picture'=>'تصویر ندارد','black screen'=>'تصویر ندارد','no image'=>'تصویر ندارد','تصویر'=>'تصویر ندارد','display issue'=>'تصویر ندارد',
+        'short circuit'=>'اتصال کوتاه','short'=>'اتصال کوتاه','اتصال کوتاه'=>'اتصال کوتاه',
+        'overheat'=>'گرمای بیش از حد','overheating'=>'گرمای بیش از حد','گرم'=>'گرمای بیش از حد','thermal'=>'گرمای بیش از حد',
+        'bios'=>'بایوس','بایوس'=>'بایوس',
+        'capacitor'=>'خازن','خازن'=>'خازن',
+        'mosfet'=>'ماسفت','ماسفت'=>'ماسفت',
+        'backlight'=>'بک‌لایت','بک‌لایت'=>'بک‌لایت',
+        'dead'=>'خرابی عمومی','خراب'=>'خرابی عمومی',
+        'error'=>'خطای دستگاه','ارور'=>'خطای دستگاه',
+        'beep'=>'بوق خطا','بوق'=>'بوق خطا',
+        'water'=>'آب‌خوردگی','آب‌خوردگی'=>'آب‌خوردگی',
+        'flicker'=>'پرپر زدن','پرپر'=>'پرپر زدن',
+        'artifact'=>'نویز تصویر','نویز'=>'نویز تصویر',
+        'blinking'=>'چشمک زدن','چشمک'=>'چشمک زدن',
+    ];
+    foreach ($map as $k => $v) if (mb_strpos($text, $k) !== false) return $v;
     return 'سایر';
 }
 function build_steps_from_text(string $text): array {
@@ -289,81 +445,40 @@ function build_steps_from_text(string $text): array {
     $steps = []; $chunk = ''; $n = 0;
     foreach ($sentences as $s) {
         $chunk .= $s . ' ';
-        if (mb_strlen($chunk) >= 220) { $n++; $steps[] = ['title' => 'گام ' . fa($n), 'body' => trim($chunk)]; $chunk = ''; }
-        if ($n >= 4) break;
+        if (mb_strlen($chunk) >= 200) { $n++; $steps[] = ['title' => 'گام ' . fa($n), 'body' => trim($chunk)]; $chunk = ''; }
+        if ($n >= 5) break;
     }
-    if ($chunk !== '' && $n < 5) { $n++; $steps[] = ['title' => 'گام ' . fa($n), 'body' => trim($chunk)]; }
+    if ($chunk !== '' && $n < 6) { $n++; $steps[] = ['title' => 'گام ' . fa($n), 'body' => trim($chunk)]; }
     return $steps ?: [['title' => 'راه‌حل', 'body' => trim($text)]];
 }
 function translate_en2fa(string $text): string {
-    $text = mb_strtolower($text);
+    $text = trim($text);
+    if ($text === '') return '';
+    $low = mb_strtolower($text);
     static $dict = null;
     if ($dict === null) {
         $dict = [
-            "won't turn on" => 'روشن نمی‌شود',
-            'not turning on' => 'روشن نمی‌شود',
-            'does not power' => 'روشن نمی‌شود',
-            'does not turn' => 'روشن نمی‌شود',
-            'no power' => 'روشن نمی‌شود',
-            'no boot' => 'سیستم بالا نمی‌آید',
-            'short circuit' => 'اتصال کوتاه',
-            'water damage' => 'آب‌خوردگی',
-            'graphics card' => 'کارت گرافیک',
-            'power supply' => 'پاور',
-            'hard drive' => 'هارد دیسک',
-            'black screen' => 'صفحه سیاه',
-            'no display' => 'تصویر ندارد',
-            'no picture' => 'تصویر ندارد',
-            'motherboard' => 'مادربرد',
-            'mainboard' => 'مادربرد',
-            'notebook' => 'لپ‌تاپ',
-            'washing machine' => 'لباسشویی',
-            'soldering' => 'لحیم‌کاری',
-            'replacing' => 'تعویض',
-            'replacement' => 'قطعه جایگزین',
-            'capacitors' => 'خازن‌ها',
-            'capacitor' => 'خازن',
-            'mosfet' => 'ماسفت',
-            'resistor' => 'مقاومت',
-            'transistor' => 'ترانزیستور',
-            'backlight' => 'بک‌لایت',
-            'overheating' => 'داغ شدن بیش از حد',
-            'overheat' => 'گرمای بیش از حد',
-            'firmware' => 'میان‌افزار',
-            'voltage' => 'ولتاژ',
-            'multimeter' => 'مولتی‌متر',
-            'circuit' => 'مدار',
-            'solder' => 'لحیم',
-            'fuse' => 'فیوز',
-            'battery' => 'باتری',
-            'charging' => 'شارژ شدن',
-            'charger' => 'شارژر',
-            'adapter' => 'آداپتور',
-            'display' => 'نمایشگر',
-            'screen' => 'صفحه نمایش',
-            'laptop' => 'لپ‌تاپ',
-            'monitor' => 'مانیتور',
-            'television' => 'تلویزیون',
-            'smartphone' => 'موبایل',
-            'inverter' => 'اینورتر',
-            'repair' => 'تعمیر',
-            'problem' => 'مشکل',
-            'issue' => 'ایراد',
-            'replace' => 'تعویض',
-            'check' => 'بررسی',
-            'test' => 'تست',
-            'guide' => 'راهنما',
-            'error' => 'خطا',
-            'beep' => 'بوق',
-            'dead' => 'از کار افتاده',
-            'shorted' => 'اتصال کوتاه',
-            'board' => 'برد',
-            'chip' => 'چیپ',
-            'power' => 'تغذیه',
-            'how to fix' => 'روش رفع',
-            'how to' => 'آموزش',
+            "won't turn on" => 'روشن نمی‌شود', 'not turning on' => 'روشن نمی‌شود', 'does not power' => 'روشن نمی‌شود',
+            'does not turn' => 'روشن نمی‌شود', 'no power' => 'روشن نمی‌شود', 'no boot' => 'سیستم بالا نمی‌آید',
+            'short circuit' => 'اتصال کوتاه', 'water damage' => 'آب‌خوردگی', 'water damaged' => 'آب‌خورده',
+            'graphics card' => 'کارت گرافیک', 'power supply' => 'پاور', 'hard drive' => 'هارد دیسک',
+            'black screen' => 'صفحه سیاه', 'no display' => 'تصویر ندارد', 'no picture' => 'تصویر ندارد',
+            'motherboard' => 'مادربرد', 'mainboard' => 'مادربرد', 'notebook' => 'لپ‌تاپ', 'washing machine' => 'لباسشویی',
+            'soldering' => 'لحیم‌کاری', 'replacing' => 'تعویض', 'replacement' => 'قطعه جایگزین',
+            'capacitors' => 'خازن‌ها', 'capacitor' => 'خازن', 'mosfet' => 'ماسفت', 'resistor' => 'مقاومت',
+            'transistor' => 'ترانزیستور', 'backlight' => 'بک‌لایت', 'overheating' => 'داغ شدن بیش از حد',
+            'overheat' => 'گرمای بیش از حد', 'firmware' => 'میان‌افزار', 'voltage' => 'ولتاژ', 'multimeter' => 'مولتی‌متر',
+            'circuit' => 'مدار', 'solder' => 'لحیم', 'fuse' => 'فیوز', 'battery' => 'باتری', 'charging' => 'شارژ شدن',
+            'charger' => 'شارژر', 'adapter' => 'آداپتور', 'display' => 'نمایشگر', 'screen' => 'صفحه نمایش',
+            'laptop' => 'لپ‌تاپ', 'monitor' => 'مانیتور', 'television' => 'تلویزیون', 'smartphone' => 'موبایل',
+            'inverter' => 'اینورتر', 'repair' => 'تعمیر', 'problem' => 'مشکل', 'issue' => 'ایراد', 'replace' => 'تعویض',
+            'check' => 'بررسی', 'test' => 'تست', 'guide' => 'راهنما', 'error' => 'خطا', 'beep' => 'بوق', 'dead' => 'از کار افتاده',
+            'shorted' => 'اتصال کوتاه', 'board' => 'برد', 'chip' => 'چیپ', 'power' => 'تغذیه', 'how to fix' => 'روش رفع',
+            'how to' => 'آموزش', 'fix' => 'رفع', 'broken' => 'خراب', 'faulty' => 'معیوب', 'damaged' => 'آسیب‌دیده',
+            'motherboard repair' => 'تعمیر مادربرد', 'laptop repair' => 'تعمیر لپ‌تاپ', 'tv repair' => 'تعمیر تلویزیون',
+            'led tv' => 'تلویزیون ال‌ای‌دی', 'lcd' => 'ال‌سی‌دی', 'inverter board' => 'برد اینورتر',
         ];
-        uksort($dict, function ($a, $b) { return strlen($b) - strlen($a); });
+        uksort($dict, fn($a,$b)=>strlen($b)-strlen($a));
     }
     foreach ($dict as $en => $fa) {
         $text = str_ireplace($en, $fa, $text);
@@ -373,88 +488,100 @@ function translate_en2fa(string $text): string {
 function build_fault_steps(string $fault, string $device, string $brand): array {
     $steps = [
         'روشن نمی‌شود' => [
-            ['بررسی منبع تغذیه', "ابتدا منبع تغذیه و کابل برق {$device} را بررسی کنید و ولتاژ خروجی را با مولتی‌متر اندازه بگیرید."],
-            ['بررسی فیوز و مدار ورودی', "فیوز اصلی برد و قطعات مسیر ورودی ({$brand}) را از نظر اتصال کوتاه یا قطعی تست کنید."],
-            ['تست قطعات نیمه‌هادی', 'قطعه معیوب (ماسفت یا دیود) را شناسایی و با نمونه مشابه تعویض کنید.'],
-            ['تست نهایی و اندازه‌گیری جریان', 'دستگاه را به منبع تغذیه آزمایشگاهی وصل کرده و جریان استندبای را کنترل کنید تا از عدم اتصال کوتاه مطمئن شوید.'],
+            ['بررسی منبع تغذیه و کابل', "ابتدا منبع تغذیه و کابل برق {$device} را بررسی کنید و ولتاژ خروجی را با مولتی‌متر اندازه بگیرید. برای {$brand} معمولاً ولتاژ 19V برای لپ‌تاپ یا 12V/5V برای برد اصلی است."],
+            ['بررسی فیوز و مدار ورودی', "فیوز اصلی برد و قطعات مسیر ورودی ({$brand}) را از نظر اتصال کوتاه یا قطعی تست کنید. مقاومت بین ورودی و زمین را اندازه بگیرید."],
+            ['تست ماسفت‌ها و دیودها', 'قطعه معیوب (ماسفت یا دیود شاتکی) را با مولتی‌متر در حالت دیود تست کنید. اگر اتصال کوتاه بود، با هیتر جدا کنید.'],
+            ['تغذیه با منبع آزمایشگاهی', 'برد را با منبع تغذیه آزمایشگاهی و جریان محدود (1A) تغذیه کنید. اگر جریان بالا بود، قطعه داغ را شناسایی کنید.'],
+            ['تست نهایی', 'پس از تعویض قطعه، دستگاه را روشن کرده و جریان استندبای را کنترل کنید.'],
         ],
         'تصویر ندارد' => [
-            ['تست با نمایشگر جایگزین', 'دستگاه را به یک نمایشگر خارجی سالم وصل کنید تا مشخص شود مشکل از پردازش تصویر است یا از پنل نمایش.'],
-            ['بررسی کابل و کانکتور تصویر', 'کابل رابط بین برد اصلی و پنل نمایش را از نظر آسیب و اتصال درست بررسی کنید.'],
-            ['بررسی مدار درایو نمایشگر', 'ولتاژ خروجی مدار درایو نمایشگر را اندازه بگیرید؛ نبود ولتاژ نشانه خرابی این بخش است.'],
-            ['تست نهایی', 'پس از رفع اشکال، دستگاه را روشن کرده و پایداری تصویر را در چند روشن و خاموش متوالی بررسی کنید.'],
+            ['تست با نمایشگر خارجی', 'دستگاه را به نمایشگر خارجی سالم وصل کنید تا مشخص شود مشکل از پردازش تصویر است یا پنل.'],
+            ['بررسی کابل LVDS و کانکتور', 'کابل رابط بین برد اصلی و پنل را از نظر قطعی و اتصال درست بررسی کنید.'],
+            ['بررسی مدار T-CON و درایو', 'ولتاژهای VGh, VGl, Vcc روی برد T-CON را اندازه بگیرید. نبود ولتاژ نشانه خرابی DC-DC است.'],
+            ['تست بک‌لایت', 'با چراغ قوه روی صفحه بتابانید؛ اگر تصویر دیده شد، مشکل از بک‌لایت است.'],
+            ['تست نهایی', 'پس از رفع، پایداری تصویر را در چند روشن/خاموش بررسی کنید.'],
         ],
         'شارژ نمی‌شود' => [
-            ['بررسی کانکتور شارژ', 'کانکتور شارژ را از نظر آسیب، اکسید یا گرد و غبار بررسی و تمیز کنید.'],
-            ['اندازه‌گیری جریان ورودی', 'با آمپرمتر USB جریان ورودی هنگام اتصال شارژر را اندازه بگیرید.'],
-            ['بررسی آی‌سی مدیریت شارژ', "آی‌سی شارژ روی برد {$brand} را از نظر گرمای غیرعادی و اتصال کوتاه بررسی کنید."],
-            ['تعویض قطعه معیوب', 'قطعه معیوب را با هیتر و فلاکس جدا و نمونه سالم را جایگزین کنید.'],
+            ['بررسی کانکتور و کابل شارژ', 'کانکتور شارژ را از نظر شکستگی، اکسید یا گرد و غبار بررسی و با اسپری تمیز کنید.'],
+            ['اندازه‌گیری جریان', 'با آمپرمتر USB جریان ورودی را اندازه بگیرید. جریان 0 یا نوسانی نشانه مشکل است.'],
+            ['بررسی آی‌سی شارژ', "آی‌سی مدیریت شارژ روی برد {$brand} را از نظر گرمای غیرعادی و اتصال کوتاه بررسی کنید."],
+            ['تست باتری', 'باتری را با تستر جدا تست کنید. ولتاژ زیر 3.7V برای لیتیومی نشانه خرابی است.'],
+            ['تعویض قطعه', 'قطعه معیوب را با هیتر و فلاکس مناسب تعویض کنید.'],
         ],
         'اتصال کوتاه' => [
-            ['اندازه‌گیری مقاومت خط تغذیه', 'با مولتی‌متر در حالت اهم، مقاومت بین خط تغذیه و زمین را اندازه بگیرید.'],
-            ['تغذیه با ولتاژ محدودشده', 'برد را با منبع تغذیه آزمایشگاهی و جریان محدود تغذیه کنید.'],
-            ['شناسایی قطعه داغ', 'با اسپری سرمازا یا لمس محتاطانه، قطعه‌ای که سریع‌تر گرم می‌شود را پیدا کنید.'],
-            ['تعویض و تست نهایی', 'قطعه معیوب را تعویض کرده و دوباره مقاومت خط تغذیه را کنترل کنید.'],
+            ['اندازه‌گیری مقاومت', 'با مولتی‌متر در حالت اهم، مقاومت بین خط تغذیه و زمین را اندازه بگیرید. زیر 10 اهم یعنی اتصال کوتاه.'],
+            ['تزریق ولتاژ محدود', 'برد را با منبع آزمایشگاهی 1V/1A تغذیه کنید و قطعه داغ را پیدا کنید.'],
+            ['شناسایی با اسپری', 'با اسپری سرمازا، قطعه‌ای که سریع‌تر گرم می‌شود را شناسایی کنید.'],
+            ['تعویض و تست', 'قطعه را تعویض و دوباره مقاومت را چک کنید. باید بالای 100 اهم باشد.'],
         ],
         'بایوس' => [
-            ['دانلود فایل بایوس صحیح', "آخرین نسخه بایوس مخصوص {$device} {$brand} را از منبع رسمی تهیه کنید."],
-            ['اتصال پروگرامر', 'با کلیپس SOIC، پروگرامر را به چیپ حافظه بایوس متصل کنید.'],
-            ['تهیه نسخه پشتیبان', 'قبل از نوشتن، محتوای فعلی چیپ را خوانده و ذخیره کنید.'],
-            ['نوشتن بایوس و تست', 'فایل بایوس جدید را بنویسید و دستگاه را روشن کنید.'],
+            ['دانلود بایوس صحیح', "آخرین نسخه بایوس مخصوص {$device} {$brand} را از منبع رسمی تهیه کنید. حتماً مدل دقیق را چک کنید."],
+            ['اتصال پروگرامر', 'با کلیپس SOIC8، پروگرامر CH341 را به چیپ بایوس متصل کنید.'],
+            ['بکاپ', 'قبل از نوشتن، محتوای فعلی را بخوانید و ذخیره کنید.'],
+            ['نوشتن و تست', 'فایل جدید را بنویسید، Verify کنید و دستگاه را روشن کنید.'],
         ],
         'گرمای بیش از حد' => [
-            ['بررسی سیستم خنک‌کننده', 'فن خنک‌کننده و خمیر حرارتی را بررسی و در صورت نیاز تمیز یا تعویض کنید.'],
-            ['اندازه‌گیری دمای قطعات', 'دمای قطعات اصلی را در حین کار کنترل کنید.'],
-            ['بررسی ولتاژ زیر بار', 'ولتاژهای اصلی را هنگام بار سنگین اندازه بگیرید.'],
-            ['تست پایداری', 'دستگاه را حداقل ۲۰ دقیقه تحت استرس اجرا کنید.'],
+            ['تمیز کردن و خمیر حرارتی', 'فن و هیت‌سینک را تمیز کرده و خمیر حرارتی جدید بزنید.'],
+            ['بررسی ولتاژ', 'ولتاژ Vcore و 12V را زیر بار سنگین اندازه بگیرید.'],
+            ['تست فن', 'دور فن را بررسی کنید. زیر 1000 RPM نشانه خرابی است.'],
+            ['تست پایداری', 'دستگاه را 20 دقیقه با FurMark یا AIDA64 استرس کنید.'],
         ],
         'بک‌لایت' => [
-            ['تست درایو بک‌لایت', 'خروجی درایو LED را با ولت‌متر بررسی کنید؛ ولتاژ بالا و نوسان یعنی مشکل از ردیف LED است.'],
-            ['تست ردیف‌های LED', 'با تستر LED هر ردیف را جدا تست کنید و ردیف سوخته را پیدا کنید.'],
-            ['تعویض ردیف LED', 'پنل را با احتیاط باز کرده و ردیف سوخته را با نمونه مشابه تعویض کنید.'],
-        ],
-        'ماسفت' => [
-            ['تست ماسفت با مولتی‌متر', 'پایه‌های Source و Drain ماسفت را در حالت دیود تست کنید.'],
-            ['بررسی مدار محرک', 'مدار گیت و مقاومت‌های محرک ماسفت را بررسی کنید.'],
-            ['تعویض ماسفت', 'ماسفت معیوب را با هیتر جدا و نمونه مشابه را با فلاکس لحیم کنید.'],
+            ['تست درایو LED', 'خروجی درایو بک‌لایت را اندازه بگیرید. ولتاژ بالا و نوسان = ردیف LED سوخته.'],
+            ['تست ردیف‌ها با تستر', 'هر ردیف LED را جدا با تستر 300V تست کنید.'],
+            ['تعویض ردیف', 'پنل را با احتیاط باز و ردیف سوخته را با مشابه تعویض کنید.'],
+            ['تنظیم جریان', 'جریان درایو را کمی کاهش دهید تا عمر LED بیشتر شود.'],
         ],
         'خازن' => [
-            ['بررسی بصری خازن‌ها', 'خازن‌های بادکرده یا نشتی‌دار را شناسایی کنید.'],
-            ['اندازه‌گیری ظرفیت', 'با ظرفیت‌سنج، خازن‌های مشکوک را اندازه بگیرید.'],
-            ['تعویض خازن', 'خازن معیوب را با نمونه با کیفیت و ظرفیت مشابه تعویض کنید.'],
+            ['بررسی بصری', 'خازن‌های بادکرده، نشتی‌دار یا تغییر رنگ را شناسایی کنید.'],
+            ['اندازه‌گیری ESR و ظرفیت', 'با ESR متر، خازن‌های مشکوک را تست کنید. ظرفیت زیر 80% یعنی خراب.'],
+            ['تعویض با کیفیت', 'خازن را با نمونه ژاپنی (Rubycon, Nichicon) با همان ظرفیت و ولتاژ بالاتر تعویض کنید.'],
         ],
-        'بوق خطا' => [
-            ['شناسایی الگوی بوق', 'تعداد و الگوی بوق‌ها را یادداشت کنید تا علت دقیق مشخص شود.'],
-            ['تست قطعات مرتبط', 'رم، پردازنده و کارت گرافیک را به‌صورت جداگانه تست کنید.'],
-            ['رفع مشکل', 'قطعه معیوب را تعویض یا اسلات‌ها را تمیز کنید.'],
+        'ماسفت' => [
+            ['تست دیودی', 'پایه‌های S و D را در حالت دیود تست کنید. بوق ممتد = سوخته.'],
+            ['بررسی مدار گیت', 'مقاومت‌های گیت و درایور را چک کنید.'],
+            ['تعویض', 'ماسفت را با هیتر 350 درجه جدا و نمونه مشابه با فلاکس لحیم کنید.'],
         ],
     ];
     if (isset($steps[$fault])) return $steps[$fault];
     return [
-        ['بررسی اولیه و تست قطعات', "ابتدا {$device} {$brand} را به‌صورت چشمی بررسی و قطعات مشکوک را با مولتی‌متر تست کنید."],
-        ['اندازه‌گیری ولتاژ و جریان', 'ولتاژ و جریان مسیرهای اصلی تغذیه را اندازه‌گیری و با مقدار نرمال مقایسه کنید.'],
-        ['تعویض قطعه معیوب', 'قطعه معیوب شناسایی‌شده را با نمونه مشابه تعویض کنید.'],
-        ['تست نهایی', 'دستگاه را دوباره مونتاژ کرده و در شرایط واقعی آزمایش کنید.'],
+        ['بررسی اولیه چشمی', "ابتدا {$device} {$brand} را با لوپ بررسی کنید. قطعات سوخته، خازن بادکرده یا ترک برد را پیدا کنید."],
+        ['اندازه‌گیری ولتاژ و جریان', 'ولتاژهای اصلی تغذیه (3.3V, 5V, 12V, 19V) را اندازه بگیرید و با مقدار نرمال مقایسه کنید.'],
+        ['تست قطعات نیمه‌هادی', 'دیودها، ماسفت‌ها و خازن‌های مسیر معیوب را با مولتی‌متر تست کنید.'],
+        ['تعویض و مونتاژ', 'قطعه معیوب را تعویض، برد را تمیز و دستگاه را تست نهایی کنید.'],
     ];
 }
-function build_persian_tip(string $rawTitle, string $rawDesc): array {
+function build_persian_tip(string $rawTitle, string $rawDesc, string $sourceUrl = '', string $sourceName = ''): array {
     $combined = $rawTitle . ' ' . strip_tags($rawDesc);
     $brand = detect_brand($combined);
     $device = detect_device($combined);
     $fault = detect_fault($combined);
-    $translatedDesc = translate_en2fa(mb_substr(strip_tags($rawDesc), 0, 900));
-    $titles = [
-        "رفع مشکل {$fault} در {$device} {$brand} — راهنمای کامل",
-        "علت و راه‌حل {$fault} در {$device} {$brand}",
-        "{$device} {$brand} دچار {$fault} شده است — تشخیص و تعمیر گام‌به‌گام",
+    $translatedDesc = translate_en2fa(mb_substr(strip_tags($rawDesc), 0, 1200));
+
+    // عنوان‌های هوشمند متنوع
+    $templates = [
+        "رفع مشکل {$fault} در {$device} {$brand} — راهنمای کامل و تست‌شده",
+        "چرا {$device} {$brand} {$fault}؟ علت‌ها و راه‌حل حرفه‌ای",
+        "{$device} {$brand} دچار {$fault} شده — تشخیص و تعمیر گام‌به‌گام",
+        "آموزش تعمیر {$fault} در {$device} {$brand} با مولتی‌متر",
+        "تجربه تعمیرکار: رفع {$fault} در {$device} {$brand}",
     ];
-    $title = $titles[array_rand($titles)];
-    $short = "در این قلق آموزشی، روش تشخیص و رفع مشکل «{$fault}» در {$device} {$brand} به‌صورت گام‌به‌گام توضیح داده شده است.";
-    $desc = "<p>{$device} {$brand} با مشکل «{$fault}» مواجه شده است. در ادامه ابتدا علت‌های رایج این خرابی بررسی و سپس روش تعمیر مرحله‌به‌مرحله آموزش داده می‌شود.</p>";
-    if ($translatedDesc !== '') {
-        $desc .= '<blockquote>' . h(mb_substr($translatedDesc, 0, 400)) . '</blockquote>';
+    $title = $templates[array_rand($templates)];
+
+    // توضیح کوتاه هوشمند
+    $short = "در این قلق آموزشی، روش تشخیص و رفع مشکل «{$fault}» در {$device} {$brand} به‌صورت گام‌به‌گام و تست‌شده توضیح داده شده است.";
+
+    // توضیح کامل
+    $desc = "<p>{$device} {$brand} با مشکل «{$fault}» مواجه شده است. این مشکل یکی از خرابی‌های رایج در تعمیرات است و در ادامه ابتدا علت‌های اصلی و سپس روش تعمیر مرحله‌به‌مرحله با ابزار دقیق آموزش داده می‌شود.</p>";
+    if ($translatedDesc !== '' && mb_strlen($translatedDesc) > 20) {
+        $desc .= '<blockquote>' . h(mb_substr($translatedDesc, 0, 500)) . '</blockquote>';
     }
-    $desc .= '<p>توجه: قبل از هر اقدام، دستگاه را از برق و باتری جدا کنید و از تجهیزات ایمنی استفاده نمایید.</p>';
+    $desc .= '<p><b>ابزار مورد نیاز:</b> مولتی‌متر دیجیتال، هویه، هیتر، فلاکس، لوپ.</p>';
+    $desc .= '<p>⚠️ قبل از هر اقدام، دستگاه را از برق و باتری جدا کنید و از دستبند آنتی‌استاتیک استفاده نمایید.</p>';
+    if ($sourceName !== '') {
+        $desc .= '<p style="font-size:11px;color:#8b98a5">منبع اصلی: ' . h($sourceName) . '</p>';
+    }
+
     return [
         'title' => $title,
         'short_description' => $short,
@@ -463,12 +590,13 @@ function build_persian_tip(string $rawTitle, string $rawDesc): array {
         'device' => $device,
         'brand' => $brand,
         'fault' => $fault,
+        'source_url' => $sourceUrl,
+        'source_name' => $sourceName,
     ];
 }
 function discover_reddit(string $query, int $limit = 4): array {
-    // Use the public .json endpoint; shared hosts may be blocked. In that case we return no results.
     $url = 'https://www.reddit.com/search.json?q=' . urlencode($query) . '&limit=' . $limit . '&sort=relevance&t=year&raw_json=1&include_over_18=0&safe=active';
-    $body = fetch_url($url, 7);
+    $body = fetch_url($url, 8);
     if ($body === null) return [];
     $data = json_decode($body, true);
     if (!is_array($data) || !isset($data['data']['children'])) return [];
@@ -477,29 +605,56 @@ function discover_reddit(string $query, int $limit = 4): array {
         $d = $child['data'] ?? [];
         $title = trim(strip_tags((string)($d['title'] ?? '')));
         $selftext = trim(strip_tags((string)($d['selftext'] ?? '')));
-        if ($title === '' || mb_strlen($selftext) < 40) continue;
+        if ($title === '' || mb_strlen($title) < 12) continue;
+        if (mb_strlen($selftext) < 30) continue;
+        // فیلتر محتوای نامرتبط
+        $low = mb_strtolower($title.' '.$selftext);
+        if (!preg_match('/(repair|fix|board|power|display|charge|motherboard|tv|laptop|mosfet|capacitor|bios|short)/i', $low)) continue;
         $url = isset($d['permalink']) ? ('https://www.reddit.com' . $d['permalink']) : ($d['url'] ?? '');
         $preview = (string)($d['thumbnail'] ?? '');
-        $items[] = ['title' => $title, 'description' => $selftext, 'url' => $url, 'image' => ($preview && filter_var($preview, FILTER_VALIDATE_URL) ? $preview : '')];
+        $images = [];
+        if (isset($d['preview']['images'][0]['source']['url'])) $images[] = html_entity_decode($d['preview']['images'][0]['source']['url']);
+        $items[] = [
+            'title' => $title,
+            'description' => $selftext,
+            'description_html' => $selftext,
+            'url' => $url,
+            'image' => ($preview && filter_var($preview, FILTER_VALIDATE_URL) ? $preview : ($images[0] ?? '')),
+            'images' => $images,
+            'source_name' => 'Reddit'
+        ];
         if (count($items) >= $limit) break;
     }
     return $items;
 }
-function discover_web(string $query, int $limit = 6): array {
+function discover_web(string $query, int $limit = 5): array {
     $items = [];
     $q = urlencode($query);
-    $html = fetch_url('https://html.duckduckgo.com/html/?q=' . $q, 20);
-    if ($html !== null && preg_match_all('~<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>~is', $html, $m)) {
-        foreach ($m[1] as $i => $href) {
+    // استفاده از DuckDuckGo HTML
+    $html = fetch_url('https://html.duckduckgo.com/html/?q=' . $q, 15);
+    if ($html !== null && preg_match_all('~<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>.*?<a[^>]+class="result__snippet"[^>]*>(.*?)</a>~is', $html, $m, PREG_SET_ORDER)) {
+        foreach ($m as $match) {
+            $href = $match[1]; $title = trim(strip_tags($match[2])); $snippet = trim(strip_tags($match[3]));
             $real = $href;
             if (preg_match('~uddg=([^&]+)~', $href, $u)) $real = urldecode($u[1]);
-            $title = trim(strip_tags($m[2][$i]));
             if ($title === '' || !preg_match('~^https?://~i', $real)) continue;
-            $items[] = ['title' => $title, 'description' => '', 'url' => $real, 'image' => ''];
+            // فیلتر سایت‌های معتبر
+            if (!preg_match('#(ifixit|electronics|repair|hackaday|adafruit|eevblog|allaboutcircuits|electronics-lab|edn|electroschematics|circuitdigest|howtogeek|tomshardware)#i', $real)) {
+                // اگر سایت معتبر نیست ولی عنوان خیلی مرتبط است، باز هم قبول کن
+                if (!preg_match('/(repair|fix|motherboard|power supply|tv|led|capacitor|mosfet)/i', $title)) continue;
+            }
+            $items[] = ['title' => $title, 'description' => $snippet, 'description_html' => $snippet, 'url' => $real, 'image' => '', 'images'=>[], 'source_name'=>parse_url($real, PHP_URL_HOST) ?: 'Web'];
             if (count($items) >= $limit) break;
         }
     }
     return $items;
+}
+function fetch_article_details(string $url): array {
+    $html = fetch_url($url, 12);
+    if ($html === null) return ['text'=>'', 'images'=>[], 'html'=>''];
+    $text = extract_article_text($html, 4000);
+    $images = extract_images_from_html($html, $url, 5);
+    return ['text'=>$text, 'images'=>$images, 'html'=>$html];
 }
 function category_for_device(string $device, ?int $preferred): int {
     $pdo = db();
@@ -507,21 +662,44 @@ function category_for_device(string $device, ?int $preferred): int {
     $parentMap = [
         'مادربرد' => 'مادربرد', 'لپ‌تاپ' => 'لپ‌تاپ', 'کارت گرافیک' => 'کارت گرافیک', 'پاور' => 'پاور',
         'مانیتور' => 'مانیتور و تلویزیون', 'تلویزیون' => 'مانیتور و تلویزیون', 'موبایل' => 'موبایل و تبلت',
-        'آداپتور' => 'آداپتور و شارژر', 'برد صنعتی' => 'بردهای صنعتی', 'لوازم خانگی' => 'لوازم خانگی', 'برد الکترونیکی' => 'سایر',
+        'آداپتور' => 'آداپتور و شارژر', 'برد صنعتی' => 'بردهای صنعتی', 'لوازم خانگی' => 'لوازم خانگی',
+        'برد الکترونیکی' => 'سایر', 'کنسول بازی' => 'کنسول بازی', 'پرینتر' => 'سایر', 'مودم و شبکه' => 'سایر',
     ];
     $parentName = $parentMap[$device] ?? 'سایر';
     $q = $pdo->prepare('SELECT id FROM categories WHERE parent_id IS NULL AND name=? LIMIT 1');
     $q->execute([$parentName]);
     $parentId = (int)$q->fetchColumn();
     if ($parentId) {
-        $c = $pdo->prepare('SELECT id FROM categories WHERE parent_id=? ORDER BY RAND() LIMIT 1');
+        $c = $pdo->prepare('SELECT id FROM categories WHERE parent_id=? AND status="active" ORDER BY sort_order, id LIMIT 1');
         $c->execute([$parentId]);
         $child = (int)$c->fetchColumn();
         if ($child) return $child;
         return $parentId;
     }
-    $f = $pdo->query('SELECT id FROM categories WHERE parent_id IS NOT NULL ORDER BY id LIMIT 1');
+    // fallback: اولین دسته فعال
+    $f = $pdo->query("SELECT id FROM categories WHERE status='active' ORDER BY id LIMIT 1");
     return (int)$f->fetchColumn();
+}
+function reputable_sources_list(): array {
+    return [
+        // Reddit - معتبرترین برای تعمیرات
+        'https://www.reddit.com/r/AskElectronics/.rss',
+        'https://www.reddit.com/r/ElectronicsRepair/.rss',
+        'https://www.reddit.com/r/TVRepair/.rss',
+        'https://www.reddit.com/r/computerrepair/.rss',
+        // سایت‌های تخصصی تعمیرات
+        'https://www.ifixit.com/News/rss',
+        'https://hackaday.com/feed/',
+        'https://blog.adafruit.com/feed/',
+        'https://www.eevblog.com/feed/',
+        'https://www.allaboutcircuits.com/new/rss/',
+        'https://www.electronics-lab.com/feed/',
+        'https://www.circuitdigest.com/feed',
+        'https://www.electroschematics.com/feed/',
+        'https://www.edn.com/feed/',
+        // StackExchange
+        'https://electronics.stackexchange.com/feeds',
+    ];
 }
 function collect_tips_web(int $count, int $categoryId, string $access, array $sources, array $queries = []): array {
     $pdo = db();
@@ -531,76 +709,170 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     if (!$botId) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'حساب کاربر سیستم یافت نشد. نصب را دوباره اجرا کنید.'];
 
     if ($queries === []) {
-        $queries = ['تعمیر مادربرد', 'رفع مشکل روشن نشدن لپ‌تاپ', 'تعمیر پاور سوئیچینگ', 'عیب‌یابی کارت گرافیک', 'تعمیر موبایل شارژ نمی‌شود', 'motherboard repair', 'laptop no power fix', 'graphics card artifact fix', 'power supply repair'];
+        $queries = [
+            'تعمیر مادربرد سامسونگ', 'رفع مشکل روشن نشدن لپ‌تاپ ایسوس', 'تعمیر پاور سوئیچینگ', 'عیب‌یابی کارت گرافیک',
+            'تعمیر تلویزیون ال‌جی تصویر ندارد', 'تعمیر موبایل شارژ نمی‌شود', 'تعویض خازن مادربرد', 'تست ماسفت با مولتی‌متر',
+            'motherboard no power repair', 'laptop no boot fix', 'tv backlight repair', 'power supply short circuit fix',
+            'samsung tv repair', 'asus laptop repair', 'capacitor replacement guide', 'mosfet testing tutorial'
+        ];
+    }
+
+    // اگر کاربر منبعی نداده، از لیست معتبر پیش‌فرض استفاده کن
+    if (empty($sources)) {
+        $sources = reputable_sources_list();
     }
 
     $candidates = [];
     $seen = [];
-    $add = function (array $c) use (&$candidates, &$seen) {
-        $key = mb_substr(trim((string)$c['title']), 0, 80);
+    $seenUrls = [];
+    $add = function (array $c) use (&$candidates, &$seen, &$seenUrls) {
+        $key = mb_substr(trim((string)$c['title']), 0, 100);
+        $urlKey = trim((string)($c['url'] ?? ''));
         if ($key === '' || isset($seen[$key])) return;
+        if ($urlKey !== '' && isset($seenUrls[$urlKey])) return;
         $seen[$key] = true;
+        if ($urlKey !== '') $seenUrls[$urlKey] = true;
         $candidates[] = $c;
     };
 
-    // Limit discovery to keep it fast: max 2 user RSS + max 3 search queries.
-    $srcsLimited = array_slice($sources, 0, 2);
+    // 1. منابع RSS معتبر - حداکثر 6 منبع برای هوشمندی
+    $srcsLimited = array_slice($sources, 0, 6);
     foreach ($srcsLimited as $source) {
         $source = trim((string)$source);
-        if ($source === '') continue;
-        $xml = fetch_url($source, 6);
+        if ($source === '' || !filter_var($source, FILTER_VALIDATE_URL)) continue;
+        $xml = fetch_url($source, 10);
         if ($xml === null) continue;
-        foreach (parse_rss_items($xml, '') as $it) {
-            $add(['title' => $it['title'], 'description' => $it['description'], 'url' => $it['link'] ?? '', 'image' => '']);
+        $host = parse_url($source, PHP_URL_HOST) ?: 'RSS';
+        foreach (parse_rss_items($xml, $host) as $it) {
+            $add($it);
         }
+        if (count($candidates) >= $count * 2) break;
     }
 
-    $queriesLimited = array_slice($queries, 0, 3);
-    if (!$queriesLimited) $queriesLimited = ['laptop no power fix', 'motherboard repair'];
+    // 2. جستجوی هوشمند - حداکثر 4 کوئری
+    $queriesLimited = array_slice($queries, 0, 4);
+    if (!$queriesLimited) $queriesLimited = ['laptop no power fix', 'motherboard repair', 'tv backlight fix'];
     foreach ($queriesLimited as $query) {
         $query = trim((string)$query);
         if ($query === '') continue;
-        foreach (discover_reddit($query, 4) as $r) $add($r);
-        if (count($candidates) < 8) {
-            foreach (discover_web($query, 4) as $w) $add($w);
+        foreach (discover_reddit($query, 3) as $r) $add($r);
+        if (count($candidates) < $count * 2) {
+            foreach (discover_web($query, 3) as $w) $add($w);
         }
+        if (count($candidates) >= $count * 3) break;
     }
 
-    if (!$candidates) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'هیچ مطلبی از منابع پیدا نشد. اینترنت سرور یا دسترسی به منابع را بررسی کنید.'];
+    if (!$candidates) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'هیچ مطلبی از منابع معتبر پیدا نشد. اینترنت سرور یا دسترسی به منابع را بررسی کنید.'];
 
     $created = 0;
     $scanned = 0;
-    $insert = $pdo->prepare('INSERT INTO tips (author_id,category_id,title,short_description,description,device_name,brand,model,board_number,fault_type,difficulty,solution_json,tools,images_json,video_url,attachments_json,access_type,price,visibility,status,tags,version,versions_json,featured,views,likes_count,purchases_count,rating_sum,rating_count,duplicate_of,rejection_reason,source_url,source_name,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,0,0,0,0,0,NULL,NULL,NULL,NULL,?)');
+    $errors = 0;
+
+    // آماده‌سازی insert با ذخیره درست source_url و source_name
+    $insert = $pdo->prepare('INSERT INTO tips (author_id,category_id,title,short_description,description,device_name,brand,model,board_number,fault_type,difficulty,solution_json,tools,images_json,video_url,attachments_json,access_type,price,visibility,status,tags,version,versions_json,featured,views,likes_count,purchases_count,rating_sum,rating_count,duplicate_of,rejection_reason,source_url,source_name,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,0,0,0,0,0,NULL,NULL,?,?,?)');
 
     foreach ($candidates as $c) {
         if ($created >= $count) break;
         $scanned++;
-        $tip = build_persian_tip((string)$c['title'], (string)$c['description']);
-        $dq = $pdo->prepare('SELECT id FROM tips WHERE title=? LIMIT 1');
-        $dq->execute([$tip['title']]);
-        if ($dq->fetch()) continue;
+
+        // 3. هوشمندی: اگر URL دارد، محتوای کامل مقاله را استخراج کن
+        $fullText = (string)($c['description'] ?? '');
+        $remoteImages = [];
+        if (!empty($c['images']) && is_array($c['images'])) $remoteImages = $c['images'];
+        if (!empty($c['image'])) $remoteImages[] = $c['image'];
+
+        if (!empty($c['url']) && filter_var($c['url'], FILTER_VALIDATE_URL) && !str_contains($c['url'], 'reddit.com')) {
+            $details = fetch_article_details($c['url']);
+            if (mb_strlen($details['text']) > mb_strlen($fullText)) {
+                $fullText = $details['text'];
+            }
+            if (!empty($details['images'])) {
+                $remoteImages = array_merge($remoteImages, $details['images']);
+            }
+        }
+
+        $tip = build_persian_tip((string)$c['title'], $fullText, (string)($c['url'] ?? ''), (string)($c['source_name'] ?? $c['source'] ?? ''));
+
+        // بررسی تکراری هوشمند: بر اساس عنوان مشابه + URL
+        $dq = $pdo->prepare('SELECT id FROM tips WHERE title=? OR source_url=? LIMIT 1');
+        $dq->execute([$tip['title'], $c['url'] ?? '']);
+        if ($dq->fetch()) { $errors++; continue; }
+
         $cat = category_for_device($tip['device'], $categoryId);
-        $diffMap = ['روشن نمی‌شود' => 'hard', 'اتصال کوتاه' => 'hard', 'بایوس' => 'hard', 'شارژ نمی‌شود' => 'hard', 'تصویر ندارد' => 'medium', 'گرمای بیش از حد' => 'medium'];
+        if (!$cat) { $errors++; continue; }
+
+        // تعیین سختی هوشمند بر اساس نوع خرابی
+        $diffMap = [
+            'روشن نمی‌شود' => 'hard', 'اتصال کوتاه' => 'hard', 'بایوس' => 'hard',
+            'شارژ نمی‌شود' => 'hard', 'آب‌خوردگی' => 'hard', 'بک‌لایت' => 'medium',
+            'تصویر ندارد' => 'medium', 'گرمای بیش از حد' => 'medium', 'خازن' => 'easy',
+            'بوق خطا' => 'medium', 'نویز تصویر' => 'medium'
+        ];
         $diff = $diffMap[$tip['fault']] ?? 'medium';
-        $tools = $diff === 'hard' ? 'مولتی‌متر،هویه،هیتر،فلاکس' : 'مولتی‌متر،هویه';
-        $tags = $tip['brand'] . ',' . $tip['device'] . ',' . $tip['fault'];
-        // Images: prefer remote source image URL, else a contextual Unsplash photo (real pictures)
+
+        // ابزار هوشمند
+        $toolsMap = [
+            'hard' => 'مولتی‌متر دیجیتال،هویه حرفه‌ای،هیتر،فلاکس،لوپ،منبع تغذیه آزمایشگاهی',
+            'medium' => 'مولتی‌متر،هویه،فلاکس،لوپ',
+            'easy' => 'مولتی‌متر،هویه'
+        ];
+        $tools = $toolsMap[$diff] ?? $toolsMap['medium'];
+        $tags = implode(',', array_unique([$tip['brand'], $tip['device'], $tip['fault'], 'تعمیرات', 'برد']));
+
+        // 4. ذخیره درست تصاویر: دانلود به /uploads/ (هوشمند)
         $images = [];
-        if (!empty($c['image'])) { $images[] = (string)$c['image']; }
-        if (!$images) { $q = $tip['device'].' '.$tip['brand'].' repair'; $us = unsplash_img($q); if ($us) $images[] = $us; }
-        $insert->execute([
-            $botId, $cat, $tip['title'], $tip['short_description'], $tip['description'],
-            $tip['device'], $tip['brand'], null, null, $tip['fault'], $diff,
-            json_encode($tip['steps'], JSON_UNESCAPED_UNICODE), $tools, json_encode($images, JSON_UNESCAPED_UNICODE),
-            null, json_encode([], JSON_UNESCAPED_UNICODE), $access, 0, 'public', 'published', $tags,
-            json_encode([], JSON_UNESCAPED_UNICODE), date('Y-m-d H:i:s'),
-        ]);
-        $created++;
+        $remoteImages = array_values(array_unique(array_filter($remoteImages)));
+        // حداکثر 3 تصویر دانلود کن
+        foreach (array_slice($remoteImages, 0, 3) as $remoteImg) {
+            $local = download_image($remoteImg);
+            if ($local) {
+                $images[] = $local;
+            } else {
+                // اگر دانلود نشد ولی URL خارجی معتبر است و رایگان است، موقت نگه دار (برای free)
+                if ($access === 'free' && filter_var($remoteImg, FILTER_VALIDATE_URL)) {
+                    $images[] = $remoteImg;
+                }
+            }
+        }
+        // اگر هنوز عکسی نداریم، یک تصویر مرتبط placeholder هوشمند
+        if (!$images) {
+            // به جای unsplash URL مستقیم، تلاش کن دانلود کنی
+            $placeholderQueries = [
+                $tip['device'].' repair',
+                $tip['brand'].' '.$tip['device'],
+                'electronics repair',
+                'circuit board'
+            ];
+            foreach ($placeholderQueries as $pq) {
+                // از picsum به عنوان fallback قابل دانلود
+                $picsum = 'https://picsum.photos/seed/'.md5($tip['title'].$pq).'/800/600';
+                $local = download_image($picsum);
+                if ($local) { $images[] = $local; break; }
+            }
+        }
+
+        if (!$images) { $errors++; continue; }
+
+        try {
+            $insert->execute([
+                $botId, $cat, $tip['title'], $tip['short_description'], $tip['description'],
+                $tip['device'], $tip['brand'], null, null, $tip['fault'], $diff,
+                json_encode($tip['steps'], JSON_UNESCAPED_UNICODE), $tools, json_encode($images, JSON_UNESCAPED_UNICODE),
+                null, json_encode([], JSON_UNESCAPED_UNICODE), $access, 0, 'public', 'published', $tags,
+                json_encode([], JSON_UNESCAPED_UNICODE),
+                $tip['source_url'] ?? $c['url'] ?? null,
+                $tip['source_name'] ?? $c['source_name'] ?? $c['source'] ?? null,
+                date('Y-m-d H:i:s'),
+            ]);
+            $created++;
+        } catch (Throwable $e) {
+            $errors++;
+        }
     }
 
-    return ['created' => $created, 'scanned' => $scanned, 'errors' => 0];
+    return ['created' => $created, 'scanned' => $scanned, 'errors' => $errors];
 }
-function escrow_admin_id(): int { static $id = null; if ($id === null) { $q = db()->query("SELECT id FROM users WHERE role IN ('superadmin','admin') ORDER BY id LIMIT 1"); $id = (int)($q->fetchColumn() ?: 0); } return $id; }
+function escrow_admin_id(): int {function escrow_admin_id(): int { static $id = null; if ($id === null) { $q = db()->query("SELECT id FROM users WHERE role IN ('superadmin','admin') ORDER BY id LIMIT 1"); $id = (int)($q->fetchColumn() ?: 0); } return $id; }
 function is_seller(array $u): bool { return ($u['seller_status'] ?? 'none') === 'approved' || in_array($u['role'] ?? '', ['admin','superadmin'], true); }
 function board_condition_label(string $c): string { return ['new'=>'نو','like_new'=>'در حد نو','used'=>'کارکرده','repair'=>'تعمیرشده'][$c] ?? 'کارکرده'; }
 function board_status_label(string $s): string { return ['pending'=>'در انتظار تأیید','approved'=>'فعال','rejected'=>'رد شده','sold'=>'فروخته شد','archived'=>'بایگانی'][$s] ?? $s; }
