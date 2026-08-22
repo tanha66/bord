@@ -32,11 +32,19 @@ if ($t['status'] !== 'published' && (!isset($_SESSION['user_id']) || (int)$_SESS
 $expected = hash_hmac('sha256', ($_SESSION['user_id']??'guest')."|".$file.'|'.$type.'|'.$id, INSTALL_KEY);
 if (!hash_equals($expected, $nonce)) { http_response_code(403); exit('forbidden'); }
 
+// helper fallback برای fa (در config.php تعریف نشده، ولی در index.php هست)
+if (!function_exists('fa')) {
+    function fa($value): string { $digits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; return strtr((string)$value, array_combine(range(0,9), $digits)); }
+}
+if (!function_exists('h')) {
+    function h($value): string { return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8'); }
+}
+
 $u = null;
 if (!empty($_SESSION['user_id'])) {
-  $u = $pdo->prepare('SELECT id, premium_until, balance FROM users WHERE id=? LIMIT 1');
-  $u->execute([(int)$_SESSION['user_id']]);
-  $u = $u->fetch();
+  $q = $pdo->prepare('SELECT id, role, premium_until, balance FROM users WHERE id=? LIMIT 1');
+  $q->execute([(int)$_SESSION['user_id']]);
+  $u = $q->fetch();
 }
 
 $isAuthor = $u && (int)$u['id'] === (int)$t['author_id'];
