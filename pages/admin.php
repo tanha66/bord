@@ -350,9 +350,13 @@ elseif ($tab === 'reports') {
 
 /* ---------------- CATEGORIES ---------------- */
 elseif ($tab === 'categories') {
-    $items = $pdo->query('SELECT c.*,p.name parent_name FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name')->fetchAll();
+    $items = $pdo->query('SELECT c.*,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name')->fetchAll();
     $parents = $pdo->query('SELECT * FROM categories WHERE parent_id IS NULL ORDER BY name')->fetchAll();
     ?>
+    <div class="flex between items-center mb" style="gap:10px;flex-wrap:wrap">
+      <p class="muted" style="font-size:11px;margin:0">اگر نامی را دوبار (با والد یکسان) می‌بینید، با دکمهٔ «حذف موارد تکراری» یک‌باره پاک‌سازی کنید.</p>
+      <form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="admin_category"><input type="hidden" name="op" value="dedupe"><button class="btn btn-secondary btn-sm" onclick="return confirm('دسته‌های تکراری (نام + والد یکسان) حذف شوند؟')">🧹 حذف موارد تکراری</button></form>
+    </div>
     <div class="grid grid-2">
       <div class="card" style="padding:18px">
         <h3 style="margin-bottom:12px">افزودن دسته جدید</h3>
@@ -375,7 +379,7 @@ elseif ($tab === 'categories') {
           <tr><th>دسته</th><th>والد</th><th>وضعیت</th><th>عملیات</th></tr>
           <?php foreach ($items as $x): ?>
           <tr>
-            <td><?=h(($x['icon'] ?: '📁') . ' ' . $x['name'])?></td>
+            <td><?=h(($x['icon'] ?: '📁') . ' ' . $x['name'])?><?php if ((int)$x['child_count'] > 0): ?><small class="muted" style="display:block"><?=(int)$x['child_count']?> زیرمجموعه</small><?php endif; ?></td>
             <td><?=h($x['parent_name'] ?: 'اصلی')?></td>
             <td><span class="pill <?=$x['status']==='active'?'green':'amber'?>"><?=h($x['status']==='active'?'فعال':'پیشنهادی')?></span></td>
             <td>

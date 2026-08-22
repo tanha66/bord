@@ -93,6 +93,10 @@ function bk_category_tree(): array {
 function bk_seed_categories($pdo): array {
     $added = 0;
     $skipped = 0;
+    // ۱) پاک‌سازی موارد تکراری واقعی (نام + والد یکسان) — اجرای مجدد امن است
+    try {
+        $pdo->exec('DELETE c1 FROM categories c1 INNER JOIN categories c2 ON c1.name=c2.name AND IFNULL(c1.parent_id,0)=IFNULL(c2.parent_id,0) AND c1.id>c2.id');
+    } catch (Throwable $e) { /* جدول قدیمی یا بدون این ستون‌ها — نادیده بگیر */ }
     $find = $pdo->prepare('SELECT id FROM categories WHERE name=? AND parent_id IS NULL LIMIT 1');
     $ins = $pdo->prepare('INSERT INTO categories (parent_id,name,slug,icon) VALUES (?,?,?,?)');
     $childFind = $pdo->prepare('SELECT id FROM categories WHERE name=? AND parent_id=? LIMIT 1');

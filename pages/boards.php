@@ -50,7 +50,7 @@ if ($page === 'boards' && $sub === 'new') {
     $leaves = leaf_categories();
     header_html('ثبت برد برای فروش');
     ?><main class="wrap page"><div class="ptitle"><h1>➕ ثبت برد برای فروش</h1><p>اطلاعات برد را کامل وارد کنید؛ پس از تأیید مدیر منتشر می‌شود.</p></div>
-    <form class="card authc" method="post" enctype="multipart/form-data">
+    <form id="boardForm" class="card authc" method="post" enctype="multipart/form-data">
       <input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="board_create">
       <div class="fgroup"><label class="flabel">عنوان برد *</label><input class="field" name="title" required placeholder="مثلاً: برد تغذیه تلویزیون سامسونگ UA55F5500"></div>
       <div class="grid g2">
@@ -64,8 +64,11 @@ if ($page === 'boards' && $sub === 'new') {
       <div class="fgroup"><label class="flabel">توضیح کامل *</label><textarea class="field" name="description" rows="6" required placeholder="وضعیت فنی، قطعات روی برد، تاریخ تعمیر و…"></textarea></div>
       <div class="fgroup"><label class="flabel">عکس‌های برد (حداقل ۱، تا ۸)</label><input class="field" type="file" name="images[]" accept="image/jpeg,image/png,image/webp" multiple required></div>
       <div class="fgroup"><label class="flabel">لینک ویدیو اختیاری</label><input class="field" dir="ltr" name="video_url" placeholder="YouTube / Aparat"></div>
+      <div id="boardFormMsg"></div>
       <button class="btn btn-primary btn-full">ثبت برد</button>
-    </form></main><?php footer_html(); exit;
+    </form><script>
+(function(){var f=document.getElementById('boardForm');if(!f)return;var msg=document.getElementById('boardFormMsg');f.addEventListener('submit',function(e){e.preventDefault();var b=f.querySelector('button');var orig=b?b.textContent:'';if(b){b.disabled=true;b.textContent='⏳ در حال ارسال…';}msg.innerHTML='';fetch(window.location.href,{method:'POST',body:new FormData(f),headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json().catch(function(){return null;});}).then(function(j){if(j&&j.ok){msg.innerHTML='<div class="notice" style="margin-top:12px">✅ '+(j.message||'انجام شد')+'</div>';if(j.redirect){setTimeout(function(){window.location.href=j.redirect;},1200);}else if(b){b.disabled=false;b.textContent=orig;}}else{msg.innerHTML='<div class="notice error" style="margin-top:12px">⚠️ '+((j&&j.error)||'پاسخی از سرور دریافت نشد؛ دوباره تلاش کنید.')+'</div>';if(b){b.disabled=false;b.textContent=orig;}}}).catch(function(){msg.innerHTML='<div class="notice error" style="margin-top:12px">⚠️ خطای ارتباط با سرور؛ دوباره تلاش کنید.</div>';if(b){b.disabled=false;b.textContent=orig;}});});})();
+</script></main><?php footer_html(); exit;
 }
 
 /* ---------- seller's own boards ---------- */
