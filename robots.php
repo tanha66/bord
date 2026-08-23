@@ -25,7 +25,6 @@ $lines = [
     'Disallow: /forgot',
     // زیرساخت
     'Disallow: /serve',
-    'Disallow: /cron-collect',
     'Disallow: /serve.php',
     'Disallow: /install.php',
     'Disallow: /migrate.php',

@@ -150,31 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('settings', 'meta_keywords', 'meta_keywords TEXT NULL');
                     $ensureColumn('settings', 'og_image', 'og_image VARCHAR(500) NULL');
                     $ensureColumn('settings', 'google_analytics', 'google_analytics VARCHAR(100) NULL');
-                    $ensureColumn('settings', 'auto_collect_queries', 'auto_collect_queries TEXT NULL');
                     $ensureColumn('settings', 'board_commission_percent', 'board_commission_percent INT NOT NULL DEFAULT 10');
-                    // ربات هوشمند - تنظیمات بیشتر + هندی و چینی - v4.3 کامل
-                    $ensureColumn('settings', 'auto_collect_indian_enabled', 'auto_collect_indian_enabled TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_chinese_enabled', 'auto_collect_chinese_enabled TINYINT(1) NOT NULL DEFAULT 0');
-                    $ensureColumn('settings', 'auto_collect_japanese_enabled', 'auto_collect_japanese_enabled TINYINT(1) NOT NULL DEFAULT 0');
-                    $ensureColumn('settings', 'auto_collect_min_length', 'auto_collect_min_length INT NOT NULL DEFAULT 100');
-                    $ensureColumn('settings', 'auto_collect_max_images', 'auto_collect_max_images INT NOT NULL DEFAULT 3');
-                    $ensureColumn('settings', 'auto_collect_translate_enabled', 'auto_collect_translate_enabled TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_extract_full', 'auto_collect_extract_full TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_save_images', 'auto_collect_save_images TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_filter_repair', 'auto_collect_filter_repair TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_language', 'auto_collect_language VARCHAR(20) NOT NULL DEFAULT "auto"');
-                    $ensureColumn('settings', 'auto_collect_content_type', 'auto_collect_content_type VARCHAR(30) NOT NULL DEFAULT "repair"');
-                    $ensureColumn('settings', 'auto_collect_image_quality', 'auto_collect_image_quality VARCHAR(20) NOT NULL DEFAULT "medium"');
-                    $ensureColumn('settings', 'auto_collect_auto_publish', 'auto_collect_auto_publish TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_exclude_keywords', 'auto_collect_exclude_keywords TEXT NULL');
-                    $ensureColumn('settings', 'auto_collect_save_path', 'auto_collect_save_path VARCHAR(100) NOT NULL DEFAULT "auto"');
-                    $ensureColumn('settings', 'auto_collect_max_retries', 'auto_collect_max_retries INT NOT NULL DEFAULT 2');
-                    $ensureColumn('settings', 'auto_collect_timeout', 'auto_collect_timeout INT NOT NULL DEFAULT 12');
-                    $ensureColumn('settings', 'auto_collect_time_limit', 'auto_collect_time_limit INT NOT NULL DEFAULT 100');
-                    $ensureColumn('settings', 'auto_collect_rotate', 'auto_collect_rotate TINYINT(1) NOT NULL DEFAULT 1');
-                    $ensureColumn('settings', 'auto_collect_last_offset', 'auto_collect_last_offset INT NOT NULL DEFAULT 0');
-                    $ensureColumn('settings', 'auto_collect_lock', 'auto_collect_lock DATETIME NULL');
-                    $ensureColumn('settings', 'auto_collect_stop', 'auto_collect_stop TINYINT(1) NOT NULL DEFAULT 0');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');
@@ -201,35 +177,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $pdo->prepare("INSERT INTO users (phone,email,password_hash,name,role,points,balance,referral_code,phone_verified,verified) VALUES (?,?,?,?,'superadmin',5200,0,'ADMIN001',1,1) ON DUPLICATE KEY UPDATE name=VALUES(name), password_hash=VALUES(password_hash), role='superadmin', phone_verified=1, verified=1")
                         ->execute([$adminPhone, $adminEmail, $hash, $adminName]);
 
-                    // 5) Bot account
-                    $botHash = password_hash(bin2hex(random_bytes(12)), PASSWORD_DEFAULT);
-                    $pdo->prepare("INSERT INTO users (phone,email,password_hash,name,role,points,balance,referral_code,phone_verified,verified,bio) VALUES ('09100000000','bot@bordkhan.local',?,'سامانه جمع‌آوری هوشمند','admin',0,0,'BOT0001',1,1,'گردآوری خودکار قلق‌های تعمیراتی') ON DUPLICATE KEY UPDATE role='admin'")
-                        ->execute([$botHash]);
-
-                    // 6) Settings - ربات بهینه با سایت‌های معتبر + ذخیره درست تصاویر
-                    $defaultSources = json_encode([
-                        // Reddit - معتبرترین انجمن تعمیرکاران
-                        'https://www.reddit.com/r/AskElectronics/.rss',
-                        'https://www.reddit.com/r/ElectronicsRepair/.rss',
-                        'https://www.reddit.com/r/TVRepair/.rss',
-                        'https://www.reddit.com/r/computerrepair/.rss',
-                        // مرجع تعمیرات
-                        'https://www.ifixit.com/News/rss',
-                        // سایت‌های تخصصی الکترونیک معتبر
-                        'https://hackaday.com/feed/',
-                        'https://blog.adafruit.com/feed/',
-                        'https://www.eevblog.com/feed/',
-                        'https://www.allaboutcircuits.com/new/rss/',
-                        'https://www.electronics-lab.com/feed/',
-                        'https://www.circuitdigest.com/feed',
-                        'https://www.electroschematics.com/feed/',
-                        'https://www.edn.com/feed/',
-                        'https://electronics.stackexchange.com/feeds',
-                    ], JSON_UNESCAPED_UNICODE);
-                    $cronKey = bin2hex(random_bytes(8));
-                    $defaultQueries = "تعمیر مادربرد سامسونگ\nرفع مشکل روشن نشدن لپ‌تاپ ایسوس\nتعمیر پاور سوئیچینگ\nعیب‌یابی کارت گرافیک\nتعمیر تلویزیون ال‌جی تصویر ندارد\nتعمیر موبایل شارژ نمی‌شود\nتعویض خازن مادربرد\nتست ماسفت با مولتی‌متر\nmotherboard no power repair\nlaptop no boot fix\ntv backlight repair\npower supply short circuit fix\nsamsung tv repair\ncapacitor replacement guide\nmosfet testing tutorial";
-                    $pdo->prepare("INSERT INTO settings (id,site_title,hero_title,hero_subtitle,meta_description,auto_collect_sources,auto_collect_queries,auto_collect_cron_key) VALUES (1,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE site_title=VALUES(site_title), meta_description=VALUES(meta_description)")
-                        ->execute([$siteName, 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی', 'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.', 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی؛ راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای.', $defaultSources, $defaultQueries, $cronKey]);
+                    // 5) Settings پایه
+                    $pdo->prepare("INSERT INTO settings (id,site_title,hero_title,hero_subtitle,meta_description) VALUES (1,?,?,?,?,?) ON DUPLICATE KEY UPDATE site_title=VALUES(site_title), meta_description=VALUES(meta_description)")
+                        ->execute([$siteName, 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی', 'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.', 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی؛ راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای.']);
 
                     // 7) Categories — درخت کامل برندها و مدل‌های شناخته‌شده (مشترک با migrate)
                     $catSeed = ['added' => 0, 'skipped' => 0];

@@ -1,7 +1,7 @@
 <?php
 /* ================================================================
    پیشخوان حرفه‌ای مدیریت — v5.1
-   KPI کامل + کارهای امروز + نمودار ۱۴ روزه + وضعیت ربات + فعالیت‌ها
+   KPI کامل + کارهای امروز + نمودار ۱۴ روزه + فعالیت‌ها
    ================================================================ */
 
 /* ---------- کمکی: اجرای امن کوئری (جدول‌های ماژول شاید نباشند) ---------- */
@@ -10,8 +10,6 @@ $safe_q = function (string $sql, $fallback = 0) use ($pdo) {
     catch (Throwable $e) { return $fallback; }
 };
 
-$botUserId = 0;
-try { $bq = $pdo->prepare("SELECT id FROM users WHERE phone='09100000000' LIMIT 1"); $bq->execute(); $botUserId = (int)$bq->fetchColumn(); } catch (Throwable $e) {}
 
 $stats = [
     'users' => (int)$safe_q('SELECT COUNT(*) FROM users'),
@@ -21,7 +19,6 @@ $stats = [
     'tips' => (int)$safe_q('SELECT COUNT(*) FROM tips'),
     'published' => (int)$safe_q("SELECT COUNT(*) FROM tips WHERE status='published'"),
     'pending' => (int)$safe_q("SELECT COUNT(*) FROM tips WHERE status='pending'"),
-    'botTips' => $botUserId ? (int)$safe_q("SELECT COUNT(*) FROM tips WHERE author_id=$botUserId") : 0,
     'reports' => (int)$safe_q("SELECT COUNT(*) FROM reports WHERE status='open'"),
     'contact' => (int)$safe_q("SELECT COUNT(*) FROM contact_messages WHERE status='new'"),
     'tickets' => (int)$safe_q("SELECT COUNT(*) FROM tickets WHERE status='open'"),
@@ -56,10 +53,6 @@ $newUsers = [];
 try { $newUsers = $pdo->query('SELECT id,name,phone,role,verified,created_at FROM users ORDER BY created_at DESC LIMIT 6')->fetchAll(); } catch (Throwable $e) {}
 $topTips = [];
 try { $topTips = $pdo->query("SELECT t.id,t.title,t.views,t.likes_count,u.name author FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY t.views DESC LIMIT 5")->fetchAll(); } catch (Throwable $e) {}
-$lastBotRun = null;
-if (bot_table_ready('bot_runs')) {
-    try { $lastBotRun = $pdo->query('SELECT * FROM bot_runs ORDER BY id DESC LIMIT 1')->fetch() ?: null; } catch (Throwable $e) {}
-}
 
 /* کارهای امروز — موارد نیازمند اقدام */
 $todo = [
@@ -80,7 +73,6 @@ $todoTotal = 0; foreach ($todo as $t) $todoTotal += $t[1];
     ['کاربران', $stats['users'], '👥', ''],
     ['ثبت‌نام ۷ روز', $stats['users7'], '🆕', 'color:#078659'],
     ['کل قلق‌ها', $stats['tips'], '🔧', ''],
-    ['قلق‌های ربات', $stats['botTips'], '🤖', ''],
     ['در انتظار بررسی', $stats['pending'], '⏳', 'color:#b8860b'],
     ['فروش قلق (تومان)', $stats['sales'], '💳', ''],
     ['فروش ۳۰ روز', $stats['sales30'], '📈', 'color:#0a7a4a'],
@@ -106,25 +98,6 @@ $todoTotal = 0; foreach ($todo as $t) $todoTotal += $t[1];
     <?php endforeach; ?>
   </div>
 
-  <!-- ===== وضعیت ربات ===== -->
-  <div class="card" style="padding:18px">
-    <div class="flex between items-center" style="margin-bottom:10px">
-      <h3 style="margin:0">🤖 وضعیت ربات پیشرفته</h3>
-      <a class="btn btn-secondary btn-sm" href="<?=url('admin', ['tab' => 'collect'])?>">پنل ربات</a>
-    </div>
-    <?php if ($lastBotRun): ?>
-    <div class="activity-item"><span>🕐</span><span class="grow">آخرین اجرا</span><b><?=h($lastBotRun['trigger_type'] === 'cron' ? 'زمان‌بندی' : 'دستی')?><?=!empty($lastBotRun['dry_run']) ? ' (آزمایشی)' : ''?></b></div>
-    <div class="activity-item"><span>📌</span><span class="grow">وضعیت</span><span class="pill <?=$lastBotRun['status'] === 'completed' ? 'green' : ($lastBotRun['status'] === 'failed' ? 'rose' : 'amber')?>"><?=$lastBotRun['status'] === 'completed' ? 'موفق' : ($lastBotRun['status'] === 'failed' ? 'ناموفق' : 'در جریان')?></span></div>
-    <div class="activity-item"><span>📦</span><span class="grow">تولید / تکراری</span><b><?=fa((int)$lastBotRun['created'])?> / <?=fa((int)$lastBotRun['duplicates'])?></b></div>
-    <div class="activity-item"><span>⏱</span><span class="grow">مدت و زمان</span><small class="muted"><?=fa((float)$lastBotRun['duration_sec'])?> ثانیه · <?=ago($lastBotRun['created_at'])?></small></div>
-    <?php else: ?>
-    <p class="muted" style="font-size:12px">هنوز اجرایی ثبت نشده — از پنل ربات یک اجرای زنده یا آزمایشی انجام دهید.</p>
-    <?php endif; ?>
-    <div class="notice" style="font-size:10px;line-height:2;margin-top:10px">
-      📦 <?=fa(number_format($stats['botTips']))?> قلق تولیدشده توسط ربات ·
-      <?php if (!empty($s['auto_collect_enabled'])): ?>✅ cron فعال<?php else: ?>⏸ cron خاموش<?php endif; ?>
-    </div>
-  </div>
 </div>
 
 <!-- ===== نمودارها ===== -->
@@ -199,7 +172,6 @@ $todoTotal = 0; foreach ($todo as $t) $todoTotal += $t[1];
 <!-- ===== دسترسی سریع ===== -->
 <div class="grid grid-3 mt">
   <?php foreach ([
-    ['admin?tab=collect', '🤖', 'ربات پیشرفته v5', 'اجرای زنده + پایش منابع'],
     ['admin?tab=users', '👥', 'مدیریت کاربران', 'جستجو، فیلتر و عملیات سریع'],
     ['admin-users', '🧑‍💼', 'مدیریت پیشرفته کاربران', 'ویرایش کامل، رمز و کیف پول'],
     ['admin?tab=boards', '🏪', 'فروشگاه برد', 'مدیریت بردها و سفارش‌ها'],
@@ -223,7 +195,7 @@ $todoTotal = 0; foreach ($todo as $t) $todoTotal += $t[1];
     <b>🩺 سلامت سیستم:</b>
     <span class="pill <?=version_compare(BORDKHAN_VERSION, '5.0', '>=') ? 'green' : 'rose'?>">کد نسخه <?=h(BORDKHAN_VERSION)?></span>
     <span class="pill <?=is_dir(UPLOAD_DIR) && is_writable(UPLOAD_DIR) ? 'green' : 'rose'?>">پوشه uploads <?=is_dir(UPLOAD_DIR) ? (is_writable(UPLOAD_DIR) ? 'قابل نوشتن ✓' : 'بدون مجوز نوشتن!') : 'موجود نیست!'?></span>
-    <span class="pill <?=extension_loaded('curl') ? 'green' : 'amber'?>">cURL <?=extension_loaded('curl') ? 'فعال' : 'غیرفعال (ربات با fallback)'?></span>
+    <span class="pill <?=extension_loaded('curl') ? 'green' : 'amber'?>">cURL <?=extension_loaded('curl') ? 'فعال' : 'غیرفعال'?></span>
     <span class="pill <?=extension_loaded('gd') ? 'green' : 'amber'?>">GD <?=extension_loaded('gd') ? 'فعال' : 'غیرفعال (بدون فشرده‌سازی عکس)'?></span>
     <span class="pill green">PHP <?=h(PHP_VERSION)?></span>
     <a class="check" href="<?=url('diag-version')?>" target="_blank">عیب‌یابی نسخه</a>

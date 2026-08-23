@@ -18,7 +18,6 @@ $TABS = [
     'transactions' => '🧾 تراکنش‌ها',
     'contact' => '📨 پیام‌های تماس',
     'settings' => '⚙️ تنظیمات سایت',
-    'collect' => '🤖 ربات پیشرفته v5',
 ];
 
 header_html('پنل مدیریت');
@@ -465,10 +464,6 @@ elseif ($tab === 'settings') {
     <?php
 }
 
-/* ---------------- COLLECT (ربات پیشرفته v5.0 — پنل حرفه‌ای) ---------------- */
-elseif ($tab === 'collect') {
-    require __DIR__ . '/admin_collect_v5.php';
-}
 ?>
     </section>
   </div>

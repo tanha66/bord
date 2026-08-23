@@ -36,7 +36,7 @@ const required = [
   'assets/style.css','manifest.webmanifest','sw.js','.htaccess',
   'pages/home.php','pages/admin.php','pages/boards.php','pages/about.php','pages/contact.php','pages/terms.php','pages/privacy.php',
   'php-extended/bk_extended.php','php-extended/bk_actionbar.php','php-extended/bk_admin_extra.php','php-extended/tickets.php','php-extended/admin_finance.php','php-extended/schema_build.php',
-  'pages/admin_dashboard_v5.php','pages/admin_users_v5.php','pages/admin_collect_v5.php',
+  'pages/admin_dashboard_v5.php','pages/admin_users_v5.php',
   'sql/schema.sql'
 ];
 required.forEach(f => {
@@ -46,13 +46,13 @@ required.forEach(f => {
 const index = read('index.php');
 
 // Routes
-const routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','cron-collect','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
+const routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
 routes.forEach(r => {
   test(`Route ${r}`, () => index.includes(`'${r}'`) || index.includes(`"${r}"`) ? true : 'یافت نشد');
 });
 
 // Actions
-const actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','unlock','comment','rate','follow','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','admin_collect','subscribe','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','repair_answer','repair_best','report','comment_vote'];
+const actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','unlock','comment','rate','follow','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','repair_answer','repair_best','report','comment_vote'];
 actions.forEach(a => {
   test(`Action ${a}`, () => index.includes(`'${a}'`) ? true : `ناموجود`);
 });
