@@ -2,7 +2,7 @@
 require __DIR__ . '/config.php';
 
 /* نسخهٔ کد — برای تشخیص اینکه سرور واقعاً کدام نسخه را اجرا می‌کند */
-if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.0');
+if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.1');
 
 /* ---------- helper های مقاوم — حتی اگر config.php سرور قدیمی باشد ---------- */
 if (!function_exists('mb_strlen')) {
@@ -2850,7 +2850,7 @@ if($page==='tour'){
         <a class="btn btn-secondary" href="<?=url('boards')?>">🏪 فروشگاه</a>
         <a class="btn btn-secondary" href="<?=url('tickets')?>">✉ پشتیبانی</a>
       </div>
-      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - ربات پیشرفته v5.0 + پنل حرفه‌ای</p>
+      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - ربات پیشرفته + پنل حرفه‌ای مدیر/کاربران v5.1</p>
     </div>
   </section>
 </main><?php footer_html();exit; }

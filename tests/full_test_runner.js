@@ -36,6 +36,7 @@ const required = [
   'assets/style.css','manifest.webmanifest','sw.js','.htaccess',
   'pages/home.php','pages/admin.php','pages/boards.php','pages/about.php','pages/contact.php','pages/terms.php','pages/privacy.php',
   'php-extended/bk_extended.php','php-extended/bk_actionbar.php','php-extended/bk_admin_extra.php','php-extended/tickets.php','php-extended/admin_finance.php','php-extended/schema_build.php',
+  'pages/admin_dashboard_v5.php','pages/admin_users_v5.php','pages/admin_collect_v5.php',
   'sql/schema.sql'
 ];
 required.forEach(f => {

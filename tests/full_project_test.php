@@ -18,7 +18,7 @@ $requiredFiles = [
     'index.php','config.php','serve.php','install.php',
     'assets/style.css','assets/icon-192.png','assets/icon-512.png','assets/icon.svg',
     'manifest.webmanifest','sw.js','.htaccess',
-    'pages/home.php','pages/admin.php','pages/boards.php','pages/about.php','pages/contact.php','pages/terms.php','pages/privacy.php',
+    'pages/home.php','pages/admin.php','pages/admin_dashboard_v5.php','pages/admin_users_v5.php','pages/admin_collect_v5.php','pages/boards.php','pages/about.php','pages/contact.php','pages/terms.php','pages/privacy.php',
     'php-extended/bk_extended.php','php-extended/bk_actionbar.php','php-extended/bk_admin_extra.php','php-extended/tickets.php','php-extended/admin_finance.php','php-extended/schema_build.php','php-extended/migrate.php',
     'sql/schema.sql'
 ];
@@ -82,6 +82,7 @@ add_test('تابع url()', strpos($index, 'function url(')!==false, 'موجود'
 // 10. ربات پیشرفته v5.0
 $schemaBuild = file_get_contents(__DIR__.'/../php-extended/schema_build.php');
 $adminCollect = is_file(__DIR__.'/../pages/admin_collect_v5.php') ? file_get_contents(__DIR__.'/../pages/admin_collect_v5.php') : '';
+$adminX = is_file(__DIR__.'/../php-extended/bk_admin_extra.php') ? file_get_contents(__DIR__.'/../php-extended/bk_admin_extra.php') : '';
 foreach([
     ['موتور: score_candidate (امتیازدهی کیفیت)', $index, 'function score_candidate'],
     ['موتور: bot_title_tokens + شباهت فازی', $index, 'function bot_titles_similar'],
@@ -101,7 +102,10 @@ foreach([
     ['پنل: زیرتب‌ها (run/sources/content/settings)', $adminCollect, "bk-subtabs"],
     ['پنل: جدول تاریخچهٔ اجراها', $adminCollect, 'bot_runs'],
     ['پنل: جدول سلامت منابع', $adminCollect, 'bot_sources'],
-    ['نسخهٔ 5.0', $index, "BORDKHAN_VERSION', '5.0'"],
+    ['نسخهٔ 5.1', $index, "BORDKHAN_VERSION', '5.1'"],
+    ['پنل: داشبورد حرفه‌ای', file_get_contents(__DIR__.'/../pages/admin_dashboard_v5.php'), 'کارهای امروز'],
+    ['پنل: مدیریت کاربران حرفه‌ای', file_get_contents(__DIR__.'/../pages/admin_users_v5.php'), 'admin_user'],
+    ['پنل: مدیریت پیشرفته کاربران v5', $adminX, 'پروفایل'],
 ] as $bt){
     add_test("ربات v5 — {$bt[0]}", is_string($bt[1]) && strpos($bt[1], $bt[2])!==false, 'بررسی کد');
 }

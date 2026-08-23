@@ -147,17 +147,93 @@ if ($sub === 'admin-boards') {
     <?php
 }
 
-/* ===== USERS ADMIN ===== */
+/* ===== USERS ADMIN (مدیریت پیشرفته کاربران — v5.1) ===== */
 elseif ($sub === 'admin-users') {
     $eid = (int)($_GET['edit'] ?? 0); $edit=null;
     if ($eid) { $q=$pdo->prepare('SELECT * FROM users WHERE id=?'); $q->execute([$eid]); $edit=$q->fetch(); }
-    $qsearch = trim($_GET['q'] ?? ''); $w=''; $par=[];
-    if ($qsearch) { $w='WHERE name LIKE ? OR phone LIKE ?'; $par=["%$qsearch%","%$qsearch%"]; }
-    $st=$pdo->prepare("SELECT * FROM users $w ORDER BY id DESC LIMIT 200"); $st->execute($par); $items=$st->fetchAll();
+
+    /* KPI کاربران */
+    $safe_u = function (string $sql) use ($pdo) { try { $v=$pdo->query($sql)->fetchColumn(); return $v===false||$v===null?0:$v; } catch (Throwable $e) { return 0; } };
+    $ukpi = [
+        'total' => (int)$safe_u('SELECT COUNT(*) FROM users'),
+        'banned' => (int)$safe_u('SELECT COUNT(*) FROM users WHERE is_banned=1'),
+        'premium' => (int)$safe_u('SELECT COUNT(*) FROM users WHERE premium_until > NOW()'),
+        'sellers' => (int)$safe_u("SELECT COUNT(*) FROM users WHERE seller_status='approved'"),
+        'experts' => (int)$safe_u("SELECT COUNT(*) FROM users WHERE role IN ('expert','moderator','admin','superadmin')"),
+        'week' => (int)$safe_u('SELECT COUNT(*) FROM users WHERE created_at >= DATE(NOW())-INTERVAL 7 DAY'),
+    ];
+
+    /* فیلتر و صفحه‌بندی */
+    $qsearch = trim($_GET['q'] ?? ''); $urole=$_GET['role']??''; $ustat=$_GET['status']??''; $upage=max(1,(int)($_GET['p']??1)); $uper=25;
+    $w=[]; $par=[];
+    if ($qsearch) { $w[]='(name LIKE ? OR phone LIKE ? OR IFNULL(email,"") LIKE ?)'; $par=["%$qsearch%","%$qsearch%","%$qsearch%"]; }
+    if (in_array($urole,['member','expert','moderator','admin','superadmin'],true)) { $w[]='role=?'; $par[]=$urole; }
+    if ($ustat==='banned') $w[]='is_banned=1'; elseif ($ustat==='verified') $w[]='verified=1'; elseif ($ustat==='premium') $w[]='premium_until > NOW()'; elseif ($ustat==='seller') $w[]="seller_status='approved'";
+    $wsql = $w ? 'WHERE '.implode(' AND ',$w) : '';
+    $totalU=0; try { $c=$pdo->prepare("SELECT COUNT(*) FROM users $wsql"); $c->execute($par); $totalU=(int)$c->fetchColumn(); } catch (Throwable $e) {}
+    $pages=max(1,(int)ceil($totalU/$uper)); $upage=min($upage,$pages); $off=($upage-1)*$uper;
+    $st=$pdo->prepare("SELECT u.*,(SELECT COUNT(*) FROM tips t WHERE t.author_id=u.id) tips_count FROM users u $wsql ORDER BY u.id DESC LIMIT $uper OFFSET $off");
+    $st->execute($par); $items=$st->fetchAll();
     $roles=['member'=>'کاربر','expert'=>'تعمیرکار','moderator'=>'ناظر','admin'=>'مدیر','superadmin'=>'سوپرادمین'];
+
+    /* آمار کاربرِ در حال ویرایش */
+    $editStats = null; $editTx = [];
+    if ($edit) {
+        try {
+            $qs=$pdo->prepare('SELECT (SELECT COUNT(*) FROM tips WHERE author_id=?) tips,(SELECT COUNT(*) FROM tip_accesses WHERE user_id=?) purchases,(SELECT COUNT(*) FROM comments WHERE user_id=?) comments');
+            $qs->execute([$edit['id'],$edit['id'],$edit['id']]); $editStats=$qs->fetch();
+        } catch (Throwable $e) { $editStats=['tips'=>0,'purchases'=>0,'comments'=>0]; }
+        try { $qt=$pdo->prepare('SELECT type,amount,balance_after,note,created_at FROM wallet_transactions WHERE user_id=? ORDER BY id DESC LIMIT 6'); $qt->execute([$edit['id']]); $editTx=$qt->fetchAll(); } catch (Throwable $e) {}
+    }
     ?>
-    <div class="flex between items-center" style="margin-bottom:16px"><h1 style="font-size:22px;font-weight:900">مدیریت کاربران</h1><a class="btn btn-secondary btn-sm" href="<?=url('admin?tab=users')?>">بازگشت به پنل</a></div>
-    <div class="card authc" style="padding:18px;margin-bottom:20px"><h3 style="margin-bottom:12px"><?=$edit?'ویرایش کاربر: '.h($edit['name']):'افزودن کاربر جدید'?></h3>
+    <div class="flex between items-center" style="margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <h1 style="font-size:22px;font-weight:900">🧑‍💼 مدیریت پیشرفته کاربران</h1>
+      <div class="flex gap" style="gap:6px"><a class="btn btn-secondary btn-sm" href="<?=url('admin?tab=users')?>">پنل سریع کاربران</a><a class="btn btn-secondary btn-sm" href="<?=url('admin')?>">بازگشت به داشبورد</a></div>
+    </div>
+
+    <div class="admin-cards">
+      <?php foreach ([['کل کاربران',$ukpi['total'],'👥',''],['هفت روز اخیر',$ukpi['week'],'🆕','color:#078659'],['تعمیرکار و مدیران',$ukpi['experts'],'🛠',''],['اشتراک ویژه',$ukpi['premium'],'⭐','color:#b8860b'],['فروشنده فعال',$ukpi['sellers'],'🏪',''],['مسدودشده',$ukpi['banned'],'🚫','color:#b3261e']] as $uk): ?>
+      <div class="card"><div class="k"><?=$uk[2]?> <?=h($uk[0])?></div><div class="v" style="<?=$uk[3]?>"><?=fa(number_format($uk[1]))?></div></div>
+      <?php endforeach; ?>
+    </div>
+
+    <?php if ($edit): ?>
+    <!-- ===== کارت جزئیات کاربر ===== -->
+    <div class="card" style="padding:18px;margin-bottom:18px">
+      <div class="flex between items-center" style="flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <h3 style="margin:0">👤 پروفایل: <?=h($edit['name'])?> <small dir="ltr" class="muted"><?=h($edit['phone'])?></small></h3>
+        <div class="tip-meta">
+          <span class="pill <?=in_array($edit['role'],['admin','superadmin'],true)?'blue':''?>"><?=h($roles[$edit['role']]??$edit['role'])?></span>
+          <?php if ((int)$edit['is_banned']): ?><span class="pill rose">🚫 مسدود</span><?php endif; ?>
+          <?php if ((int)$edit['verified']): ?><span class="pill green">✅ تأییدشده</span><?php endif; ?>
+          <?php if (!empty($edit['premium_until'])&&strtotime($edit['premium_until'])>time()): ?><span class="pill amber">⭐ ویژه تا <?=date_fa($edit['premium_until'])?></span><?php endif; ?>
+        </div>
+      </div>
+      <?php if ($editStats): ?>
+      <div class="bk-run-grid" style="margin-bottom:14px">
+        <div class="bk-run-box"><b>🔧 قلق ثبت‌شده</b><span><?=fa((int)$editStats['tips'])?></span></div>
+        <div class="bk-run-box"><b>🛒 خرید قلق</b><span><?=fa((int)$editStats['purchases'])?></span></div>
+        <div class="bk-run-box"><b>💬 نظر ثبت‌شده</b><span><?=fa((int)$editStats['comments'])?></span></div>
+        <div class="bk-run-box"><b>💰 موجودی (تومان)</b><span><?=money($edit['balance'])?></span></div>
+        <div class="bk-run-box"><b>🏅 امتیاز</b><span><?=fa((int)$edit['points'])?></span></div>
+        <div class="bk-run-box"><b>🗓 عضویت</b><span style="font-size:13px"><?=date_fa($edit['created_at'])?></span></div>
+        <div class="bk-run-box"><b>🕐 آخرین ورود</b><span style="font-size:13px"><?=$edit['last_login']?ago($edit['last_login']):'—'?></span></div>
+        <div class="bk-run-box"><b>🎁 کد معرف</b><span style="font-size:13px" dir="ltr"><?=h($edit['referral_code']??'—')?></span></div>
+      </div>
+      <?php endif; ?>
+      <?php if ($editTx): ?>
+      <details style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:800;font-size:12px">💳 آخرین تراکنش‌های کیف پول (۶ مورد)</summary>
+        <div class="table-wrap" style="margin-top:10px"><table class="bk-table">
+          <thead><tr><th>نوع</th><th>مبلغ</th><th>موجودی پس از</th><th>توضیح</th><th>زمان</th></tr></thead>
+          <tbody><?php foreach ($editTx as $tx): ?><tr><td><?=h($tx['type'])?></td><td style="color:<?=$tx['amount']>=0?'#0a7a4a':'#b3261e'?>"><?=money(abs((int)$tx['amount']))?></td><td><?=money((int)$tx['balance_after'])?></td><td class="muted"><?=h(mb_substr((string)$tx['note'],0,50))?></td><td><?=ago($tx['created_at'])?></td></tr><?php endforeach; ?></tbody>
+        </table></div>
+      </details>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <div class="card" style="padding:18px;margin-bottom:20px">
+      <h3 style="margin-bottom:12px"><?=$edit?'✏️ ویرایش کاربر: '.h($edit['name']):'➕ افزودن کاربر جدید'?></h3>
     <form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="xaction" value="user_save"><input type="hidden" name="user_id" value="<?=$edit['id']??0?>">
       <div class="grid grid-2"><div class="fgroup"><label class="field-label">نام</label><input class="field" name="name" value="<?=h($edit['name']??'')?>" required></div>
       <div class="fgroup"><label class="field-label">موبایل</label><input class="field" dir="ltr" name="phone" value="<?=h($edit['phone']??'')?>" required></div>
@@ -165,14 +241,46 @@ elseif ($sub === 'admin-users') {
       <div class="fgroup"><label class="field-label">وضعیت فروشنده</label><select class="field" name="seller_status"><?php foreach(['none'=>'هیچ','pending'=>'در انتظار','approved'=>'تأییدشده','rejected'=>'ردشده'] as $k=>$v):?><option value="<?=$k?>" <?=($edit['seller_status']??'none')===$k?'selected':''?>><?=$v?></option><?php endforeach;?></select></div>
       <div class="fgroup"><label class="field-label">رمز جدید (اختیاری)</label><input class="field" type="text" name="password" placeholder="خالی = بدون تغییر"></div>
       <div class="fgroup"><label class="field-label" style="display:block">وضعیت</label><label style="font-size:12px"><input type="checkbox" name="verified" value="1" <?=!empty($edit['verified'])?'checked':''?>> تأییدشده</label> <label style="font-size:12px;margin-inline-start:12px"><input type="checkbox" name="is_banned" value="1" <?=!empty($edit['is_banned'])?'checked':''?>> مسدود</label></div></div>
-      <button class="btn btn-primary"><?=$edit?'ذخیره':'افزودن کاربر'?></button> <?php if($edit):?><a class="btn btn-secondary" href="<?=url('admin-users')?>">انصراف</a><?php endif;?>
+      <div class="flex gap" style="flex-wrap:wrap">
+        <button class="btn btn-primary"><?=$edit?'💾 ذخیره تغییرات':'➕ افزودن کاربر'?></button>
+        <?php if($edit):?><a class="btn btn-secondary" href="<?=url('admin-users')?>">انصراف</a><?php endif;?>
+      </div>
     </form></div>
-    <form method="get" style="max-width:320px;margin-bottom:14px"><input type="hidden" name="r" value="admin-users"><input class="field" name="q" value="<?=h($qsearch)?>" placeholder="جستجوی نام یا موبایل…"></form>
-    <div class="card tablewrap"><table class="table"><tr><th>کاربر</th><th>نقش</th><th>موجودی</th><th>تعدیل موجودی</th><th>عملیات</th></tr>
-    <?php foreach($items as $x):?><tr><td><?=h($x['name'])?><br><small dir="ltr" class="muted"><?=h($x['phone'])?></small></td><td><?=h($roles[$x['role']]??$x['role'])?></td><td><?=money($x['balance'])?></td>
+
+    <!-- ===== فیلترها ===== -->
+    <form method="get" class="flex gap" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <input type="hidden" name="r" value="admin-users">
+      <input class="field" style="max-width:220px" name="q" value="<?=h($qsearch)?>" placeholder="🔍 نام، موبایل یا ایمیل…">
+      <select class="field" style="max-width:150px" name="role">
+        <option value="">همه نقش‌ها</option>
+        <?php foreach ($roles as $rv=>$rl): ?><option value="<?=$rv?>" <?=$urole===$rv?'selected':''?>><?=h($rl)?></option><?php endforeach; ?>
+      </select>
+      <select class="field" style="max-width:150px" name="status">
+        <?php foreach ([''=>'همه وضعیت‌ها','banned'=>'🚫 مسدود','verified'=>'✅ تأییدشده','premium'=>'⭐ اشتراک ویژه','seller'=>'🏪 فروشنده'] as $sv=>$sl): ?><option value="<?=$sv?>" <?=$ustat===$sv?'selected':''?>><?=h($sl)?></option><?php endforeach; ?>
+      </select>
+      <button class="btn btn-primary btn-sm">اعمال</button>
+      <small class="muted" style="align-self:center"><?=fa($totalU)?> کاربر یافت شد</small>
+    </form>
+
+    <div class="card table-wrap"><table class="bk-table">
+      <thead><tr><th>کاربر</th><th>نقش</th><th>قلق</th><th>موجودی</th><th>وضعیت</th><th>آخرین ورود</th><th>تعدیل سریع موجودی</th><th>عملیات</th></tr></thead>
+    <?php foreach($items as $x): ?><tr>
+      <td><span class="avatar small" style="display:inline-block"><?=h(mb_substr($x['name'],0,1))?></span> <a class="check" href="<?=url('admin-users',['edit'=>$x['id']])?>" style="font-weight:bold"><?=h(mb_substr($x['name'],0,24))?></a><br><small dir="ltr" class="muted" style="font-size:10px"><?=h($x['phone'])?></small></td>
+      <td><span class="pill <?=in_array($x['role'],['admin','superadmin'],true)?'blue':''?>"><?=h($roles[$x['role']]??$x['role'])?></span></td>
+      <td><?=fa((int)$x['tips_count'])?></td>
+      <td><b><?=money($x['balance'])?></b></td>
+      <td>
+        <?php if((int)$x['is_banned']): ?><span class="pill rose">🚫</span><?php endif; ?>
+        <?php if((int)$x['verified']): ?><span class="pill green">✅</span><?php endif; ?>
+        <?php if(!empty($x['premium_until'])&&strtotime($x['premium_until'])>time()): ?><span class="pill amber">⭐</span><?php endif; ?>
+        <?php if($x['seller_status']==='approved'): ?><span class="pill blue">🏪</span><?php endif; ?>
+      </td>
+      <td><small class="muted"><?=$x['last_login']?ago($x['last_login']):'—'?></small></td>
       <td><form method="post" style="display:flex;gap:4px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="xaction" value="user_balance"><input type="hidden" name="user_id" value="<?=$x['id']?>"><input class="field" style="width:90px" type="number" name="delta" placeholder="± تومان"><button class="btn btn-secondary btn-sm">اعمال</button></form></td>
-      <td style="display:flex;gap:4px"><a class="btn btn-secondary btn-sm" href="<?=url('admin-users',['edit'=>$x['id']])?>">ویرایش</a>
-      <form method="post" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="xaction" value="user_del"><input type="hidden" name="user_id" value="<?=$x['id']?>"><button class="btn btn-danger btn-sm">حذف</button></form></td></tr><?php endforeach;?></table></div>
+      <td><div class="flex" style="gap:4px"><a class="btn btn-secondary btn-sm" href="<?=url('admin-users',['edit'=>$x['id']])?>">✏️ ویرایش</a>
+      <form method="post" onsubmit="return confirm('این کاربر برای همیشه حذف شود؟ محتواهای او حفظ می‌شود.')"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="xaction" value="user_del"><input type="hidden" name="user_id" value="<?=$x['id']?>"><button class="btn btn-danger btn-sm">🗑 حذف</button></form></div></td></tr><?php endforeach;?>
+    </table></div>
+    <?php if ($pages>1): ?><div class="flex gap mt" style="flex-wrap:wrap"><?php for($pi=max(1,$upage-3);$pi<=min($pages,$upage+3);$pi++): ?><a class="pill <?=$pi===$upage?'green':''?>" href="<?=url('admin-users',['q'=>$qsearch,'role'=>$urole,'status'=>$ustat,'p'=>$pi])?>"><?=fa($pi)?></a><?php endfor; ?><small class="muted" style="align-self:center">صفحه <?=fa($upage)?> از <?=fa($pages)?></small></div><?php endif; ?>
     <?php
 }
 

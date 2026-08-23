@@ -52,112 +52,9 @@ $flash = pull_flash();
 
     <section class="admin-main">
 <?php
-/* ---------------- DASHBOARD ---------------- */
+/* ---------------- DASHBOARD (پیشخوان حرفه‌ای v5) ---------------- */
 if ($tab === 'dashboard') {
-    $stats = [
-        'users' => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
-        'tips' => (int)$pdo->query('SELECT COUNT(*) FROM tips')->fetchColumn(),
-        'published' => (int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn(),
-        'pending' => (int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='pending'")->fetchColumn(),
-        'reports' => (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status='open'")->fetchColumn(),
-        'contact' => (function () use ($pdo) { try { return (int)$pdo->query("SELECT COUNT(*) FROM contact_messages WHERE status='new'")->fetchColumn(); } catch (Throwable $e) { return 0; } })(),
-        'withdrawals' => (int)$pdo->query("SELECT COUNT(*) FROM withdrawals WHERE status IN ('pending','reviewing')")->fetchColumn(),
-        'sales' => (int)$pdo->query("SELECT COALESCE(SUM(price_paid),0) FROM tip_accesses WHERE access_type='purchase'")->fetchColumn(),
-        'balance' => (int)$pdo->query('SELECT COALESCE(SUM(balance),0) FROM users')->fetchColumn(),
-    ];
-    $tips7 = $pdo->query("SELECT DATE(created_at) d, COUNT(*) c FROM tips WHERE created_at >= DATE(NOW())-INTERVAL 6 DAY GROUP BY DATE(created_at)")->fetchAll();
-    $users7 = $pdo->query("SELECT DATE(created_at) d, COUNT(*) c FROM users WHERE created_at >= DATE(NOW())-INTERVAL 6 DAY GROUP BY DATE(created_at)")->fetchAll();
-    $recent = $pdo->query("SELECT t.id,t.title,t.status,t.created_at,u.name FROM tips t JOIN users u ON u.id=t.author_id ORDER BY t.created_at DESC LIMIT 8")->fetchAll();
-    function chart_series(array $rows): array {
-        $out = []; for ($i = 6; $i >= 0; $i--) { $d = date('Y-m-d', strtotime("-{$i} day")); $out[$d] = 0; }
-        foreach ($rows as $r) if (isset($out[$r['d']])) $out[$r['d']] = (int)$r['c'];
-        return $out;
-    }
-    $tipsSeries = chart_series($tips7);
-    $usersSeries = chart_series($users7);
-    ?>
-    <div class="admin-cards">
-      <?php foreach ([
-        ['کاربران', $stats['users'], '👥'], ['کل قلق‌ها', $stats['tips'], '🔧'],
-        ['منتشرشده', $stats['published'], '✅'], ['در انتظار بررسی', $stats['pending'], '⏳'],
-        ['گزارش‌های باز', $stats['reports'], '🚩'], ['پیام تماس جدید', $stats['contact'], '📨'], ['تسویه در انتظار', $stats['withdrawals'], '🏦'],
-        ['حجم فروش (تومان)', $stats['sales'], '💳'], ['موجودی کاربران (تومان)', $stats['balance'], '💰'],
-      ] as $card): ?>
-        <div class="card">
-          <div class="k"><?=$card[2]?> <?=h($card[0])?></div>
-          <div class="v"><?=fa(number_format($card[1]))?></div>
-        </div>
-      <?php endforeach; ?>
-    </div>
-
-    <div class="grid grid-2">
-      <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:16px">📈 قلق‌های جدید (۷ روز اخیر)</h3>
-        <div class="bar-chart">
-          <?php foreach ($tipsSeries as $d => $c): $max = max(1, max($tipsSeries)); ?>
-            <div class="bar" style="height:<?=max(3, round($c / $max * 110))?>px">
-              <span><?=fa($c)?></span><i><?=fa(date('m/d', strtotime($d)))?></i>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:16px">👥 ثبت‌نام‌های جدید (۷ روز اخیر)</h3>
-        <div class="bar-chart">
-          <?php foreach ($usersSeries as $d => $c): $max = max(1, max($usersSeries)); ?>
-            <div class="bar" style="height:<?=max(3, round($c / $max * 110))?>px">
-              <span><?=fa($c)?></span><i><?=fa(date('m/d', strtotime($d)))?></i>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-    </div>
-
-    <div class="card mt" style="padding:18px">
-      <h3 style="margin-bottom:8px">🕒 آخرین قلق‌های ثبت‌شده</h3>
-      <?php foreach ($recent as $r): ?>
-        <div class="activity-item">
-          <a class="grow" href="<?=url('tip/' . $r['id'])?>" style="font-weight:bold"><?=h(mb_substr($r['title'], 0, 60))?></a>
-          <span class="pill <?=$r['status'] === 'published' ? 'green' : ($r['status'] === 'pending' ? 'amber' : 'rose')?>"><?=h(status_label($r['status']))?></span>
-          <small class="muted"><?=ago($r['created_at'])?></small>
-        </div>
-      <?php endforeach; ?>
-    </div>
-
-    <!-- Quick action cards row -->
-    <div class="grid grid-3 mt">
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'collect'])?>">
-        <div style="font-size:30px">🤖</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">ربات پیشرفته v5</strong>
-        <small class="muted">اجرای زنده + پایش منابع</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'boards'])?>">
-        <div style="font-size:30px">🏪</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">فروشگاه برد</strong>
-        <small class="muted">مدیریت بردها و سفارش‌ها</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'withdrawals'])?>">
-        <div style="font-size:30px">🏦</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">تسویه‌ها</strong>
-        <small class="muted">درخواست‌های برداشت</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'sellers'])?>">
-        <div style="font-size:30px">🛒</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">فروشندگان</strong>
-        <small class="muted">تأیید و مدیریت</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'settings'])?>">
-        <div style="font-size:30px">⚙️</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">تنظیمات سایت</strong>
-        <small class="muted">متن‌ها، قیمت‌ها و سئو</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'reports'])?>">
-        <div style="font-size:30px">🚩</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">گزارش‌ها</strong>
-        <small class="muted">بررسی محتوای مشکوک</small>
-      </a>
-    </div>
-    <?php
+    require __DIR__ . '/admin_dashboard_v5.php';
 }
 
 /* ---------------- TIPS ---------------- */
@@ -285,55 +182,9 @@ elseif ($tab === 'tips') {
     <?php
 }
 
-/* ---------------- USERS ---------------- */
+/* ---------------- USERS (مدیریت کاربران حرفه‌ای v5) ---------------- */
 elseif ($tab === 'users') {
-    $q = trim($_GET['q'] ?? '');
-    $where = ''; $params = [];
-    if ($q !== '') { $where = "WHERE name LIKE ? OR phone LIKE ?"; $params = ["%$q%", "%$q%"]; }
-    $stmt = $pdo->prepare("SELECT * FROM users $where ORDER BY created_at DESC LIMIT 150");
-    $stmt->execute($params);
-    $items = $stmt->fetchAll();
-    ?>
-    <form method="get" class="mb" style="max-width:320px">
-      <input type="hidden" name="r" value="admin"><input type="hidden" name="tab" value="users">
-      <input class="field" name="q" value="<?=h($q)?>" placeholder="جستجوی نام یا موبایل…">
-    </form>
-    <p class="muted" style="font-size:11px;margin:0 0 10px">✏️ نام، موبایل، نقش و وضعیت هر کاربر را همین‌جا ویرایش کنید و با فیلد «± شارژ» موجودی کیف پول او را کم/زیاد کنید. برای ویرایش کامل‌تر (رمز عبور، آدرس و حذف) از <a class="check" href="<?=url('admin-users')?>">مدیریت پیشرفته کاربران</a> استفاده کنید.</p>
-    <div class="card table-wrap">
-      <table class="table">
-        <tr><th>کاربر (ویرایش)</th><th>نقش</th><th>امتیاز</th><th>موجودی / شارژ</th><th>وضعیت</th><th>ذخیره</th></tr>
-        <?php foreach ($items as $x): ?>
-        <tr>
-          <td style="min-width:140px">
-            <input class="field" style="width:120px;margin-bottom:5px;font-size:12px;padding:6px" name="name" value="<?=h($x['name'])?>" placeholder="نام">
-            <input class="field" dir="ltr" style="width:120px;font-size:12px;padding:6px" name="phone" value="<?=h($x['phone'])?>" placeholder="موبایل">
-          </td>
-          <td>
-            <form method="post" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-              <input type="hidden" name="csrf" value="<?=csrf()?>">
-              <input type="hidden" name="action" value="admin_user">
-              <input type="hidden" name="user_id" value="<?=$x['id']?>">
-              <select class="field" name="role" style="width:135px">
-                <?php foreach (['member'=>'کاربر عادی','expert'=>'تعمیرکار','moderator'=>'ناظر','admin'=>'مدیر','superadmin'=>'سوپرادمین'] as $rv => $rl): ?>
-                  <option value="<?=$rv?>" <?=$x['role']===$rv?'selected':''?>><?=h($rl)?></option>
-                <?php endforeach; ?>
-              </select>
-          </td>
-          <td><?=fa($x['points'])?></td>
-          <td style="min-width:130px"><?=money($x['balance'])?><br>
-            <input class="field" style="width:100px;margin-top:5px;font-size:12px;padding:6px" type="number" name="delta" placeholder="± شارژ (تومان)">
-            <input class="field" style="width:100px;margin-top:4px;font-size:11px;padding:6px" name="note" placeholder="توضیح شارژ">
-          </td>
-          <td>
-              <label style="font-size:11px"><input type="checkbox" name="verified" value="1" <?=$x['verified']?'checked':''?>> تأیید</label>
-              <label style="font-size:11px"><input type="checkbox" name="banned" value="1" <?=$x['is_banned']?'checked':''?>> مسدود</label>
-          </td>
-          <td><button class="btn btn-primary btn-sm">ذخیره</button></form></td>
-        </tr>
-        <?php endforeach; ?>
-      </table>
-    </div>
-    <?php
+    require __DIR__ . '/admin_users_v5.php';
 }
 
 /* ---------------- REPORTS ---------------- */
