@@ -12,6 +12,9 @@ $cronUrl = url('cron-collect', ['key' => $cs['auto_collect_cron_key'] ?? 'KEY'])
 $st = $_GET['st'] ?? 'run';
 if (!in_array($st, ['run', 'sources', 'content', 'settings'], true)) $st = 'run';
 
+/* پاک‌سازی اجراهای یتیم (v5.2): پروسه‌های کشته‌شده دیگر «در جریان» نشان داده نمی‌شوند */
+bot_cleanup_stale_runs();
+
 /* شناسهٔ کاربر ربات */
 $botId = 0;
 try { $bq = $pdo->prepare("SELECT id FROM users WHERE phone='09100000000' LIMIT 1"); $bq->execute(); $botId = (int)$bq->fetchColumn(); } catch (Throwable $e) {}
@@ -99,7 +102,7 @@ $regionLabels = ['western' => '🌍 غربی', 'indian' => '🇮🇳 هندی', 
 <div class="grid grid-2">
   <div class="card" style="padding:18px">
     <h3 style="margin-bottom:6px">⚡ اجرای زندهٔ ربات پیشرفته v5.0</h3>
-    <p class="muted" style="font-size:11px">اجرای همزمان با cron قفل می‌شود · تشخیص تکرار ۳لایه · انتخاب بهترین محتوا با امتیازدهی · گارد زمان اجرا</p>
+    <p class="muted" style="font-size:11px">v5.2: گارد زمان در همهٔ فازها (دیگر گیر نمی‌کند) · دکمهٔ توقف فوری · قلق بدون عکس هم ذخیره می‌شود · تشخیص تکرار ۳لایه · امتیازدهی کیفیت</p>
     <form id="bkBotRunForm" method="post" class="mt" data-status-url="<?=url('ajax-bot-status')?>">
       <input type="hidden" name="csrf" value="<?=csrf()?>">
       <input type="hidden" name="action" value="admin_bot_run">
@@ -120,6 +123,7 @@ $regionLabels = ['western' => '🌍 غربی', 'indian' => '🇮🇳 هندی', 
       <div id="bkBotResult" class="mt"></div>
       <div class="flex gap" style="flex-wrap:wrap;margin-top:10px">
         <button class="btn btn-primary" type="submit" id="bkBotRunBtn">🚀 اجرای زندهٔ ربات</button>
+        <button class="btn btn-danger" type="button" id="bkBotStopBtn">⏹ توقف ربات</button>
         <a class="btn btn-secondary" href="<?=url('admin', ['tab' => 'collect', 'st' => 'settings'])?>">⚙️ تنظیمات ربات</a>
       </div>
     </form>
@@ -135,7 +139,7 @@ $regionLabels = ['western' => '🌍 غربی', 'indian' => '🇮🇳 هندی', 
     <div class="notice" style="font-size:11px;line-height:2;margin-top:14px">
       <?php if ($lastRun): ?>
         <b>آخرین اجرا:</b> <?=h($lastRun['trigger_type'] === 'cron' ? '🕐 زمان‌بندی‌شده' : '🖐 دستی')?> ·
-        <span class="pill <?=$lastRun['status'] === 'completed' ? 'green' : ($lastRun['status'] === 'failed' ? 'rose' : 'amber')?>"><?=h($lastRun['status'] === 'completed' ? 'موفق' : ($lastRun['status'] === 'failed' ? 'ناموفق' : 'در جریان'))?></span>
+        <span class="pill <?=$lastRun['status'] === 'completed' ? 'green' : ($lastRun['status'] === 'running' ? 'amber' : 'rose')?>"><?=h($lastRun['status'] === 'completed' ? 'موفق' : ($lastRun['status'] === 'running' ? 'در جریان' : ($lastRun['status'] === 'stopped' ? 'متوقف‌شده' : 'ناموفق')))?></span>
         · <?=fa((int)$lastRun['created'])?> قلق در <?=fa((float)$lastRun['duration_sec'])?> ثانیه · <?=ago($lastRun['created_at'])?>
         <?=!empty($lastRun['dry_run']) ? ' · <b>آزمایشی</b>' : ''?>
       <?php else: ?>
@@ -160,7 +164,7 @@ $regionLabels = ['western' => '🌍 غربی', 'indian' => '🇮🇳 هندی', 
       <tr>
         <td><?=fa((int)$r['id'])?></td>
         <td><?=h($r['trigger_type'] === 'cron' ? '🕐 cron' : '🖐 دستی')?><?=!empty($r['dry_run']) ? ' 🧪' : ''?></td>
-        <td><span class="bk-dot <?=$r['status'] === 'completed' ? 'ok' : ($r['status'] === 'failed' ? 'bad' : 'run')?>"></span><?=h($r['status'] === 'completed' ? 'موفق' : ($r['status'] === 'failed' ? 'ناموفق' : 'در جریان'))?></td>
+        <td><span class="bk-dot <?=$r['status'] === 'completed' ? 'ok' : ($r['status'] === 'running' ? 'run' : 'warn')?>"></span><?=h($r['status'] === 'completed' ? 'موفق' : ($r['status'] === 'running' ? 'در جریان' : ($r['status'] === 'stopped' ? 'متوقف‌شده' : 'ناموفق')))?></td>
         <td><b style="color:#0a7a4a"><?=fa((int)$r['created'])?></b></td>
         <td><?=fa((int)$r['scanned'])?></td>
         <td><?=fa((int)$r['duplicates'])?></td>
@@ -173,13 +177,29 @@ $regionLabels = ['western' => '🌍 غربی', 'indian' => '🇮🇳 هندی', 
     <?php endforeach; ?>
     </tbody>
   </table></div>
-  <small class="muted" style="font-size:10px">نشانگر ماوس را روی زمان ببرید تا پیام اجرا دیده شود.</small>
+  <small class="muted" style="font-size:10px">نشانگر ماوس را روی زمان ببرید تا پیام اجرا دیده شود · اگر اجرایی «در جریان» گیر کرد، دکمهٔ «⏹ توقف ربات» آن را می‌بندد و قفل را آزاد می‌کند.</small>
   <?php endif; ?>
 </div>
 
 <script>
 (function(){
   var form = document.getElementById('bkBotRunForm'); if (!form) return;
+  var stopBtn = document.getElementById('bkBotStopBtn');
+  if (stopBtn) stopBtn.addEventListener('click', function(){
+    if (!confirm('ربات متوقف شود؟ قفل آزاد و اجرای در جریان بسته می‌شود.')) return;
+    stopBtn.disabled = true;
+    var fd = new FormData();
+    fd.append('csrf', form.querySelector('[name=csrf]').value);
+    fd.append('action', 'admin_bot_stop');
+    fetch(window.location.href, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}, body:fd})
+      .then(function(r){return r.json();})
+      .then(function(j){
+        out.innerHTML = '<div class="notice" style="font-size:12px">⏹ ' + esc((j && j.message) || 'ربات متوقف شد.') + '</div>';
+        stage.textContent = 'ربات متوقف شد';
+        stopBtn.disabled = false;
+      })
+      .catch(function(){ stopBtn.disabled = false; });
+  });
   var bar = document.getElementById('bkBotBar'), wrap = document.getElementById('bkBotProgressWrap'),
       stage = document.getElementById('bkBotStage'), out = document.getElementById('bkBotResult'),
       btn = document.getElementById('bkBotRunBtn');

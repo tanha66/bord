@@ -2,7 +2,7 @@
 require __DIR__ . '/config.php';
 
 /* نسخهٔ کد — برای تشخیص اینکه سرور واقعاً کدام نسخه را اجرا می‌کند */
-if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.1');
+if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.2');
 
 /* ---------- helper های مقاوم — حتی اگر config.php سرور قدیمی باشد ---------- */
 if (!function_exists('mb_strlen')) {
@@ -175,6 +175,7 @@ function settings(): array {
         'auto_collect_rotate'=>1,
         'auto_collect_last_offset'=>0,
         'auto_collect_lock'=>null,
+        'auto_collect_stop'=>0,
         'contact_form_enabled'=>0,
         'contact_email'=>'',
         'contact_phone'=>'',
@@ -984,9 +985,10 @@ function bot_run_start(string $trigger, int $requested, bool $dryRun): int {
 function bot_run_end(int $runId, array $r): void {
     if (!$runId || !bot_table_ready('bot_runs')) return;
     try {
+        $status = $r['status_override'] ?? (!empty($r['error']) ? 'failed' : 'completed');
         db()->prepare('UPDATE bot_runs SET status=?, created=?, scanned=?, duplicates=?, errors=?, images_downloaded=?, sources_ok=?, sources_failed=?, duration_sec=?, regions_json=?, message=?, finished_at=NOW() WHERE id=?')
             ->execute([
-                !empty($r['error']) ? 'failed' : 'completed',
+                $status,
                 (int)($r['created'] ?? 0), (int)($r['scanned'] ?? 0), (int)($r['duplicates'] ?? 0),
                 (int)($r['errors'] ?? 0), (int)($r['images_downloaded'] ?? 0),
                 (int)($r['sources_ok'] ?? 0), (int)($r['sources_failed'] ?? 0),
@@ -996,6 +998,17 @@ function bot_run_end(int $runId, array $r): void {
                 $runId,
             ]);
     } catch (Throwable $e) {}
+}
+/** پاک‌سازی اجراهای یتیم: پروسه‌ای که وسط کار کشته شده (running قدیمی) → stopped */
+function bot_cleanup_stale_runs(): void {
+    if (!bot_table_ready('bot_runs')) return;
+    try {
+        db()->exec("UPDATE bot_runs SET status='stopped', message='اجرای ناتمام — پروسهٔ PHP قطع شد (timeout/kill)', finished_at=NOW() WHERE status='running' AND created_at < DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
+    } catch (Throwable $e) {}
+}
+/** آیا مدیر دستور توقف داده؟ (در هر تکرار حلقهٔ ربات چک می‌شود) */
+function bot_stop_requested(): bool {
+    try { return (int)bot_get_setting('auto_collect_stop') === 1; } catch (Throwable $e) { return false; }
 }
 function collect_tips_web(int $count, int $categoryId, string $access, array $sources, array $queries = [], array $extraSettings = []): array {
     $startedAt = microtime(true);
@@ -1012,10 +1025,8 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     $lockTs = $lock ? strtotime((string)$lock) : false;
     $isStale = !$lockTs || (time() - $lockTs) > 600;
     if (!$dryRun && !$isStale) {
-        return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'error' => 'اجرای همزمان مجاز نیست — یک اجرای دیگر همین الان در جریان است. چند لحظه بعد دوباره تلاش کنید.'];
+        return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'error' => 'اجرای همزمان مجاز نیست — یک اجرای دیگر همین الان در جریان است. اگر مطمئنید گیر کرده، دکمهٔ «⏹ توقف ربات» را بزنید.'];
     }
-    if (!$dryRun) bot_set_setting('auto_collect_lock', date('Y-m-d H:i:s'));
-
     $runId = bot_run_start($trigger, $count, $dryRun);
     $finish = function (array $r) use ($startedAt, $runId, $dryRun): array {
         $r['duration'] = round(microtime(true) - $startedAt, 1);
@@ -1024,6 +1035,16 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         if (!$dryRun) bot_set_setting('auto_collect_lock', null);
         return $r;
     };
+    if (!$dryRun) {
+        $lockToken = date('Y-m-d H:i:s');
+        bot_set_setting('auto_collect_lock', $lockToken);
+        /* ---- ضد گیرکردن: حتی اگر پروسهٔ PHP با timeout کشته شود، این تابع اجرا می‌شود و قفل را آزاد می‌کند ---- */
+        register_shutdown_function(function () use ($lockToken) {
+            try { if (bot_get_setting('auto_collect_lock') === $lockToken) bot_set_setting('auto_collect_lock', null); } catch (Throwable $e) {}
+        });
+        bot_set_setting('auto_collect_stop', 0); // پرچم توقف قدیمی پاک شود
+    }
+    bot_cleanup_stale_runs();
 
     // تنظیمات پیشرفته ربات از extraSettings یا از settings() جدول - v5.0 پیشرفته
     $s = settings();
@@ -1046,6 +1067,20 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     $timeout = max(5, min(30, (int)($extraSettings['timeout'] ?? $s['auto_collect_timeout'] ?? 12)));
     $timeLimit = max(20, min(600, (int)($extraSettings['time_limit'] ?? $s['auto_collect_time_limit'] ?? 100)));
     $rotate = $extraSettings['rotate'] ?? (int)($s['auto_collect_rotate'] ?? 1) === 1;
+
+    /* ---- بودجهٔ زمان کل اجرا (v5.2): در «همهٔ» فازها رعایت می‌شود — کشف منابع + پردازش ----
+       قبلاً گارد زمان فقط در حلقهٔ آخر بود و فاز جمع‌آوری (تا ۱۰ فید × retry + ۶ جستجو + دانلود مقاله‌ها)
+       می‌توانست چند دقیقه طول بکشد و پروسه با timeout کشته شود؛ حالا همه‌جا به ددلاین احترام می‌گذاریم. */
+    $deadline = $startedAt + $timeLimit;
+
+    /* ---- قطع‌کنندهٔ منابع خراب (circuit breaker): منبعی که ۳+ خطای متوالی در ۲۴ ساعت اخیر دارد،
+       این بار skip می‌شود تا اجرا روی هاست‌های با اینترنت خروجی ضعیف سریع تمام شود */
+    $deadSources = [];
+    if (bot_table_ready('bot_sources')) {
+        try {
+            foreach (db()->query("SELECT url FROM bot_sources WHERE consecutive_fails >= 3 AND last_check > DATE_SUB(NOW(), INTERVAL 24 HOUR)") as $dr) $deadSources[$dr['url']] = true;
+        } catch (Throwable $e) {}
+    }
 
     $excludeList = array_filter(array_map('trim', preg_split('/[\n,]+/', $excludeKeywords)));
 
@@ -1119,10 +1154,15 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     };
 
     // 1. منابع RSS معتبر - حداکثر 10 منبع با retry هوشمند + پایش سلامت و زمان پاسخ
+    //    (v5.2: گارد ددلاین + skip منابع خراب + چک توقف توسط مدیر)
     $srcsLimited = array_slice($rotSources, 0, 10);
+    $sourcesSkipped = 0;
     foreach ($srcsLimited as $source) {
+        if (microtime(true) > $deadline - 3) break;               // بودجهٔ زمان تمام شد
+        if (bot_stop_requested()) return $finish(['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'sources_ok' => $sourcesOk, 'sources_failed' => $sourcesFailed, 'status_override' => 'stopped', 'message' => 'اجرا توسط مدیر متوقف شد.']);
         $source = trim((string)$source);
         if ($source === '' || !filter_var($source, FILTER_VALIDATE_URL)) continue;
+        if (isset($deadSources[$source])) { $sourcesSkipped++; continue; } // منبع خراب — این بار امتحان نشود
         $t0 = microtime(true);
         $xml = null;
         $lastErr = '';
@@ -1130,6 +1170,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
             $xml = fetch_url($source, $timeout);
             if ($xml !== null) break;
             $lastErr = 'HTTP fetch failed after ' . ($retry+1) . ' try';
+            if (microtime(true) > $deadline - 3) { $lastErr .= ' (deadline)'; break; } // بین retry هم چک شود
         }
         $host = parse_url($source, PHP_URL_HOST) ?: 'rss';
         $region = bot_region_for_host($host);
@@ -1148,9 +1189,12 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     }
 
     // 2. جستجوی هوشمند - حداکثر 6 کوئری منطقه‌ای (با چرخش بین اجراها)
+    //    (v5.2: گارد ددلاین + چک توقف)
     $queriesLimited = array_slice($queries, 0, 6);
     if (!$queriesLimited) $queriesLimited = ['laptop no power fix', 'motherboard repair', 'tv backlight fix', 'mobile repair india', 'electronics repair china', 'inverter repair'];
     foreach ($queriesLimited as $query) {
+        if (microtime(true) > $deadline - 5) break; // بودجهٔ زمان برای جستجو تمام شد
+        if (bot_stop_requested()) return $finish(['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'sources_ok' => $sourcesOk, 'sources_failed' => $sourcesFailed, 'status_override' => 'stopped', 'message' => 'اجرا توسط مدیر متوقف شد.']);
         $query = trim((string)$query);
         if ($query === '') continue;
         foreach (discover_reddit($query, 3) as $r) $add($r);
@@ -1160,7 +1204,13 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         if (count($candidates) >= $count * 6) break;
     }
 
-    if (!$candidates) return $finish(['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'sources_ok' => $sourcesOk, 'sources_failed' => $sourcesFailed, 'images_downloaded' => 0, 'error' => 'هیچ مطلبی از منابع معتبر (غربی/هندی/چینی) پیدا نشد. اینترنت سرور یا دسترسی به منابع را بررسی کنید.']);
+    if (!$candidates) {
+        $hint = '';
+        if ($sourcesOk === 0 && $sourcesFailed > 0) {
+            $hint = ' سرور شما به هیچ‌کدام از منابع خارجی دسترسی ندارد (احتمالاً خروجی اینترنت هاست بسته/فیلتر است). تب «سلامت منابع» را ببینید یا با پشتیبانی هاست برای باز کردن خروجی HTTPS تماس بگیرید.';
+        }
+        return $finish(['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'sources_ok' => $sourcesOk, 'sources_failed' => $sourcesFailed, 'images_downloaded' => 0, 'error' => 'هیچ مطلبی از منابع معتبر (غربی/هندی/چینی) پیدا نشد.' . $hint]);
+    }
 
     /* ---- امتیازدهی کیفیت (v5.0): کاندیدها بر اساس امتیاز مرتب می‌شوند
        تا ربات همیشه بهترین محتوا را انتخاب کند نه اولین نتیجه را */
@@ -1193,8 +1243,13 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
 
     foreach ($candidates as $c) {
         if ($created >= $count) break;
-        /* گارد زمان (v5.0): اگر زمان مجاز تمام شد، اجرا با همان مقدار تولیدشده تمام می‌شود تا cron نصفه‌کاره نشود */
-        if ((microtime(true) - $startedAt) > $timeLimit) { break; }
+        /* گارد زمان (v5.2): با ددلاین سراسری — اجرا همیشه در سقف زمانی تمام می‌شود */
+        if (microtime(true) > $deadline) break;
+        /* چک توقف توسط مدیر */
+        if (bot_stop_requested()) {
+            bot_set_setting('auto_collect_stop', 0);
+            return $finish(['created' => $created, 'scanned' => $scanned, 'errors' => $errors, 'duplicates' => $duplicates, 'images_downloaded' => $imagesDownloaded, 'sources_ok' => $sourcesOk, 'sources_failed' => $sourcesFailed, 'regions' => $regions, 'status_override' => 'stopped', 'message' => 'اجرا توسط مدیر متوقف شد — ' . fa($created) . ' قلق تا این لحظه ثبت شده بود.']);
+        }
         $scanned++;
 
         $fullText = (string)($c['description'] ?? '');
@@ -1203,7 +1258,8 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         if (!empty($c['images']) && is_array($c['images'])) $remoteImages = $c['images'];
         if (!empty($c['image'])) $remoteImages[] = $c['image'];
 
-        if ($extractFull && !empty($c['url']) && filter_var($c['url'], FILTER_VALIDATE_URL) && !str_contains($c['url'], 'reddit.com')) {
+        /* استخراج متن کامل فقط اگر بودجهٔ زمان باقی باشد (v5.2 — حداقل ۵ ثانیه وقت) */
+        if ($extractFull && !empty($c['url']) && filter_var($c['url'], FILTER_VALIDATE_URL) && !str_contains($c['url'], 'reddit.com') && (microtime(true) < $deadline - 5)) {
             $details = fetch_article_details($c['url']);
             if (mb_strlen($details['text']) > mb_strlen($fullText)) {
                 $fullText = $details['text'];
@@ -1298,7 +1354,10 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
             }
         }
 
-        if (!$images && !$dryRun) { $errors++; continue; }
+        /* v5.2: قلق بدون عکس هم ذخیره می‌شود — کارت‌ها آیکون fallback دارند.
+           قبلاً اینجا errors++ و skip بود که روی هاست‌های با دانلود بلاک‌شده،
+           هیچ قلگی هرگز ثبت نمی‌شد. عکس‌ها فقط امتیاز اضافه‌اند نه شرط. */
+        if (!$images && !$dryRun) { /* بدون عکس ادامه می‌دهیم */ }
 
         // ---- حالت آزمایشی (dry-run): چیزی ذخیره نمی‌شود، فقط گزارش تولید می‌شود
         if ($dryRun) {
@@ -1335,12 +1394,16 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         'images_downloaded' => $imagesDownloaded,
         'sources_ok' => $sourcesOk,
         'sources_failed' => $sourcesFailed,
+        'sources_skipped' => $sourcesSkipped,
         'regions' => $regions,
         'dry_run' => $dryRun,
         'status_used' => $status,
         'message' => $dryRun
             ? 'اجرای آزمایشی انجام شد — ' . fa($created) . ' قلق قابل تولید بود (چیزی ذخیره نشد).'
-            : 'اجرا کامل شد — ' . fa($created) . ' قلق جدید، ' . fa($duplicates) . ' تکراری رد شد.',
+            : 'اجرا کامل شد — ' . fa($created) . ' قلق جدید، ' . fa($duplicates) . ' تکراری رد شد.'
+              . ($sourcesFailed > 0 ? ' · ' . fa($sourcesFailed) . ' منبع در دسترس نبود.' : '')
+              . ($sourcesSkipped > 0 ? ' · ' . fa($sourcesSkipped) . ' منبع خراب رد شد (circuit breaker).' : '')
+              . (($status === 'pending') ? ' · قلق‌ها در حالت «در انتظار بررسی» ذخیره شدند — از تب «محتوای ربات» منتشر کنید.' : ''),
         'settings_used' => ['indian'=>$indianEnabled, 'chinese'=>$chineseEnabled, 'japanese'=>$japaneseEnabled, 'max_images'=>$maxImages, 'save_images'=>$saveImages, 'region_count'=>count($srcsLimited), 'rotate'=>$rotate, 'time_limit'=>$timeLimit],
     ]);
 }
@@ -1730,7 +1793,8 @@ if($action==='admin_collect'){
     if($sets){$pdo->prepare('UPDATE settings SET '.implode(',',$sets).' WHERE id=1')->execute($vals);}
 
     if(!empty($_POST['run_now'])){
-        @set_time_limit(120);
+        @set_time_limit(max(150,$timeLimit+60));
+        bot_cleanup_stale_runs();
         try{
             $extra=[
                 'indian_enabled'=> (bool)$indianEnabled,
@@ -1778,13 +1842,27 @@ if($action==='admin_collect'){
         $sources=json_decode_array($s['auto_collect_sources']??'[]');
         $queries=preg_split('/\r?\n/',(string)($s['auto_collect_queries']??''));
         $queries=array_values(array_filter(array_map('trim',$queries)));
-        @set_time_limit(max(120,(int)($s['auto_collect_time_limit']??100)+30));
+        @set_time_limit(max(150, (int)($s['auto_collect_time_limit'] ?? 100) + 60));
         try{
             $extra=['trigger'=>'panel','dry_run'=>$dryRun,'time_limit'=>(int)($s['auto_collect_time_limit']??100),'rotate'=>(int)($s['auto_collect_rotate']??1)===1];
             $result=collect_tips_web($count,$cat,$access,$sources,$queries,$extra);
             $ok=empty($result['error']);
             bk_json_out(['ok'=>$ok,'result'=>$result,'error'=>$result['error']??null]);
         }catch(Throwable $e){ bk_json_out(['ok'=>false,'error'=>'خطای اجرای ربات: '.$e->getMessage()],500); }
+    }
+    /* ---- ربات پیشرفته v5.2: توقف فوری ربات (حتی اگر اجرا گیر کرده باشد) ---- */
+    if($action==='admin_bot_stop'){ $a=require_admin();
+        $ajax=is_ajax_request();
+        bot_set_setting('auto_collect_stop', 1);           // پرچم: هر حلقهٔ زنده خودش را متوقف می‌کند
+        bot_set_setting('auto_collect_lock', null);        // قفل فوراً آزاد می‌شود
+        $stopped=0;
+        if(bot_table_ready('bot_runs')){
+            try{ $q=db()->prepare("UPDATE bot_runs SET status='stopped', message='توسط مدیر متوقف شد', finished_at=NOW() WHERE status='running'"); $q->execute(); $stopped=$q->rowCount(); }catch(Throwable $e){}
+        }
+        $msg='دستور توقف ثبت شد — قفل آزاد شد و '.$stopped.' اجرای در جریان متوقف شد.';
+        if($ajax){ bk_json_out(['ok'=>true,'message'=>$msg]); }
+        flash($msg);
+        redirect_to('admin?tab=collect');
     }
     /* ---- ربات پیشرفته v5.0: عملیات سریع روی قلق‌های ربات از پنل ---- */
     if($action==='admin_bot_tip'){ $a=require_admin();
@@ -1834,8 +1912,9 @@ if($page==='admin-actionbar'&&is_file(__DIR__.'/php-extended/bk_actionbar.php'))
 if(in_array($page,['admin-boards','admin-users','admin-tips'],true)&&is_file(__DIR__.'/php-extended/bk_admin_extra.php')){$GLOBALS['bkx_page']=$page;require __DIR__.'/php-extended/bk_admin_extra.php';exit;}
 
 if($page==='serve'||$page==='serve.php'){require __DIR__.'/serve.php';exit;}
-if($page==='cron-collect'){ $s=settings();$key=(string)($_GET['key']??'');$enabled=(int)($s['auto_collect_enabled']??0);$cronKey=(string)($s['auto_collect_cron_key']??'');if(!$enabled||$cronKey===''||!hash_equals($cronKey,$key)){http_response_code(403);exit('forbidden');}$count=max(1,min(100,(int)($s['auto_collect_count']??10)));$cat=(int)($s['auto_collect_category']??0);$access=in_array($s['auto_collect_access']??'free',['free','like','paid'],true)?$s['auto_collect_access']:'free';$sources=json_decode_array($s['auto_collect_sources']??'[]');$queries=preg_split('/\r?\n/',(string)($s['auto_collect_queries']??''));$queries=array_values(array_filter(array_map('trim',$queries)));@set_time_limit(max(120,(int)($s['auto_collect_time_limit']??100)+30));$result=collect_tips_web($count,$cat,$access,$sources,$queries,['trigger'=>'cron','time_limit'=>(int)($s['auto_collect_time_limit']??100),'rotate'=>(int)($s['auto_collect_rotate']??1)===1]);header('Content-Type: application/json; charset=utf-8');echo json_encode($result,JSON_UNESCAPED_UNICODE);exit; }
+if($page==='cron-collect'){ $s=settings();$key=(string)($_GET['key']??'');$enabled=(int)($s['auto_collect_enabled']??0);$cronKey=(string)($s['auto_collect_cron_key']??'');if(!$enabled||$cronKey===''||!hash_equals($cronKey,$key)){http_response_code(403);exit('forbidden');}$count=max(1,min(100,(int)($s['auto_collect_count']??10)));$cat=(int)($s['auto_collect_category']??0);$access=in_array($s['auto_collect_access']??'free',['free','like','paid'],true)?$s['auto_collect_access']:'free';$sources=json_decode_array($s['auto_collect_sources']??'[]');$queries=preg_split('/\r?\n/',(string)($s['auto_collect_queries']??''));$queries=array_values(array_filter(array_map('trim',$queries)));@set_time_limit(max(150,(int)($s['auto_collect_time_limit']??100)+60));try{$result=collect_tips_web($count,$cat,$access,$sources,$queries,['trigger'=>'cron','time_limit'=>(int)($s['auto_collect_time_limit']??100),'rotate'=>(int)($s['auto_collect_rotate']??1)===1]);}catch(Throwable $e){$result=['created'=>0,'scanned'=>0,'errors'=>1,'error'=>'خطای cron: '.$e->getMessage()];}header('Content-Type: application/json; charset=utf-8');echo json_encode($result,JSON_UNESCAPED_UNICODE);exit; }
 if($page==='ajax-bot-status'){ require_admin();
+    bot_cleanup_stale_runs();
     $botQ=db()->prepare("SELECT id FROM users WHERE phone='09100000000' LIMIT 1");$botQ->execute();$botId=(int)$botQ->fetchColumn();
     $kpi=['total'=>0,'published'=>0,'pending'=>0,'week'=>0];
     if($botId){
@@ -2850,7 +2929,7 @@ if($page==='tour'){
         <a class="btn btn-secondary" href="<?=url('boards')?>">🏪 فروشگاه</a>
         <a class="btn btn-secondary" href="<?=url('tickets')?>">✉ پشتیبانی</a>
       </div>
-      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - ربات پیشرفته + پنل حرفه‌ای مدیر/کاربران v5.1</p>
+      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - ربات پیشرفته + پنل حرفه‌ای مدیر/کاربران v5.2</p>
     </div>
   </section>
 </main><?php footer_html();exit; }

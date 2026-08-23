@@ -58,6 +58,7 @@ function bk_schema_columns(): array {
         ['settings', 'auto_collect_rotate', 'TINYINT(1) NOT NULL DEFAULT 1'],
         ['settings', 'auto_collect_last_offset', 'INT NOT NULL DEFAULT 0'],
         ['settings', 'auto_collect_lock', 'DATETIME NULL'],
+        ['settings', 'auto_collect_stop', 'TINYINT(1) NOT NULL DEFAULT 0'],
         ['bk_gateway_payments', 'order_id', 'VARCHAR(190) NULL'],
     ];
 }

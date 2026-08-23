@@ -174,6 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('settings', 'auto_collect_rotate', 'auto_collect_rotate TINYINT(1) NOT NULL DEFAULT 1');
                     $ensureColumn('settings', 'auto_collect_last_offset', 'auto_collect_last_offset INT NOT NULL DEFAULT 0');
                     $ensureColumn('settings', 'auto_collect_lock', 'auto_collect_lock DATETIME NULL');
+                    $ensureColumn('settings', 'auto_collect_stop', 'auto_collect_stop TINYINT(1) NOT NULL DEFAULT 0');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');
