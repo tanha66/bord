@@ -14,6 +14,7 @@ function bk_schema_columns(): array {
         ['users', 'landline', 'VARCHAR(30) NULL'], ['users', 'mobile', 'VARCHAR(30) NULL'],
         ['users', 'city', 'VARCHAR(100) NULL'], ['users', 'support_group', 'VARCHAR(80) NULL'],
         ['users', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['users', 'email_verified', 'TINYINT(1) NOT NULL DEFAULT 0'],
         ['board_orders', 'full_name', 'VARCHAR(160) NULL'], ['board_orders', 'phone', 'VARCHAR(30) NULL'],
         ['board_orders', 'address', 'TEXT NULL'], ['board_orders', 'city', 'VARCHAR(100) NULL'],
         ['board_orders', 'postal_code', 'VARCHAR(20) NULL'], ['board_orders', 'carrier', 'VARCHAR(40) NULL'],
@@ -42,6 +43,16 @@ function bk_schema_columns(): array {
 /** جدول‌های ماژول‌ها: [نام جدول => DDL] */
 function bk_schema_tables(): array {
     return [
+        'email_codes' => "CREATE TABLE email_codes (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(190) NOT NULL,
+            code VARCHAR(10) NOT NULL,
+            purpose VARCHAR(20) NOT NULL DEFAULT 'gate',
+            expires_at DATETIME NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_email_codes_email (email, purpose),
+            INDEX idx_email_codes_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         'tickets' => "CREATE TABLE tickets (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NOT NULL,
             destination VARCHAR(20) NOT NULL DEFAULT 'support', seller_id INT UNSIGNED NULL,

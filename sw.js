@@ -1,8 +1,5 @@
-const CACHE = 'bordkhan-pwa-v3';
-const ASSETS = ['/', '/assets/style.css', '/assets/icon-192.png', '/assets/icon-512.png'];
-
-// صفحاتی که محتوای شخصی دارند یا فرم دارند هرگز کش نمی‌شوند
-const NO_CACHE_PREFIXES = ['/api/', '/admin', '/wallet', '/serve', '/tickets', '/notifications', '/settings', '/profile', '/upload', '/my-', '/bookmarks', '/favorites', '/login', '/register', '/verify', '/forgot', '/contact'];
+const CACHE = 'bordkhan-pwa-v5';
+const ASSETS = ['/assets/style.css', '/assets/icon-192.png', '/assets/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
@@ -20,9 +17,9 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
-  if (NO_CACHE_PREFIXES.some(p => url.pathname.startsWith(p) || url.pathname === p.slice(0, -1))) return;
 
-  // فایل‌های استاتیک: cache-first
+  // v5.5: صفحات HTML هرگز کش نمی‌شوند (مشکل «لاگ‌اوت نمی‌شود» به‌خاطر کش صفحهٔ خانه بود)
+  // فقط فایل‌های استاتیک کش می‌شوند.
   if (url.pathname.startsWith('/assets/')) {
     e.respondWith(
       caches.match(req).then(r => r || fetch(req).then(res => {
@@ -34,12 +31,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // صفحات HTML: شبکه-اول، در نبود شبکه از کش
+  // بقیهٔ درخواست‌ها: مستقیم شبکه؛ fallback آفلاین فقط برای ریشه
   e.respondWith(
-    fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
-      return res;
-    }).catch(() => caches.match(req).then(r => r || caches.match('/')))
+    fetch(req).catch(() => caches.match('/').then(r => r || Response.error()))
   );
 });

@@ -28,13 +28,13 @@ foreach($requiredFiles as $f){
 
 // 2. بررسی index.php برای routeهای اصلی
 $index = file_get_contents(__DIR__.'/../index.php');
-$routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
+$routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','verify-email','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
 foreach($routes as $r){
     add_test("Route $r", strpos($index, "'$r'")!==false || strpos($index, "\"$r\"")!==false, strpos($index, "'$r'")!==false ? 'یافت شد' : 'یافت نشد');
 }
 
 // 3. بررسی اکشن‌های POST
-$actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','my_tip_toggle','my_tip_resubmit','admin_tip_edit','admin_tip_delete','unlock','comment','rate','follow','repair_answer','repair_best','report','comment_vote','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create'];
+$actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','my_tip_toggle','my_tip_resubmit','admin_tip_edit','admin_tip_delete','unlock','comment','rate','follow','repair_answer','repair_best','report','comment_vote','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','email_code_send','email_code_verify','email_code_resend','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create'];
 foreach($actions as $a){
     add_test("Action $a", strpos($index, "'$a'")!==false, strpos($index, "'$a'")!==false ? 'موجود' : 'ناموجود - ممکن است باگ باشد');
 }

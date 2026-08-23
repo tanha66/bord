@@ -2,7 +2,7 @@
 require __DIR__ . '/config.php';
 
 /* نسخهٔ کد — برای تشخیص اینکه سرور واقعاً کدام نسخه را اجرا می‌کند */
-if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.4');
+if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.5');
 
 /* ---------- helper های مقاوم — حتی اگر config.php سرور قدیمی باشد ---------- */
 if (!function_exists('mb_strlen')) {
@@ -118,6 +118,77 @@ function json_decode_array($value): array { $r = json_decode((string)$value, tru
 function clean_text(string $text): string { return trim(strip_tags($text)); }
 function safe_rich(string $html): string { $html=strip_tags($html,'<p><br><b><strong><i><em><h2><h3><ul><ol><li><blockquote><code>'); return preg_replace_callback('/<\\/?\\s*([a-z0-9]+)(?:\\s[^>]*)?>/i', function($m){ return str_starts_with($m[0],'</') ? '</'.$m[1].'>' : '<'.$m[1].'>'; }, $html) ?? ''; }
 function staff(?array $u): bool { return $u && in_array($u['role'], ['moderator','admin','superadmin'], true); }
+/* ================== ایمیل و کد تأیید (v5.5) ================== */
+/** ارسال ایمیل HTML با mail() هاست اشتراکی */
+function bk_send_mail(string $to, string $subject, string $bodyHtml): bool {
+    $to = strtolower(trim($to));
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL) || !function_exists('mail')) return false;
+    $host = (string)(parse_url(SITE_URL, PHP_URL_HOST) ?: 'localhost');
+    $host = preg_replace('/^www\./i', '', $host);
+    $from = 'no-reply@' . $host;
+    $headers = "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\nFrom: =?UTF-8?B?" . base64_encode('بردخان') . "?= <{$from}>\r\nReply-To: {$from}\r\nX-Mailer: Bordkhan";
+    $body = '<!doctype html><html lang="fa" dir="rtl"><body style="margin:0;background:#f2f5f8;padding:24px"><div style="max-width:520px;margin:auto;background:#fff;border-radius:14px;padding:26px;border:1px solid #e3e8ee;direction:rtl;text-align:right;font-family:Tahoma,Arial;line-height:2.1"><div style="font-size:20px;font-weight:900;color:#078659;margin-bottom:10px">⌁ بردخان</div>' . $bodyHtml . '<hr style="border:0;border-top:1px solid #eef1f4;margin:18px 0"><p style="font-size:11px;color:#8b98a5;margin:0">این ایمیل به‌صورت خودکار ارسال شده است؛ لطفاً پاسخ ندهید.</p></div></body></html>';
+    $encSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    return @mail($to, $encSubject, $body, $headers);
+}
+/** ماسک ایمیل برای نمایش: al***@gmail.com */
+function bk_mask_email(string $email): string {
+    $p = explode('@', $email);
+    if (count($p) !== 2) return '***';
+    $l = mb_substr($p[0], 0, min(2, mb_strlen($p[0])));
+    return $l . '***@' . $p[1];
+}
+/** ارسال کد ۶ رقمی به ایمیل (انقضا ۱۰ دقیقه، حداکثر ۳ کد در ۱۰ دقیقه) */
+function bk_send_email_code(string $email, string $purpose): array {
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return ['ok' => false, 'error' => 'آدرس ایمیل معتبر نیست.'];
+    $pdo = db();
+    try {
+        $q = $pdo->prepare("SELECT COUNT(*) FROM email_codes WHERE email=? AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+        $q->execute([$email]);
+        if ((int)$q->fetchColumn() >= 3) return ['ok' => false, 'error' => 'تعداد درخواست کد زیاد است؛ چند دقیقه بعد دوباره امتحان کنید.'];
+        $code = (string)random_int(100000, 999999);
+        $pdo->prepare('DELETE FROM email_codes WHERE email=? AND purpose=?')->execute([$email, $purpose]);
+        $pdo->prepare('INSERT INTO email_codes(email,code,purpose,expires_at) VALUES(?,?,?,DATE_ADD(NOW(), INTERVAL 10 MINUTE))')->execute([$email, $code, $purpose]);
+    } catch (Throwable $e) {
+        return ['ok' => false, 'error' => 'خطای دیتابیس در ثبت کد: ' . $e->getMessage()];
+    }
+    $titles = ['register' => 'تأیید ثبت‌نام', 'gate' => 'تأیید ایمیل'];
+    $title = $titles[$purpose] ?? 'تأیید';
+    $sent = bk_send_mail(
+        $email,
+        'کد تأیید بردخان — ' . $title,
+        '<h2 style="margin:0 0 10px;font-size:15px">کد تأیید ' . $title . '</h2><p style="font-size:13px;color:#334155;margin:0 0 14px">کد تأیید شما:</p><div style="font-size:30px;font-weight:900;letter-spacing:8px;color:#078659;background:#ecfdf5;border:1px dashed #078659;border-radius:12px;padding:12px 18px;text-align:center;direction:ltr">' . $code . '</div><p style="font-size:12px;color:#64748b;margin:14px 0 0">این کد ۱۰ دقیقه اعتبار دارد. اگر شما درخواست نکرده‌اید این ایمیل را نادیده بگیرید.</p>'
+    );
+    if (!$sent) return ['ok' => false, 'error' => 'ارسال ایمیل روی سرور ممکن نشد (تابع mail غیرفعال است). با پشتیبانی هاست تماس بگیرید.'];
+    return ['ok' => true];
+}
+/** بررسی صحت کد ایمیل + حذف پس از استفاده */
+function bk_check_email_code(string $email, string $code, string $purpose): bool {
+    $email = strtolower(trim($email));
+    $code = preg_replace('/\D/', '', (string)$code);
+    if (mb_strlen($code) !== 6) return false;
+    try {
+        $q = db()->prepare('SELECT id FROM email_codes WHERE email=? AND code=? AND purpose=? AND expires_at > NOW() LIMIT 1');
+        $q->execute([$email, $code, $purpose]);
+        $id = $q->fetchColumn();
+        if (!$id) return false;
+        db()->prepare('DELETE FROM email_codes WHERE id=?')->execute([(int)$id]);
+        return true;
+    } catch (Throwable $e) { return false; }
+}
+/** آیا کاربر ایمیلش تأیید شده؟ */
+function email_verified(?array $u): bool {
+    return $u && !empty($u['email']) && (int)($u['email_verified'] ?? 0) === 1;
+}
+/** دروازهٔ تأیید ایمیل برای خرید/ثبت قلق */
+function bk_require_email_verified(array $u, string $backUrl, bool $ajax = false): void {
+    if (email_verified($u)) return;
+    $_SESSION['email_gate'] = ['back' => $backUrl];
+    if ($ajax) bk_json_out(['ok' => false, 'error' => 'برای ادامه باید ایمیل خود را تأیید کنید — کد تأیید به ایمیل شما ارسال شد.', 'need_verify' => true, 'url' => url('verify-email')], 403);
+    flash('برای خرید یا ثبت قلق ابتدا باید ایمیل خود را تأیید کنید. کد تأیید به ایمیل شما ارسال شد.', 'error');
+    redirect_to('verify-email');
+}
 function admin_user(?array $u): bool { return $u && in_array($u['role'], ['admin','superadmin'], true); }
 function current_user(): ?array { static $user = false; if ($user !== false) return $user; $id = (int)($_SESSION['user_id'] ?? 0); if (!$id) return $user = null; $s = db()->prepare('SELECT * FROM users WHERE id=? LIMIT 1'); $s->execute([$id]); $u = $s->fetch() ?: null; if ($u && !empty($u['is_deleted'])) $u = null; return $user = $u; }
 function require_login(): array { $u = current_user(); if (!$u) { flash('برای انجام این عملیات ابتدا وارد شوید.', 'error'); redirect_to('login'); } if ((int)$u['is_banned']) exit('حساب کاربری شما مسدود شده است.'); return $u; }
@@ -287,7 +358,7 @@ function order_status_label(string $s): string { return ['paid'=>'پرداخت �
 function leaf_categories(): array { $rows = db()->query("SELECT id,parent_id,name FROM categories WHERE status='active' ORDER BY sort_order,name")->fetchAll(); $byParent=[]; $byId=[]; foreach($rows as $r){ $byParent[(int)$r['parent_id']][]=$r; $byId[(int)$r['id']]=$r; } $out=[]; foreach($rows as $r){ $hasKids = !empty($byParent[(int)$r['id']]); if(!$hasKids){ $path=[]; $cur=$r; while($cur && ($cur['parent_id'])){ $path[]= $cur['name']; $cur = $byId[(int)$cur['parent_id']] ?? null; } if($cur){$path[]=$cur['name'];} $out[]=['id'=>(int)$r['id'],'label'=>implode(' ← ',array_reverse($path))]; } } return $out; }
 function board_card(array $b): void { $imgs = json_decode_array($b['images_json'] ?? '[]'); ?><a class="card tcard" href="<?=url('board/'.(int)$b['id'])?>"><div class="timg"><?php if($imgs):?><img loading="lazy" src="<?=h($imgs[0])?>" alt="<?=h($b['title'])?>"><?php else:?><div style="height:100%;display:grid;place-items:center;font-size:42px">🔩</div><?php endif;?><div class="badges"><span class="pill green"><?=h(board_condition_label($b['condition_status']))?></span><?php if($b['status']==='sold'):?><span class="pill rose">فروخته شد</span><?php endif;?></div></div><div class="tbody"><h3><?=h($b['title'])?></h3><div class="tmeta"><?php if(!empty($b['brand'])):?><span class="pill"><?=h($b['brand'])?></span><?php endif;?><?php if(!empty($b['model'])):?><span class="pill"><?=h($b['model'])?></span><?php endif;?></div><div class="tfoot"><strong style="color:var(--accent);font-size:16px"><?=money($b['price'])?> تومان</strong><span class="muted" style="margin-right:auto;font-size:11px">👁 <?=fa($b['views'])?></span></div></div></a><?php }
 function tip_card(array $t): void { $imgs=tip_images($t); $rating=((int)$t['rating_count']>0)?round((int)$t['rating_sum']/(int)$t['rating_count'],1):0; $locked=!tip_has_access($t,current_user()); ?><a class="card tip-card" href="<?=url('tip/'.$t['id'])?>"><div class="tip-img"><?php if($imgs):?><img loading="lazy" src="<?=h(media_url($imgs[0], 'thumb', (int)$t['id']))?>" alt="<?=h($t['title'])?>" class="<?=$locked?'bk-blur':''?>"><?php if($locked):?><span class="bk-lockbadge" title="<?=h($t['access_type']==='paid'?'پس از خرید نمایش داده می‌شود':'پس از لایک نمایش داده می‌شود')?>"><?=$t['access_type']==='paid'?'💰':'♥'?></span><?php endif;?><?php else:?><div style="height:100%;display:grid;place-items:center;font-size:45px">🔧</div><?php endif;?><div class="badges"><span class="pill <?=h($t['access_type']==='paid'?'amber':($t['access_type']==='like'?'rose':'green'))?>"><?=h(access_label($t['access_type'],(int)$t['price']))?></span><?php if((int)$t['featured']):?><span class="pill amber">★ منتخب</span><?php endif;?></div></div><div class="tip-body"><h3><?=h($t['title'])?></h3><p><?=h($t['short_description'])?></p><div class="tip-meta"><span class="pill"><?=h(['easy'=>'آسان','medium'=>'متوسط','hard'=>'سخت'][$t['difficulty']??'medium']??'متوسط')?></span><span class="pill">◉ <?=fa($t['views'])?></span><?php if($rating):?><span class="pill amber">★ <?=fa($rating)?></span><?php endif;?></div><div class="tip-footer"><span class="avatar small"><?=h(mb_substr($t['author_name']??'؟',0,1))?></span><small class="muted"><?=h($t['author_name']??'تعمیرکار')?></small><?php if(!empty($t['verified'])):?><span class="check">✓</span><?php endif;?><?php if(has_favorite((int)$t['id'], current_user())):?><span title="علاقه‌مندی من" style="margin-right:auto;color:#d94258">♥</span><?php endif;?></div></div></a><?php }
-function header_html(string $title=''): void { $u=current_user(); $s=settings(); $active=bk_route(); ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="<?=h(($s['meta_description'] ?? 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی'))?>"><?php if(!empty($s['meta_keywords'])):?><meta name="keywords" content="<?=h($s['meta_keywords'])?>"><?php endif;?><meta name="theme-color" content="#078659"><meta property="og:type" content="website"><meta property="og:site_name" content="<?=h($s['site_title'] ?? SITE_NAME)?>"><meta property="og:title" content="<?=h($title ?: ($s['site_title'] ?? SITE_NAME))?>"><meta property="og:description" content="<?=h(($s['meta_description'] ?? 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی'))?>"><?php if(!empty($s['og_image'])):?><meta property="og:image" content="<?=h($s['og_image'])?>"><?php endif;?><meta name="twitter:card" content="summary_large_image"><link rel="manifest" href="<?=url('manifest.webmanifest')?>"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="<?=h($s['site_title'] ?? SITE_NAME)?>"><link rel="apple-touch-icon" href="<?=url('assets/icon-192.png')?>"><title><?=h($title ? $title.' | '.($s['site_title'] ?? SITE_NAME) : ($s['site_title'] ?? SITE_NAME).' — بازار قلق‌های تعمیراتی')?></title><script>
+function header_html(string $title=''): void { $u=current_user(); $s=settings(); $active=bk_route(); if ($u) { @header('Cache-Control: no-store, max-age=0'); @header('Vary: Cookie'); } ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="<?=h(($s['meta_description'] ?? 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی'))?>"><?php if(!empty($s['meta_keywords'])):?><meta name="keywords" content="<?=h($s['meta_keywords'])?>"><?php endif;?><meta name="theme-color" content="#078659"><meta property="og:type" content="website"><meta property="og:site_name" content="<?=h($s['site_title'] ?? SITE_NAME)?>"><meta property="og:title" content="<?=h($title ?: ($s['site_title'] ?? SITE_NAME))?>"><meta property="og:description" content="<?=h(($s['meta_description'] ?? 'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی'))?>"><?php if(!empty($s['og_image'])):?><meta property="og:image" content="<?=h($s['og_image'])?>"><?php endif;?><meta name="twitter:card" content="summary_large_image"><link rel="manifest" href="<?=url('manifest.webmanifest')?>"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="<?=h($s['site_title'] ?? SITE_NAME)?>"><link rel="apple-touch-icon" href="<?=url('assets/icon-192.png')?>"><title><?=h($title ? $title.' | '.($s['site_title'] ?? SITE_NAME) : ($s['site_title'] ?? SITE_NAME).' — بازار قلق‌های تعمیراتی')?></title><script>
 (function(){
   try{
     if(localStorage.getItem('bk_theme')==='light'){document.documentElement.setAttribute('data-theme','light')}
@@ -341,6 +412,37 @@ if(typeof bkFilterSelect!=='function'){function bkFilterSelect(inp){var sel=inp.
 /* زنگولهٔ اعلان‌ها */
 (function(){var bell=document.getElementById('notifBell');if(!bell)return;var drop=document.getElementById('notifDrop');var badge=document.getElementById('notifBadge');var list=document.getElementById('notifList');
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+/* v5.5: فرم‌های AJAX — ارسال بدون رفرش با بازخورد درجا */
+if(!window.__bkAjaxForms){window.__bkAjaxForms=true;(function(){
+  function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+  document.addEventListener('submit',function(e){
+    var f=e.target;if(!f||!f.classList||!f.classList.contains('bk-ajax'))return;
+    e.preventDefault();
+    var msg=f.querySelector('.bk-ajax-msg');
+    var btns=f.querySelectorAll('button[type=submit],button:not([type])');
+    var btn=btns.length?btns[btns.length-1]:null;
+    var orig=btn?btn.innerHTML:'';
+    if(btn){btn.disabled=true;btn.dataset.bkOrig=orig;btn.innerHTML='⏳ لطفاً صبر کنید…';}
+    fetch(window.location.href,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'},body:new FormData(f)})
+      .then(function(r){return r.json().catch(function(){throw new Error('پاسخ سرور قابل خواندن نبود');});})
+      .then(function(j){
+        if(j&&j.ok){
+          if(j.url){if(msg)msg.innerHTML='<div class="notice">✅ '+esc(j.message||'در حال انتقال…')+'</div>';window.location.href=j.url;return;}
+          if(j.reload){window.location.reload();return;}
+          if(msg)msg.innerHTML='<div class="notice">✅ '+esc(j.message||'انجام شد')+'</div>';
+          if(btn){btn.disabled=false;btn.innerHTML=orig;}
+        }else{
+          if(j&&j.need_verify&&j.url){window.location.href=j.url;return;}
+          if(msg)msg.innerHTML='<div class="notice error">⚠️ '+esc((j&&j.error)||'خطای نامشخص')+'</div>';
+          if(btn){btn.disabled=false;btn.innerHTML=orig;}
+        }
+      })
+      .catch(function(err){
+        if(msg)msg.innerHTML='<div class="notice error">⚠️ '+esc(err.message||err)+'</div>';
+        if(btn){btn.disabled=false;btn.innerHTML=orig;}
+      });
+  });
+})();()}
 function load(){fetch('/ajax-notifications',{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json().catch(function(){return null;});}).then(function(j){if(!j)return;if(j.unread>0){badge.hidden=false;badge.textContent=j.unread>99?'99+':j.unread;}else{badge.hidden=true;}if(j.items&&j.items.length){var h='';j.items.forEach(function(n){h+='<a class="notif-item" href="/notifications"><strong>'+esc(n.title)+'</strong><small>'+esc(n.body)+' · '+esc(n.ago)+'</small></a>';});list.innerHTML=h;}else{list.innerHTML='<div class="notif-empty">اعلان جدیدی ندارید ✓</div>';}}).catch(function(){});}
 bell.addEventListener('click',function(e){e.stopPropagation();drop.hidden=!drop.hidden;if(!drop.hidden)load();});
 document.addEventListener('click',function(e){if(drop&&!drop.hidden&&!e.target.closest('#notifWrap'))drop.hidden=true;});
@@ -487,10 +589,32 @@ function footer_html(): void { ?><footer class="footer"><div class="wrap footer-
 
 $action = $_POST['action'] ?? '';
 if ($_SERVER['REQUEST_METHOD']==='POST' && $action) { check_csrf(); $pdo=db();
-    if($action==='login'){ $id=trim($_POST['identifier']??'');$pass=(string)($_POST['password']??'');if(!throttle('login:'.md5($id),5,600)){flash('تلاش‌های ناموفق زیاد است؛ ۱۰ دقیقه بعد دوباره امتحان کنید.','error');redirect_to('login');}$s=$pdo->prepare('SELECT * FROM users WHERE phone=? OR email=? LIMIT 1');$s->execute([$id,$id]);$u=$s->fetch();if(!$u||!empty($u['is_deleted'])||!password_verify($pass,$u['password_hash'])){flash('اطلاعات ورود اشتباه است.','error');redirect_to('login');}if($u['is_banned'])exit('حساب شما مسدود شده است.');throttle_clear('login:'.md5($id));session_regenerate_id(true);$_SESSION['user_id']=$u['id'];$pdo->prepare('UPDATE users SET last_login=NOW() WHERE id=?')->execute([$u['id']]);redirect_to('');}
-    if($action==='register'){ $name=clean_text($_POST['name']??'');$phone=preg_replace('/[^0-9]/','',$_POST['phone']??'');$email=trim($_POST['email']??'');$pass=(string)($_POST['password']??'');$ref=trim($_POST['referral']??'');if(mb_strlen($name)<3||!preg_match('/^09[0-9]{9}$/',$phone)||mb_strlen($pass)<6){flash('نام، شماره موبایل یا رمز عبور معتبر نیست.','error');redirect_to('register');}$s=$pdo->prepare('SELECT id FROM users WHERE phone=? LIMIT 1');$s->execute([$phone]);if($s->fetch()){flash('این شماره قبلاً ثبت شده است.','error');redirect_to('register');}$referrer=null;if($ref){$q=$pdo->prepare('SELECT id FROM users WHERE referral_code=?');$q->execute([$ref]);$referrer=$q->fetchColumn()?:null;}$_SESSION['pending_register']=['name'=>$name,'phone'=>$phone,'email'=>$email?:null,'hash'=>password_hash($pass,PASSWORD_DEFAULT),'referred_by'=>$referrer];$_SESSION['demo_code']=(string)random_int(100000,999999);redirect_to('verify');}
-    if($action==='verify'){ $p=$_SESSION['pending_register']??null;if(!$p){flash('ابتدا فرم ثبت‌نام را تکمیل کنید.','error');redirect_to('register');}if(!throttle('verify',8,900)){flash('تلاش‌های ناموفق زیاد است؛ ۱۵ دقیقه بعد دوباره امتحان کنید.','error');redirect_to('verify');}if(($_POST['code']??'')!==($_SESSION['demo_code']??'')){flash('کد تأیید اشتباه است.','error');redirect_to('verify');}throttle_clear('verify');$code='USR'.strtoupper(bin2hex(random_bytes(3)));$s=$pdo->prepare('INSERT INTO users(phone,email,password_hash,name,referral_code,referred_by,phone_verified) VALUES(?,?,?,?,?,?,1)');$s->execute([$p['phone'],$p['email'],$p['hash'],$p['name'],$code,$p['referred_by']]);$uid=(int)$pdo->lastInsertId();if($p['referred_by'])credit($uid,(int)settings()['invitee_credit'],'referral_invitee','اعتبار خوش‌آمدگویی ثبت‌نام');session_regenerate_id(true);$_SESSION['user_id']=$uid;unset($_SESSION['pending_register'],$_SESSION['demo_code']);redirect_to('');}
-    if($action==='logout'){session_destroy();redirect_to('');}
+    if($action==='login'){ $ajax=is_ajax_request();$id=strtolower(trim($_POST['identifier']??''));$pass=(string)($_POST['password']??'');$fail=function(string $m)use($ajax){if($ajax)bk_json_out(['ok'=>false,'error'=>$m],422);flash($m,'error');redirect_to('login');};if(!throttle('login:'.md5($id),5,600))$fail('تلاش‌های ناموفق زیاد است؛ ۱۰ دقیقه بعد دوباره امتحان کنید.');$s=$pdo->prepare('SELECT * FROM users WHERE phone=? OR email=? LIMIT 1');$s->execute([$id,$id]);$u=$s->fetch();if(!$u||!empty($u['is_deleted'])||!password_verify($pass,$u['password_hash']))$fail('ایمیل/موبایل یا رمز عبور اشتباه است.');if($u['is_banned'])$fail('حساب شما مسدود شده است.');throttle_clear('login:'.md5($id));session_regenerate_id(true);$_SESSION['user_id']=$u['id'];$pdo->prepare('UPDATE users SET last_login=NOW() WHERE id=?')->execute([$u['id']]);if($ajax)bk_json_out(['ok'=>true,'url'=>url(''),'message'=>'خوش آمدید! در حال ورود…']);redirect_to('');}
+    if($action==='register'){ $ajax=is_ajax_request();$name=clean_text($_POST['name']??'');$email=strtolower(trim($_POST['email']??''));$phone=preg_replace('/[^0-9]/','',$_POST['phone']??'');$pass=(string)($_POST['password']??'');$ref=trim($_POST['ref']??'');$fail=function(string $m)use($ajax){if($ajax)bk_json_out(['ok'=>false,'error'=>$m],422);flash($m,'error');redirect_to('register');};
+    /* v5.5: ثبت‌نام با ایمیل — موبایل اختیاری */
+    if(mb_strlen($name)<3||!filter_var($email,FILTER_VALIDATE_EMAIL)||mb_strlen($pass)<6)$fail('نام، ایمیل معتبر و رمز عبور حداقل ۶ کاراکتر لازم است.');
+    if($phone!==''&&!preg_match('/^09[0-9]{9}$/',$phone))$fail('شماره موبایل معتبر نیست (مثال: 09123456789) — یا خالی بگذارید.');
+    $e=$pdo->prepare('SELECT id FROM users WHERE email=? LIMIT 1');$e->execute([$email]);if($e->fetch())$fail('این ایمیل قبلاً ثبت شده است؛ وارد شوید یا ایمیل دیگری بزنید.');
+    if($phone!==''){$p=$pdo->prepare('SELECT id FROM users WHERE phone=? LIMIT 1');$p->execute([$phone]);if($p->fetch())$fail('این شماره موبایل قبلاً ثبت شده است.');}
+    $referrer=null;if($ref){$q=$pdo->prepare('SELECT id FROM users WHERE referral_code=?');$q->execute([$ref]);$referrer=$q->fetchColumn()?:null;}
+    $send=bk_send_email_code($email,'register');if(!$send['ok'])$fail($send['error']);
+    $_SESSION['pending_register']=['name'=>$name,'email'=>$email,'phone'=>$phone?:null,'hash'=>password_hash($pass,PASSWORD_DEFAULT),'referred_by'=>$referrer];
+    if($ajax)bk_json_out(['ok'=>true,'url'=>url('verify'),'message'=>'کد تأیید به ایمیل شما ارسال شد.']);redirect_to('verify');}
+    if($action==='verify'){ $ajax=is_ajax_request();$p=$_SESSION['pending_register']??null;$fail=function(string $m,string $to='verify')use($ajax){if($ajax)bk_json_out(['ok'=>false,'error'=>$m],422);flash($m,'error');redirect_to($to);};
+    if(!$p)$fail('ابتدا فرم ثبت‌نام را تکمیل کنید.','register');
+    if(!throttle('verify',8,900))$fail('تلاش‌های زیاد؛ ۱۵ دقیقه بعد دوباره امتحان کنید.');
+    /* v5.5: کد از ایمیل خوانده می‌شود (نه از نشست) */
+    if(!bk_check_email_code($p['email'],(string)($_POST['code']??''),'register'))$fail('کد تأیید نادرست یا منقضی است — دوباره تلاش کنید یا کد جدید بگیرید.');
+    throttle_clear('verify');
+    $code='USR'.strtoupper(bin2hex(random_bytes(3)));
+    $phone=$p['phone'];
+    $ins=function()use($pdo,$p,$code){$pdo->prepare('INSERT INTO users(phone,email,password_hash,name,referral_code,referred_by,phone_verified,email_verified) VALUES(?,?,?,?,?,?,?,1)')->execute([$p['phone'] ?: 'u-'.bin2hex(random_bytes(5)),$p['email'],$p['hash'],$p['name'],$code,$p['referred_by']]);};
+    try{ $ins(); }catch(Throwable $e){ /* ستون email_verified قدیمی نیست؟ بساز و دوباره */ try{ $pdo->exec('ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0'); }catch(Throwable $e2){} try{ $ins(); }catch(Throwable $e3){ $fail('ساخت حساب ناموفق بود: '.$e3->getMessage(),'register'); } }
+    $uid=(int)$pdo->lastInsertId();
+    if($p['referred_by'])credit($uid,(int)settings()['invitee_credit'],'referral_invitee','اعتبار خوش‌آمدگویی ثبت‌نام');
+    session_regenerate_id(true);$_SESSION['user_id']=$uid;unset($_SESSION['pending_register']);
+    if($ajax)bk_json_out(['ok'=>true,'url'=>url(''),'message'=>'حساب شما ساخته شد — خوش آمدید!']);redirect_to('');}
+    if($action==='logout'){ $_SESSION=[]; if (ini_get('session.use_cookies')) { $p = session_get_cookie_params(); @setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']); } session_destroy(); @header('Clear-Site-Data: "cache"'); redirect_to('?loggedout=' . time()); }
 
     // بازیابی رمز عبور — مرحله ۱: درخواست کد
     if($action==='forgot_request'){
@@ -528,7 +652,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action) { check_csrf(); $pdo=db();
     if($action==='admin_tip_delete'){ require_admin();if(($_POST['confirm']??'')!=='1'){flash('برای حذف نهایی، تأیید لازم است.','error');redirect_to('admin?tab=tips');}else{$tid=(int)($_POST['tip_id']??0);$pdo->prepare('DELETE FROM tips WHERE id=?')->execute([$tid]);flash('قلق برای همیشه حذف شد.');redirect_to('admin?tab=tips');}}
     // ---------- آپلود قلق (ترمیم شده - قبلاً در نسخه ریلز حذف شده بود) ----------
     if($action==='upload_tip' && !empty($_POST['edit_id'])){
-        $u=require_login();
+        $u=require_login();bk_require_email_verified($u,url('upload'));
         $tid=(int)$_POST['edit_id'];
         $existing=$pdo->prepare('SELECT id,author_id FROM tips WHERE id=? LIMIT 1');$existing->execute([$tid]);$ex=$existing->fetch();
         if(!$ex||(int)$ex['author_id']!==(int)$u['id']){flash('عدم دسترسی به ویرایش این قلق.','error');redirect_to('my-tips');}
@@ -539,7 +663,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action) { check_csrf(); $pdo=db();
         flash('تغییرات قلق با موفقیت ذخیره شد.');redirect_to('tip/'.$tid);
     }
     if($action==='upload_tip'){
-        $u=require_login();
+        $u=require_login();bk_require_email_verified($u,url('upload'));
         $ajax=is_ajax_request();
         $bk_fail=function(string $m)use($ajax){
             if($ajax){bk_json_out(['ok'=>false,'error'=>$m],422);}
@@ -585,8 +709,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action) { check_csrf(); $pdo=db();
         $pdo->prepare('INSERT INTO repair_requests(user_id,title,description,device_name,brand,model,reward_type,reward_amount,deadline_days) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$u['id'],$title,$desc,$device,clean_text($_POST['brand']??''),clean_text($_POST['model']??''),$rewardType,$amount,settings()['repair_deadline_days']]);
         flash('درخواست تعمیر ثبت شد.');redirect_to('repair/'.$pdo->lastInsertId());
     }
-    if($action==='unlock'){ $u=require_login();$ajax=is_ajax_request();$tipId=(int)$_POST['tip_id'];$q=$pdo->prepare('SELECT * FROM tips WHERE id=? AND status="published"');$q->execute([$tipId]);$t=$q->fetch();if(!$t){if($ajax)bk_json_out(['ok'=>false,'error'=>'قلق یافت نشد.'],404);exit('قلق یافت نشد');}if((int)$t['author_id']===(int)$u['id']){if($ajax)bk_json_out(['ok'=>false,'error'=>'نمی‌توانید قلق خودتان را باز کنید.']);flash('نمی‌توانید قلق خودتان را باز کنید.','error');redirect_to('tip/'.$tipId);}$q=$pdo->prepare('SELECT id FROM tip_accesses WHERE tip_id=? AND user_id=?');$q->execute([$tipId,$u['id']]);if($q->fetch()){if($ajax)bk_json_out(['ok'=>true,'already'=>true]);redirect_to('tip/'.$tipId);}$access=$t['access_type'];if($access==='paid'){if(!debit($u['id'],(int)$t['price'],'purchase','خرید قلق «'.$t['title'].'»',$tipId)){if($ajax)bk_json_out(['ok'=>false,'error'=>'موجودی کیف پول کافی نیست.','wallet'=>url('wallet')],402);flash('موجودی کیف پول کافی نیست.','error');redirect_to('wallet');} $net=(int)floor($t['price']*(100-(int)settings()['commission_percent'])/100);credit((int)$t['author_id'],$net,'sale','درآمد فروش قلق «'.$t['title'].'»',$tipId);maybe_reward_referrer($u['id']);$type='purchase';}elseif($access==='like'){$today=date('Y-m-d');$used=$u['likes_used_date']===$today?(int)$u['likes_used_today']:0;if($used>=(int)settings()['daily_like_limit']){if($ajax)bk_json_out(['ok'=>false,'error'=>'سقف لایک روزانه شما تمام شده است.']);flash('سقف لایک روزانه شما تمام شده است.','error');redirect_to('tip/'.$tipId);} $pdo->prepare('UPDATE users SET likes_used_today=?,likes_used_date=? WHERE id=?')->execute([$used+1,$today,$u['id']]);$pdo->prepare('UPDATE tips SET likes_count=likes_count+1 WHERE id=?')->execute([$tipId]);award((int)$t['author_id'],(int)(settings()['like_points_reward']??5));$type='like';}else{$type='free';}$pdo->prepare('INSERT INTO tip_accesses(tip_id,user_id,access_type,price_paid,ip) VALUES(?,?,?,?,?)')->execute([$tipId,$u['id'],$type,$t['price']??0,$_SERVER['REMOTE_ADDR']??'']);if($access==='paid'){award_badge((int)$u['id'],'first_purchase');award_badge((int)$t['author_id'],'first_sale');}notify_user((int)$t['author_id'],$access==='paid'?'sale':'like',$access==='paid'?'قلق شما فروخته شد':'قلق شما لایک گرفت',$u['name'].' قلق «'.$t['title'].'» را باز کرد.',url('tip/'.$tipId));if($ajax)bk_json_out(['ok'=>true,'message'=>$access==='paid'?'خرید انجام شد؛ محتوای کامل باز شد.':'لایک ثبت شد؛ محتوای کامل باز شد.','type'=>$access]);redirect_to('tip/'.$tipId);}
-if($action==='comment'){ $u=require_login();$tipId=(int)$_POST['tip_id'];$body=trim($_POST['body']??'');$ajax=is_ajax_request();if(mb_strlen($body)<2){if($ajax)bk_json_out(['ok'=>false,'error'=>'متن نظر کوتاه است.'],422);flash('متن نظر کوتاه است.','error');redirect_to('tip/'.$tipId);} $pdo->prepare('INSERT INTO comments(tip_id,user_id,parent_id,body) VALUES(?,?,?,?)')->execute([$tipId,$u['id'],($_POST['parent_id']??null)?:null,$body]);if($ajax)bk_json_out(['ok'=>true,'message'=>'نظر شما ثبت شد.']);flash('نظر شما ثبت شد.');redirect_to('tip/'.$tipId.'#comments');}if($action==='rate'){ $u=require_login();$tipId=(int)$_POST['tip_id'];$stars=max(1,min(5,(int)$_POST['stars']));$q=$pdo->prepare('SELECT * FROM ratings WHERE tip_id=? AND user_id=?');$q->execute([$tipId,$u['id']]);$old=$q->fetch();if($old){$pdo->prepare('UPDATE ratings SET stars=? WHERE id=?')->execute([$stars,$old['id']]);$pdo->prepare('UPDATE tips SET rating_sum=rating_sum-?+? WHERE id=?')->execute([$old['stars'],$stars,$tipId]);}else{$pdo->prepare('INSERT INTO ratings(tip_id,user_id,stars) VALUES(?,?,?)')->execute([$tipId,$u['id'],$stars]);$pdo->prepare('UPDATE tips SET rating_sum=rating_sum+?,rating_count=rating_count+1 WHERE id=?')->execute([$stars,$tipId]);}flash('امتیاز شما ثبت شد.');redirect_to('tip/'.$tipId.'#rating');}
+    if($action==='unlock'){ $u=require_login();$ajax=is_ajax_request();bk_require_email_verified($u,url('tip/'.((int)($_POST['tip_id']??0))),$ajax);$tipId=(int)$_POST['tip_id'];$q=$pdo->prepare('SELECT * FROM tips WHERE id=? AND status="published"');$q->execute([$tipId]);$t=$q->fetch();if(!$t){if($ajax)bk_json_out(['ok'=>false,'error'=>'قلق یافت نشد.'],404);exit('قلق یافت نشد');}if((int)$t['author_id']===(int)$u['id']){if($ajax)bk_json_out(['ok'=>false,'error'=>'نمی‌توانید قلق خودتان را باز کنید.']);flash('نمی‌توانید قلق خودتان را باز کنید.','error');redirect_to('tip/'.$tipId);}$q=$pdo->prepare('SELECT id FROM tip_accesses WHERE tip_id=? AND user_id=?');$q->execute([$tipId,$u['id']]);if($q->fetch()){if($ajax)bk_json_out(['ok'=>true,'already'=>true]);redirect_to('tip/'.$tipId);}$access=$t['access_type'];if($access==='paid'){if(!debit($u['id'],(int)$t['price'],'purchase','خرید قلق «'.$t['title'].'»',$tipId)){if($ajax)bk_json_out(['ok'=>false,'error'=>'موجودی کیف پول کافی نیست.','wallet'=>url('wallet')],402);flash('موجودی کیف پول کافی نیست.','error');redirect_to('wallet');} $net=(int)floor($t['price']*(100-(int)settings()['commission_percent'])/100);credit((int)$t['author_id'],$net,'sale','درآمد فروش قلق «'.$t['title'].'»',$tipId);maybe_reward_referrer($u['id']);$type='purchase';}elseif($access==='like'){$today=date('Y-m-d');$used=$u['likes_used_date']===$today?(int)$u['likes_used_today']:0;if($used>=(int)settings()['daily_like_limit']){if($ajax)bk_json_out(['ok'=>false,'error'=>'سقف لایک روزانه شما تمام شده است.']);flash('سقف لایک روزانه شما تمام شده است.','error');redirect_to('tip/'.$tipId);} $pdo->prepare('UPDATE users SET likes_used_today=?,likes_used_date=? WHERE id=?')->execute([$used+1,$today,$u['id']]);$pdo->prepare('UPDATE tips SET likes_count=likes_count+1 WHERE id=?')->execute([$tipId]);award((int)$t['author_id'],(int)(settings()['like_points_reward']??5));$type='like';}else{$type='free';}$pdo->prepare('INSERT INTO tip_accesses(tip_id,user_id,access_type,price_paid,ip) VALUES(?,?,?,?,?)')->execute([$tipId,$u['id'],$type,$t['price']??0,$_SERVER['REMOTE_ADDR']??'']);if($access==='paid'){award_badge((int)$u['id'],'first_purchase');award_badge((int)$t['author_id'],'first_sale');}notify_user((int)$t['author_id'],$access==='paid'?'sale':'like',$access==='paid'?'قلق شما فروخته شد':'قلق شما لایک گرفت',$u['name'].' قلق «'.$t['title'].'» را باز کرد.',url('tip/'.$tipId));if($ajax)bk_json_out(['ok'=>true,'message'=>$access==='paid'?'خرید انجام شد؛ محتوای کامل باز شد.':'لایک ثبت شد؛ محتوای کامل باز شد.','type'=>$access]);redirect_to('tip/'.$tipId);}
+if($action==='comment'){ $u=require_login();$tipId=(int)$_POST['tip_id'];$body=trim($_POST['body']??'');$ajax=is_ajax_request();if(mb_strlen($body)<2){if($ajax)bk_json_out(['ok'=>false,'error'=>'متن نظر کوتاه است.'],422);flash('متن نظر کوتاه است.','error');redirect_to('tip/'.$tipId);} $pdo->prepare('INSERT INTO comments(tip_id,user_id,parent_id,body) VALUES(?,?,?,?)')->execute([$tipId,$u['id'],($_POST['parent_id']??null)?:null,$body]);if($ajax)bk_json_out(['ok'=>true,'message'=>'نظر شما ثبت شد.']);flash('نظر شما ثبت شد.');redirect_to('tip/'.$tipId.'#comments');}if($action==='rate'){ $u=require_login();$tipId=(int)$_POST['tip_id'];$stars=max(1,min(5,(int)$_POST['stars']));$q=$pdo->prepare('SELECT * FROM ratings WHERE tip_id=? AND user_id=?');$q->execute([$tipId,$u['id']]);$old=$q->fetch();if($old){$pdo->prepare('UPDATE ratings SET stars=? WHERE id=?')->execute([$stars,$old['id']]);$pdo->prepare('UPDATE tips SET rating_sum=rating_sum-?+? WHERE id=?')->execute([$old['stars'],$stars,$tipId]);}else{$pdo->prepare('INSERT INTO ratings(tip_id,user_id,stars) VALUES(?,?,?)')->execute([$tipId,$u['id'],$stars]);$pdo->prepare('UPDATE tips SET rating_sum=rating_sum+?,rating_count=rating_count+1 WHERE id=?')->execute([$stars,$tipId]);}if(is_ajax_request())bk_json_out(['ok'=>true,'reload'=>true,'message'=>'امتیاز شما ثبت شد ✓']);flash('امتیاز شما ثبت شد.');redirect_to('tip/'.$tipId.'#rating');}
     if($action==='follow'){ $u=require_login();$target=(int)$_POST['user_id'];if($target===$u['id'])redirect_to('profile/'.$target);$q=$pdo->prepare('SELECT id FROM follows WHERE follower_id=? AND following_id=?');$q->execute([$u['id'],$target]);$old=$q->fetchColumn();if($old)$pdo->prepare('DELETE FROM follows WHERE id=?')->execute([$old]);else{$pdo->prepare('INSERT INTO follows(follower_id,following_id) VALUES(?,?)')->execute([$u['id'],$target]);notify_user($target,'follow','دنبال‌کننده جدید',$u['name'].' شما را دنبال کرد.',url('profile/'.$u['id']));}redirect_to($_POST['back']??'');}
     if($action==='repair_answer'){ $u=require_login();$rid=(int)$_POST['request_id'];$body=clean_text($_POST['body']??'');$q=$pdo->prepare('SELECT * FROM repair_requests WHERE id=?');$q->execute([$rid]);$r=$q->fetch();if(!$r||$r['status']!=='open'||(int)$r['user_id']===(int)$u['id']||mb_strlen($body)<10){flash('پاسخ قابل ثبت نیست.','error');redirect_to('repair/'.$rid);} $pdo->prepare('INSERT INTO repair_answers(request_id,user_id,body) VALUES(?,?,?)')->execute([$rid,$u['id'],$body]);$pdo->prepare('UPDATE repair_requests SET answer_count=answer_count+1 WHERE id=?')->execute([$rid]);notify_user((int)$r['user_id'],'repair','پاسخ جدید برای درخواست شما',$u['name'].' به درخواست شما پاسخ داد.',url('repair/'.$rid));flash('پاسخ شما ثبت شد.');redirect_to('repair/'.$rid);}
     if($action==='repair_best'){ $u=require_login();$rid=(int)$_POST['request_id'];$aid=(int)$_POST['answer_id'];$q=$pdo->prepare('SELECT r.*,a.user_id answer_user FROM repair_requests r JOIN repair_answers a ON a.request_id=r.id WHERE r.id=? AND a.id=?');$q->execute([$rid,$aid]);$r=$q->fetch();if(!$r||$r['user_id']!=$u['id']||$r['status']!=='open'){flash('عملیات نامعتبر.','error');redirect_to('repair/'.$rid);} $pdo->prepare("UPDATE repair_requests SET status='closed',best_answer_id=? WHERE id=?")->execute([$aid,$rid]);$pdo->prepare('UPDATE repair_answers SET is_best=1 WHERE id=?')->execute([$aid]);if($r['reward_type']==='money'&&(int)$r['reward_amount']>0&&debit($u['id'],(int)$r['reward_amount'],'repair_payment','پاداش پاسخ منتخب',null,$rid))credit((int)$r['answer_user'],(int)$r['reward_amount'],'repair_reward','پاداش پاسخ منتخب',null,$rid);award((int)$r['answer_user'],50);notify_user((int)$r['answer_user'],'repair','پاسخ شما انتخاب شد','پاسخ شما به عنوان بهترین پاسخ انتخاب شد.',url('repair/'.$rid));flash('بهترین پاسخ انتخاب شد.');redirect_to('repair/'.$rid);}
@@ -599,6 +723,27 @@ if($action==='comment'){ $u=require_login();$tipId=(int)$_POST['tip_id'];$body=t
     if($action==='admin_user'){ $a=require_admin();$id=(int)$_POST['user_id'];$role=$_POST['role']??'member';if(!in_array($role,['member','expert','moderator','admin','superadmin'],true))$role='member';$q=$pdo->prepare('SELECT * FROM users WHERE id=?');$q->execute([$id]);$t=$q->fetch();if(!$t){flash('کاربر یافت نشد.','error');redirect_to('admin?tab=users');}if($t['role']==='superadmin'&&$a['role']!=='superadmin'){flash('فقط سوپرادمین می‌تواند حساب سوپرادمین را تغییر دهد.','error');redirect_to('admin?tab=users');}if($id===(int)$a['id']&&$role!==$a['role']){flash('نمی‌توانید نقش خودتان را تغییر دهید.','error');redirect_to('admin?tab=users');}if($id===(int)$a['id']&&!empty($_POST['banned'])){flash('نمی‌توانید حساب خودتان را مسدود کنید.','error');redirect_to('admin?tab=users');}$name=clean_text($_POST['name']??$t['name']);$phone=preg_replace('/[^0-9]/','',$_POST['phone']??$t['phone']);if(mb_strlen($name)<3)$name=$t['name'];if(!preg_match('/^09\d{9}$/',$phone))$phone=$t['phone'];$pdo->prepare('UPDATE users SET role=?,verified=?,is_banned=?,name=?,phone=? WHERE id=?')->execute([$role,!empty($_POST['verified'])?1:0,!empty($_POST['banned'])?1:0,$name,$phone,$id]);if(!empty($_POST['verified']))award_badge($id,'expert');$delta=(int)($_POST['delta']??0);$note=clean_text($_POST['note']??'')?:'تعدیل توسط مدیر';if($delta!==0&&$id!==(int)$a['id']){if($delta>0){credit($id,$delta,'admin_adjust','شارژ کیف پول توسط مدیر: '.$note);notify_user($id,'wallet','کیف پول شما شارژ شد',money($delta).' تومان توسط مدیر به کیف پول شما اضافه شد.',url('wallet'));}elseif(!debit($id,-$delta,'admin_adjust','کسر از کیف پول توسط مدیر: '.$note)){flash('کسر انجام نشد: موجودی کاربر کافی نیست.','error');}}flash('کاربر به‌روزرسانی شد.');redirect_to('admin?tab=users');}
     if($action==='admin_withdraw'){ require_admin();$id=(int)$_POST['withdrawal_id'];$status=$_POST['status']??'pending';$q=$pdo->prepare('SELECT * FROM withdrawals WHERE id=?');$q->execute([$id]);$w=$q->fetch();if($w&&in_array($status,['paid','rejected','reviewing'],true)){$pdo->prepare('UPDATE withdrawals SET status=?,admin_note=?,reviewed_at=IF(? IN ("paid","rejected"),NOW(),NULL) WHERE id=?')->execute([$status,clean_text($_POST['note']??''),$status,$id]);if($status==='rejected')credit((int)$w['user_id'],(int)$w['amount'],'withdrawal_cancel','برگشت تسویه رد شده');notify_user((int)$w['user_id'],'wallet','وضعیت تسویه تغییر کرد',$status==='paid'?'تسویه شما واریز شد.':($status==='rejected'?'تسویه رد شد و مبلغ برگشت داده شد.':'درخواست تسویه در حال بررسی است.'),url('wallet'));}redirect_to('admin?tab=withdrawals');}
     if(!function_exists('unsplash_img')) { function unsplash_img(string $q, int $w=1200): ?string { $u = 'https://source.unsplash.com/'.$w.'x800/?'.rawurlencode($q); return fetch_url($u, 10) ? $u : null; } }
+/* ---------- v5.5: کد تأیید ایمیل برای کاربران واردشده ---------- */
+if($action==='email_code_resend'){ require_login();
+    $p=$_SESSION['pending_register']??null; if(!$p)bk_json_out(['ok'=>false,'error'=>'نشست ثبت‌نام یافت نشد؛ دوباره ثبت‌نام کنید.'],422);
+    $send=bk_send_email_code((string)$p['email'],'register');
+    if(!$send['ok'])bk_json_out(['ok'=>false,'error'=>$send['error']],429);
+    bk_json_out(['ok'=>true,'message'=>'کد جدید به '.bk_mask_email((string)$p['email']).' ارسال شد.']);
+}
+if($action==='email_code_send'){ $u=require_login();
+    if(email_verified($u)){ bk_json_out(['ok'=>true,'message'=>'ایمیل شما از قبل تأیید شده است.']); }
+    $send=bk_send_email_code((string)$u['email'],'gate');
+    if(!$send['ok'])bk_json_out(['ok'=>false,'error'=>$send['error']],429);
+    bk_json_out(['ok'=>true,'message'=>'کد تأیید به '.bk_mask_email((string)$u['email']).' ارسال شد.']);
+}
+if($action==='email_code_verify'){ $u=require_login();$ajax=is_ajax_request();
+    if(email_verified($u)){ if($ajax)bk_json_out(['ok'=>true,'url'=>url('')]); flash('ایمیل شما از قبل تأیید شده است.'); redirect_to(''); }
+    if(!bk_check_email_code((string)$u['email'],(string)($_POST['code']??''),'gate')){ if($ajax)bk_json_out(['ok'=>false,'error'=>'کد نادرست یا منقضی است.'],422); flash('کد نادرست یا منقضی است.','error'); redirect_to('verify-email'); }
+    try{ $pdo->prepare('UPDATE users SET email_verified=1 WHERE id=?')->execute([(int)$u['id']]); }catch(Throwable $e){ try{ $pdo->exec('ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0'); $pdo->prepare('UPDATE users SET email_verified=1 WHERE id=?')->execute([(int)$u['id']]); }catch(Throwable $e2){} }
+    $back=$_SESSION['email_gate']['back'] ?? url(''); unset($_SESSION['email_gate']);
+    if($ajax)bk_json_out(['ok'=>true,'url'=>$back,'message'=>'ایمیل شما تأیید شد ✓ در حال بازگشت…']);
+    flash('ایمیل شما با موفقیت تأیید شد.'); redirect_to($back);
+}
 if($action==='subscribe'){ $u=require_login();$months=(int)($_POST['months']??1);$prices=[1=>(int)settings()['premium_1'],3=>(int)settings()['premium_3'],12=>(int)settings()['premium_12']];$amount=$prices[$months]??$prices[1];if(!debit($u['id'],$amount,'subscription','خرید اشتراک ویژه '.$months.' ماهه')){flash('موجودی کیف پول کافی نیست.','error');redirect_to('wallet');}$base=($u['premium_until']&&strtotime($u['premium_until'])>time())?strtotime($u['premium_until']):time();$until=date('Y-m-d H:i:s',$base+$months*30*86400);$pdo->prepare('UPDATE users SET premium_until=? WHERE id=?')->execute([$until,$u['id']]);award_badge((int)$u['id'],'premium');flash('اشتراک ویژه با موفقیت فعال شد.');redirect_to('premium');}
     if($action==='profile_update'){ $u=require_login();$name=clean_text($_POST['name']??$u['name']);$bio=trim($_POST['bio']??'');if(mb_strlen($name)<3){flash('نام معتبر نیست.','error');redirect_to('settings');}$pdo->prepare('UPDATE users SET name=?,bio=? WHERE id=?')->execute([$name,$bio,$u['id']]);flash('پروفایل ذخیره شد.');redirect_to('settings');}
     if($action==='suggest_category'){ $u=require_login();$name=clean_text($_POST['name']??'');$parent=(int)($_POST['parent_id']??0)?:null;if(mb_strlen($name)<2){flash('نام دسته را وارد کنید.','error');redirect_to('upload');}$q=$pdo->prepare('SELECT id FROM categories WHERE name=? LIMIT 1');$q->execute([$name]);if($q->fetch()){flash('این دسته قبلاً ثبت شده است.','error');redirect_to('upload');}$pdo->prepare('INSERT INTO categories(parent_id,name,slug,icon,status) VALUES(?,?,?,?,?)')->execute([$parent,$name,'cat-'.md5($name.time()),null,'pending']);flash('پیشنهاد دسته شما ثبت شد و پس از تأیید مدیر اضافه می‌شود.');redirect_to('upload');}
@@ -625,7 +770,15 @@ if($page==='diag-version'){ header('Content-Type: text/html; charset=utf-8'); $r
 if($page==='ajax-comments'){ $tipId=(int)($_GET['tip_id']??0);$items=[];$can=current_user();if($tipId>0){$q=db()->prepare('SELECT c.id,c.body,c.created_at,u.name user_name FROM comments c JOIN users u ON u.id=c.user_id WHERE c.tip_id=? AND c.is_deleted=0 ORDER BY c.created_at ASC LIMIT 100');$q->execute([$tipId]);foreach($q->fetchAll() as $c){$items[]=['id'=>(int)$c['id'],'name'=>$c['user_name'],'body'=>$c['body'],'ago'=>ago($c['created_at'])];}}$cnt=db()->prepare('SELECT COUNT(*) FROM comments WHERE tip_id=? AND is_deleted=0');$cnt->execute([$tipId]);bk_json_out(['ok'=>true,'count'=>(int)$cnt->fetchColumn(),'can'=>(bool)$can,'items'=>$items]); }
 if($page==='ajax-notifications'){ $u=current_user(); if(!$u){bk_json_out(['unread'=>0,'items'=>[]]);} $q=db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0');$q->execute([(int)$u['id']]);$unread=(int)$q->fetchColumn();$q=db()->prepare('SELECT id,title,body,link,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 5');$q->execute([(int)$u['id']]);$items=[];foreach($q->fetchAll() as $n){$items[]=['title'=>$n['title'],'body'=>mb_substr((string)($n['body']??''),0,90),'link'=>$n['link'],'ago'=>ago($n['created_at'])];}bk_json_out(['unread'=>$unread,'items'=>$items]); }
 if($page==='ajax-categories'){ $q=trim($_GET['q']??'');$like=$q!==''?'%'.$q.'%':null;if($like){$st=db()->prepare('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id WHERE c.name LIKE ? OR p.name LIKE ? ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');$st->execute([$like,$like]);}else{$st=db()->query('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');}header('Content-Type: application/json; charset=utf-8');echo json_encode(['q'=>$q,'rows'=>$st->fetchAll()],JSON_UNESCAPED_UNICODE);exit; }
-if($page==='logout'){session_destroy();redirect_to('');}
+if($page==='logout'){
+    /* v5.5: خروج کامل — پاک‌سازی نشست + کوکی + کش مرورگر (Clear-Site-Data) */
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) { $p = session_get_cookie_params(); @setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']); }
+    session_destroy();
+    @header('Clear-Site-Data: "cache"');
+    @header('Cache-Control: no-store, max-age=0');
+    redirect_to('?loggedout=' . time());
+}
 if($page==='assets'){ $safe=preg_replace('/[^A-Za-z0-9._-]/','',basename(trim(str_replace('assets/','',$route),'/'))); $file=__DIR__.'/assets/'.$safe; $map=['css'=>'text/css','js'=>'application/javascript','png'=>'image/png','svg'=>'image/svg+xml','webmanifest'=>'application/manifest+json','woff2'=>'font/woff2']; $ext=strtolower(pathinfo($safe,PATHINFO_EXTENSION)); if($safe!==''&&is_file($file)&&isset($map[$ext])){header('Content-Type: '.$map[$ext]);header('Cache-Control: public,max-age=604800');readfile($file);exit;} http_response_code(404);exit('not found'); }
 if($_SERVER['REQUEST_METHOD']==='POST'){ $bkA=$_POST['action']??''; if(in_array($bkA,['board_buy','board_ship','profile_save','wallet_gateway_start','wallet_card_to_card'],true)&&is_file(__DIR__.'/php-extended/bk_extended.php')){require __DIR__.'/php-extended/bk_extended.php';if(function_exists('check_csrf'))check_csrf();bk_extended_action($bkA);} }
 if($page==='tickets'&&is_file(__DIR__.'/php-extended/tickets.php')){require __DIR__.'/php-extended/tickets.php';exit;}
@@ -666,14 +819,42 @@ if($page==='tip'){
 <div class="tip-action-row">
 <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="bookmark"><input type="hidden" name="tip_id" value="<?=$id?>"><input type="hidden" name="back" value="<?=h('tip/'.$id)?>"><button class="btn btn-secondary btn-sm">🔖 <?=has_bookmark($id,$u)?'حذف نشانک':'نشانک'?></button></form>
 <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="favorite"><input type="hidden" name="tip_id" value="<?=$id?>"><input type="hidden" name="back" value="<?=h('tip/'.$id)?>"><button class="btn btn-<?=has_favorite($id,$u)?'danger':'secondary'?> btn-sm"><?=has_favorite($id,$u)?'♥ پسندیده شد':'♡ پسندیدم'?></button></form>
-</div><?php if(!$access):?><div class="locked"><div class="lock">🔒</div><?php if($t['access_type']==='like'):?><h2>این قلق با یک لایک باز می‌شود</h2><p><?=h($t['short_description'])?></p><p>بعد از لایک، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php else:?><h2>این قلق پولی است</h2><p><?=h($t['short_description'])?></p><p>با پرداخت <?=money($t['price'])?> تومان، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php endif;?><?php if(!$u):?><a class="btn btn-primary" href="<?=url('login')?>">برای باز کردن قلق وارد شوید</a><?php else:?><form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="unlock"><input type="hidden" name="tip_id" value="<?=$id?>"><button class="btn <?=$t['access_type']==='like'?'btn-danger':'btn-primary'?>"><?=$t['access_type']==='like'?'♥ لایک و باز کردن':'🛒 پرداخت و باز کردن — '.money($t['price']).' تومان'?></button></form><?php endif;?></div><?php else:?><div class="rich"><?=safe_rich($t['description'])?></div><h2 class="section-head" style="margin-top:30px;font-size:19px">🔧 راه‌حل گام‌به‌گام</h2><div class="steps"><?php foreach(tip_solution($t) as $i=>$step):?><div class="step"><span class="step-num"><?=fa($i+1)?></span><div><h3><?=h($step['title']??'')?></h3><p><?=h($step['body']??'')?></p></div></div><?php endforeach;?></div><?php if($t['tools']):?><div class="mt"><b style="font-size:14px">ابزار لازم</b><div class="tip-meta" style="margin-top:8px"><?php foreach(explode('،',$t['tools']) as $tool):?><span class="pill blue"><?=h(trim($tool))?></span><?php endforeach;?></div></div><?php endif;?><?=video_embed($t['video_url'] ?? '', $t, $u)?><div class="card" id="rating" style="padding:16px;margin-top:25px"><b>به این قلق امتیاز دهید</b><form method="post" class="tip-meta" style="margin-top:8px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="rate"><input type="hidden" name="tip_id" value="<?=$id?>"><?php for($star=1;$star<=5;$star++):?><button name="stars" value="<?=$star?>" class="btn btn-secondary btn-sm" style="color:#d99711;font-size:17px">★</button><?php endfor;?></form></div><?php endif;?><div class="comments" id="comments"><h2 style="font-size:19px">نظرات (<?=fa(count($comments))?>)</h2><?php if($u):?><form method="post" class="card" style="padding:15px;margin-bottom:15px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment"><input type="hidden" name="tip_id" value="<?=$id?>"><textarea class="field" name="body" rows="3" placeholder="نظر یا تجربه خود را بنویسید…"></textarea><button class="btn btn-primary btn-sm mt">ثبت نظر</button></form><?php else:?><div class="card empty"><a href="<?=url('login')?>" class="check">برای ثبت نظر وارد شوید</a></div><?php endif;?><?php foreach($comments as $c):$cv=(int)($voteTotals[(int)$c['id']]??0);$cmv=$voteMine[(int)$c['id']]??0;?><div class="card comment" id="comment-<?=$c['id']?>"><div class="comment-head"><span class="avatar small"><?=h(mb_substr($c['user_name'],0,1))?></span><b style="font-size:12px"><?=h($c['user_name'])?></b><small class="muted"><?=ago($c['created_at'])?></small></div><?php if(!$c['is_deleted']):?><p class="comment-body"><?=nl2br(h($c['body']))?></p><div class="flex aicenter gap" style="margin-top:8px"><form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="1"><button class="btn btn-sm <?=$cmv===1?'btn-primary':'btn-secondary'?>" title="مفید بود">👍 <?=fa($cv)?></button></form><form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="-1"><button class="btn btn-sm <?=$cmv===-1?'btn-danger':'btn-secondary'?>" title="مفید نبود">👎</button></form></div><?php else:?><p class="comment-body">این نظر حذف شده است.</p><?php endif;?></div><?php endforeach;?></div></article><aside><div class="card side-card"><h3>مشخصات دستگاه</h3><div class="info-list"><div><span>دستگاه</span><b><?=h($t['device_name'])?></b></div><div><span>برند</span><b><?=h($t['brand'])?></b></div><div><span>مدل</span><b><?=h($t['model']?:'—')?></b></div><div><span>شماره برد</span><b><?=h($t['board_number']?:'—')?></b></div><div><span>نوع خرابی</span><b><?=h($t['fault_type'])?></b></div></div></div><div class="card side-card"><h3>آمار قلق</h3><div class="stat-grid"><div><b><?=fa($t['views'])?></b><small>بازدید</small></div><div><b><?=fa($t['likes_count'])?></b><small>لایک</small></div><div><b><?=fa($t['purchases_count'])?></b><small>خرید</small></div></div></div><?php if (!empty($t['source_url']) && staff($u)): ?><div class="card side-card"><h3>🔗 مطلب اصلی (منبع)</h3><p style="font-size:11px;direction:ltr;text-align:left;word-break:break-all;line-height:1.9"><a class="check" href="<?=h($t['source_url'])?>" target="_blank" rel="noopener"><?=h($t['source_url'])?></a></p><?php if (!empty($t['source_name'])): ?><small class="muted">منبع: <?=h($t['source_name'])?></small><?php endif; ?></div><?php endif; ?><div class="card side-card"><h3>شما هم قلق دارید؟</h3><p class="muted" style="font-size:12px">دانش تعمیراتی خود را ثبت کنید و پاداش آپلود بگیرید.</p><a class="btn btn-primary btn-full btn-sm" href="<?=url('upload')?>">آپلود قلق جدید</a></div></aside></div><?php if($related):?><section class="section"><div class="section-head"><h2>قلق‌های مرتبط</h2></div><div class="grid grid-4"><?php foreach($related as $r)tip_card($r);?></div></section><?php endif;?></main><?php footer_html();exit; }
+</div><?php if(!$access):?><div class="locked"><div class="lock">🔒</div><?php if($t['access_type']==='like'):?><h2>این قلق با یک لایک باز می‌شود</h2><p><?=h($t['short_description'])?></p><p>بعد از لایک، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php else:?><h2>این قلق پولی است</h2><p><?=h($t['short_description'])?></p><p>با پرداخت <?=money($t['price'])?> تومان، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php endif;?><?php if(!$u):?><a class="btn btn-primary" href="<?=url('login')?>">برای باز کردن قلق وارد شوید</a><?php else:?><form method="post" class="bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="unlock"><input type="hidden" name="tip_id" value="<?=$id?>"><button class="btn <?=$t['access_type']==='like'?'btn-danger':'btn-primary'?>"><?=$t['access_type']==='like'?'♥ لایک و باز کردن':'🛒 پرداخت و باز کردن — '.money($t['price']).' تومان'?></button></form><?php endif;?></div><?php else:?><div class="rich"><?=safe_rich($t['description'])?></div><h2 class="section-head" style="margin-top:30px;font-size:19px">🔧 راه‌حل گام‌به‌گام</h2><div class="steps"><?php foreach(tip_solution($t) as $i=>$step):?><div class="step"><span class="step-num"><?=fa($i+1)?></span><div><h3><?=h($step['title']??'')?></h3><p><?=h($step['body']??'')?></p></div></div><?php endforeach;?></div><?php if($t['tools']):?><div class="mt"><b style="font-size:14px">ابزار لازم</b><div class="tip-meta" style="margin-top:8px"><?php foreach(explode('،',$t['tools']) as $tool):?><span class="pill blue"><?=h(trim($tool))?></span><?php endforeach;?></div></div><?php endif;?><?=video_embed($t['video_url'] ?? '', $t, $u)?><div class="card" id="rating" style="padding:16px;margin-top:25px"><b>به این قلق امتیاز دهید</b><form method="post" class="tip-meta bk-ajax" style="margin-top:8px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="rate"><input type="hidden" name="tip_id" value="<?=$id?>"><?php for($star=1;$star<=5;$star++):?><button name="stars" value="<?=$star?>" class="btn btn-secondary btn-sm" style="color:#d99711;font-size:17px">★</button><?php endfor;?></form></div><?php endif;?><div class="comments" id="comments"><h2 style="font-size:19px">نظرات (<?=fa(count($comments))?>)</h2><?php if($u):?><form method="post" class="card bk-ajax" style="padding:15px;margin-bottom:15px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment"><input type="hidden" name="tip_id" value="<?=$id?>"><textarea class="field" name="body" rows="3" placeholder="نظر یا تجربه خود را بنویسید…"></textarea><button class="btn btn-primary btn-sm mt">ثبت نظر</button></form><?php else:?><div class="card empty"><a href="<?=url('login')?>" class="check">برای ثبت نظر وارد شوید</a></div><?php endif;?><?php foreach($comments as $c):$cv=(int)($voteTotals[(int)$c['id']]??0);$cmv=$voteMine[(int)$c['id']]??0;?><div class="card comment" id="comment-<?=$c['id']?>"><div class="comment-head"><span class="avatar small"><?=h(mb_substr($c['user_name'],0,1))?></span><b style="font-size:12px"><?=h($c['user_name'])?></b><small class="muted"><?=ago($c['created_at'])?></small></div><?php if(!$c['is_deleted']):?><p class="comment-body"><?=nl2br(h($c['body']))?></p><div class="flex aicenter gap" style="margin-top:8px"><form method="post" class="bk-ajax" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="1"><button class="btn btn-sm <?=$cmv===1?'btn-primary':'btn-secondary'?>" title="مفید بود">👍 <?=fa($cv)?></button></form><form method="post" class="bk-ajax" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="-1"><button class="btn btn-sm <?=$cmv===-1?'btn-danger':'btn-secondary'?>" title="مفید نبود">👎</button></form></div><?php else:?><p class="comment-body">این نظر حذف شده است.</p><?php endif;?></div><?php endforeach;?></div></article><aside><div class="card side-card"><h3>مشخصات دستگاه</h3><div class="info-list"><div><span>دستگاه</span><b><?=h($t['device_name'])?></b></div><div><span>برند</span><b><?=h($t['brand'])?></b></div><div><span>مدل</span><b><?=h($t['model']?:'—')?></b></div><div><span>شماره برد</span><b><?=h($t['board_number']?:'—')?></b></div><div><span>نوع خرابی</span><b><?=h($t['fault_type'])?></b></div></div></div><div class="card side-card"><h3>آمار قلق</h3><div class="stat-grid"><div><b><?=fa($t['views'])?></b><small>بازدید</small></div><div><b><?=fa($t['likes_count'])?></b><small>لایک</small></div><div><b><?=fa($t['purchases_count'])?></b><small>خرید</small></div></div></div><?php if (!empty($t['source_url']) && staff($u)): ?><div class="card side-card"><h3>🔗 مطلب اصلی (منبع)</h3><p style="font-size:11px;direction:ltr;text-align:left;word-break:break-all;line-height:1.9"><a class="check" href="<?=h($t['source_url'])?>" target="_blank" rel="noopener"><?=h($t['source_url'])?></a></p><?php if (!empty($t['source_name'])): ?><small class="muted">منبع: <?=h($t['source_name'])?></small><?php endif; ?></div><?php endif; ?><div class="card side-card"><h3>شما هم قلق دارید؟</h3><p class="muted" style="font-size:12px">دانش تعمیراتی خود را ثبت کنید و پاداش آپلود بگیرید.</p><a class="btn btn-primary btn-full btn-sm" href="<?=url('upload')?>">آپلود قلق جدید</a></div></aside></div><?php if($related):?><section class="section"><div class="section-head"><h2>قلق‌های مرتبط</h2></div><div class="grid grid-4"><?php foreach($related as $r)tip_card($r);?></div></section><?php endif;?></main><?php footer_html();exit; }
 
 
 
 if($page==='forgot'){header_html('بازیابی رمز عبور');$step2=!empty($_SESSION['reset_code']);?><main class="auth-page"><div class="auth-box"><div class="logo">⌁ برد<em>خان</em></div><div class="card auth-card"><h1>بازیابی رمز عبور</h1><p>کد بازیابی به شماره موبایل ثبت‌شده ارسال می‌شود</p><?php if(!$step2):?><form method="post" class="mt"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="forgot_request"><div class="form-group"><label class="field-label">شماره موبایل</label><input class="field" dir="ltr" name="phone" placeholder="0912…" required></div><button class="btn btn-primary btn-full">دریافت کد بازیابی</button></form><p class="text-center"><a class="check" href="<?=url('login')?>">بازگشت به ورود</a></p><?php else:?><div class="notice text-center">کد نمایشی شما: <b style="font-size:24px;letter-spacing:5px"><?=h($_SESSION['reset_code'])?></b></div><form method="post" class="mt"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="forgot_reset"><div class="form-group"><label class="field-label">کد شش رقمی</label><input class="field" dir="ltr" name="code" maxlength="6" required></div><div class="form-group"><label class="field-label">رمز عبور جدید</label><input class="field" type="password" dir="ltr" name="password" minlength="6" required></div><button class="btn btn-primary btn-full">تغییر رمز عبور</button></form><p class="text-center"><a class="check" href="<?=url('forgot')?>">ارسال مجدد کد</a> · <a class="check" href="<?=url('login')?>">ورود</a></p><?php endif;?></div></div></main><?php footer_html();exit;}
 
+/* ---------- v5.5: صفحهٔ تأیید ایمیل (دروازهٔ خرید/ثبت قلق) ---------- */
+if($page==='verify-email'){
+    $u=current_user();
+    if(!empty($_SESSION['pending_register']))redirect_to('verify');
+    if(!$u)redirect_to('login');
+    /* ارسال خودکار کد در اولین ورود به صفحه (فقط اگر کد فعال ندارد) */
+    $autoSent=false;
+    if(!email_verified($u)){
+        try{ $hc=db()->prepare("SELECT COUNT(*) FROM email_codes WHERE email=? AND purpose='gate' AND expires_at > NOW()"); $hc->execute([strtolower((string)$u['email'])]);
+            if((int)$hc->fetchColumn()===0){ $snd=bk_send_email_code((string)$u['email'],'gate'); $autoSent=!empty($snd['ok']); }
+        }catch(Throwable $e){}
+    } else { redirect_to(''); }
+    $gateBack=$_SESSION['email_gate']['back'] ?? '';
+    header_html('تأیید ایمیل');
+    ?><main class="auth-page"><div class="auth-box"><div class="logo">⌁ برد<em>خان</em></div><div class="card auth-card">
+        <h1>تأیید ایمیل</h1>
+        <p>برای <b>خرید یا ثبت قلق</b> باید ایمیل خود را تأیید کنید. کد ۶ رقمی به <b dir="ltr"><?=h(bk_mask_email((string)$u['email']))?></b> ارسال شد<?=$autoSent ? ' ✓' : ''?>.</p>
+        <?php if ($gateBack): ?><div class="notice" style="font-size:11px">پس از تأیید، به همان صفحه‌ای که بودید برمی‌گردید.</div><?php endif; ?>
+        <form method="post" class="mt bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="email_code_verify">
+            <div class="form-group"><label class="field-label">کد ۶ رقمی ایمیل‌شده</label><input class="field" dir="ltr" name="code" maxlength="6" placeholder="۱۲۳۴۵۶" required inputmode="numeric"></div>
+            <div class="bk-ajax-msg"></div>
+            <button class="btn btn-primary btn-full">تأیید ایمیل</button>
+        </form>
+        <form method="post" class="mt bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="email_code_send"><button class="btn btn-secondary btn-full">📨 ارسال مجدد کد</button><div class="bk-ajax-msg" style="margin-top:8px"></div></form>
+        <p class="text-center" style="font-size:11px"><a class="check" href="<?=url('')?>">بعداً تأیید می‌کنم</a></p>
+    </div></div></main><?php footer_html();exit;
+}
 if(in_array($page,['login','register','verify'],true)){
-    header_html($page==='login'?'ورود':($page==='register'?'ثبت‌نام':'تأیید شماره'));?><main class="auth-page"><div class="auth-box"><div class="logo">⌁ برد<em>خان</em></div><div class="card auth-card"><?php if($page==='login'):?><h1>ورود به حساب</h1><p>به بردخان خوش برگشتید.</p><form method="post" class="mt"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="login"><div class="form-group"><label class="field-label">موبایل یا ایمیل</label><input class="field" dir="ltr" name="identifier" required placeholder="0912…"></div><div class="form-group"><label class="field-label">رمز عبور</label><input class="field" type="password" dir="ltr" name="password" required></div><button class="btn btn-primary btn-full">ورود</button></form><div class="flex between mt" style="font-size:12px"><a class="check" href="<?=url('forgot')?>">🔑 رمز عبور را فراموش کرده‌اید؟</a><a class="check" href="<?=url('register')?>">ثبت‌نام رایگان</a></div><?php elseif($page==='register'):?><h1>ثبت‌نام رایگان</h1><p>عضو شوید و اعتبار هدیه دریافت کنید.</p><form method="post" class="mt"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="register"><div class="form-group"><label class="field-label">نام و نام خانوادگی</label><input class="field" name="name" required></div><div class="form-group"><label class="field-label">شماره موبایل</label><input class="field" dir="ltr" name="phone" placeholder="09123456789" required></div><div class="form-group"><label class="field-label">ایمیل اختیاری</label><input class="field" dir="ltr" type="email" name="email"></div><div class="form-group"><label class="field-label">رمز عبور حداقل ۶ کاراکتر</label><input class="field" dir="ltr" type="password" name="password" minlength="6" required></div><div class="form-group"><label class="field-label">کد معرف اختیاری</label><input class="field" dir="ltr" name="referral" value="<?=h($_GET['ref'] ?? '')?>"></div><button class="btn btn-primary btn-full">دریافت کد تأیید</button></form><p class="text-center">حساب دارید؟ <a class="check" href="<?=url('login')?>">وارد شوید</a></p><?php else:$pending=$_SESSION['pending_register']??null;if(!$pending)redirect_to('register');?><h1>تأیید شماره موبایل</h1><p>کد تأیید به <?=h($pending['phone'])?> ارسال شد.</p><div class="notice text-center">کد نمایشی شما: <b style="font-size:24px;letter-spacing:5px"><?=h($_SESSION['demo_code']??'')?></b></div><form method="post" class="mt"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="verify"><div class="form-group"><label class="field-label">کد شش رقمی</label><input class="field" dir="ltr" name="code" maxlength="6" required></div><button class="btn btn-primary btn-full">تأیید و ساخت حساب</button></form><?php endif;?></div></div></main><?php footer_html();exit; }
+    header_html($page==='login'?'ورود':($page==='register'?'ثبت‌نام':'تأیید ایمیل'));
+    ?><main class="auth-page"><div class="auth-box"><div class="logo">⌁ برد<em>خان</em></div><div class="card auth-card"><?php if($page==='login'):?><h1>ورود به حساب</h1><p>با ایمیل یا شماره موبایل وارد شوید.</p><form method="post" class="mt bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="login"><div class="form-group"><label class="field-label">ایمیل یا موبایل</label><input class="field" dir="ltr" name="identifier" required placeholder="you@example.com یا 0912…"></div><div class="form-group"><label class="field-label">رمز عبور</label><input class="field" type="password" dir="ltr" name="password" required></div><div class="bk-ajax-msg"></div><button class="btn btn-primary btn-full">ورود</button></form><div class="flex between mt" style="font-size:12px"><a class="check" href="<?=url('forgot')?>">🔑 رمز عبور را فراموش کرده‌اید؟</a><a class="check" href="<?=url('register')?>">ثبت‌نام رایگان</a></div><?php elseif($page==='register'):?><h1>ثبت‌نام رایگان</h1><p>با ایمیل ثبت‌نام کنید؛ کد تأیید به ایمیل شما ارسال می‌شود.</p><form method="post" class="mt bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="register"><div class="form-group"><label class="field-label">نام و نام خانوادگی</label><input class="field" name="name" required></div><div class="form-group"><label class="field-label">ایمیل (نام کاربری شما)</label><input class="field" dir="ltr" type="email" name="email" placeholder="you@example.com" required></div><div class="form-group"><label class="field-label">شماره موبایل (اختیاری)</label><input class="field" dir="ltr" name="phone" placeholder="09123456789"></div><div class="form-group"><label class="field-label">رمز عبور حداقل ۶ کاراکتر</label><input class="field" dir="ltr" type="password" name="password" minlength="6" required></div><div class="form-group"><label class="field-label">کد معرف اختیاری</label><input class="field" dir="ltr" name="referral" value="<?=h($_GET['ref'] ?? '')?>"></div><div class="bk-ajax-msg"></div><button class="btn btn-primary btn-full">دریافت کد تأیید ایمیل</button></form><p class="text-center">حساب دارید؟ <a class="check" href="<?=url('login')?>">وارد شوید</a></p><?php else:$pending=$_SESSION['pending_register']??null;if(!$pending)redirect_to('register');?><h1>تأیید ایمیل</h1><p>کد تأیید ۶ رقمی به <b dir="ltr"><?=h($pending['email'])?></b> ارسال شد — ایمیل خود (از جمله پوشهٔ Spam) را بررسی کنید.</p><form method="post" class="mt bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="verify"><div class="form-group"><label class="field-label">کد شش رقمی</label><input class="field" dir="ltr" name="code" maxlength="6" required inputmode="numeric"></div><div class="bk-ajax-msg"></div><button class="btn btn-primary btn-full">تأیید و ساخت حساب</button></form><form method="post" class="mt bk-ajax"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="email_code_resend"><button class="btn btn-secondary btn-full">📨 ارسال مجدد کد به ایمیل</button><div class="bk-ajax-msg" style="margin-top:8px"></div></form><?php endif;?></div></div></main><?php footer_html();exit; }
 
 if($page==='upload'){
 $u=require_login();
@@ -1425,184 +1606,58 @@ setTimeout(function(){
 </script>
 </body></html><?php exit;}
 if($page==='tour'){
-    $s=settings();
-    $u=current_user();
-    header_html('آموزش و امکانات سایت');?>
-<main class="wrap page">
-  <!-- Hero -->
-  <div class="tour-hero" style="background:radial-gradient(900px 400px at 85% -10%,rgba(16,185,129,.18),transparent),radial-gradient(700px 350px at 10% 110%,rgba(56,189,248,.12),transparent),linear-gradient(135deg,#073d2e,#0a5a3f);border:1px solid rgba(16,185,129,.25);border-radius:20px;padding:36px 20px;text-align:center;margin-bottom:24px;position:relative;overflow:hidden">
-    <div style="font-size:48px;margin-bottom:10px">🎓</div>
-    <h1 style="font-size:clamp(22px,4vw,32px);font-weight:900;color:#fff">آموزش کامل بردخان - از صفر تا درآمد</h1>
-    <p style="color:#c8f5e3;max-width:720px;margin:10px auto 0;font-size:14px;line-height:2">بردخان بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی است. اینجا یاد می‌گیرید چطور قلق ثبت کنید، برد بفروشید، از ریلز استفاده کنید و از دانش‌تان درآمد بسازید.</p>
-    <div class="flex center gap mt" style="flex-wrap:wrap;justify-content:center;margin-top:18px">
-      <?php if($u): ?>
-        <a class="btn btn-amber btn-lg" href="<?=url('upload')?>">➕ ثبت قلق و کسب درآمد</a>
-        <a class="btn btn-primary" href="<?=url('reels')?>">🎬 مشاهده ریلز</a>
-        <a class="btn secondary" href="<?=url('boards')?>">🏪 فروشگاه برد</a>
-      <?php else: ?>
-        <a class="btn btn-amber btn-lg" href="<?=url('register')?>">✨ ثبت‌نام رایگان + <?=money($s['invitee_credit']??10000)?> تومان هدیه</a>
-        <a class="btn btn-primary" href="<?=url('reels-demo')?>">🧪 تست ریلز (دمو)</a>
-        <a class="btn secondary" href="<?=url('tour')?>#features">مشاهده امکانات</a>
-      <?php endif; ?>
+  header_html('آموزش و سوالات پرتکرار');
+  $faq = [
+    ['چطور ثبت‌نام کنم؟','فرم ثبت‌نام را با «ایمیل» پر کنید؛ یک کد ۶ رقمی به ایمیل شما ارسال می‌شود. کد را در صفحهٔ تأیید وارد کنید تا حساب ساخته شود. شماره موبایل اختیاری است.'],
+    ['چرا باید ایمیلم را تأیید کنم؟','برای خرید قلق یا ثبت قلق جدید، یک‌بار باید ایمیل خود را تأیید کنید (کد به ایمیل ارسال می‌شود). این کار امنیت حساب و خرید شما را تضمین می‌کند و فقط یک‌بار انجام می‌شود.'],
+    ['با ایمیل وارد شدم نمی‌شوم؟','در صفحهٔ ورود، همان فیلد هم ایمیل و هم شماره موبایل را می‌پذیرد. اگر رمز را فراموش کرده‌اید از «رمز عبور را فراموش کرده‌اید؟» استفاده کنید.'],
+    ['قلق چیست و چطور بخرم؟','«قلق» راه‌حل تست‌شدهٔ یک خرابی конкретی است. وارد صفحهٔ قلق شوید و دکمهٔ «پرداخت و باز کردن» را بزنید؛ مبلغ از کیف پول شما کسر می‌شود و تمام عکس‌ها، ویدیو و مراحل نمایش داده می‌شود.'],
+    ['چطور کیف پول را شارژ کنم؟','از صفحهٔ کیف پول، با درگاه آنلاین (زرین‌پال/آیدی‌پی/زیبال) یا کارت‌به‌کارت با آپلود فیش. پس از تأیید، مبلغ به کیف پول اضافه می‌شود.'],
+    ['برای آپلود قلق پاداش دارم؟','بله؛ برای هر قلق تأییدشده پاداش آپلود دریافت می‌کنید و اگر قلق شما خریداری شود، درآمد به کیف پولتان واریز می‌شود.'],
+    ['قلق من تأیید نشد، چرا؟','قلق‌ها باید واقعی، تست‌شده و با عکس/ویدیوی مرتبط باشند. علت رد شدن از پنل «قلق‌های من» قابل مشاهده است؛ پس از اصلاح دوباره ارسال کنید.'],
+    ['سهم من از فروش قلق چقدر است؟','کمیسیون سایت از تنظیمات مدیریت خوانده می‌شود؛ بقیهٔ مبلغ به‌طور کامل به کیف پول شما واریز می‌شود و از حداقل تسویه که بیشتر شود می‌توانید برداشت کنید.'],
+    ['چطور فروشندهٔ برد شوم؟','از صفحهٔ «درخواست فروشندگی» توضیح تخصص خود را بنویسید؛ پس از تأیید مدیر می‌توانید برد ثبت کنید. وجه خریدها نزد سایت امانت می‌ماند تا تحویل تأیید شود.'],
+    ['پشتیبانی چطور پاسخ می‌دهد؟','از بخش «تیکت پشتیبانی» با اولویت و دستهٔ موردنظر تیکت بزنید؛ کارشناسان در سریع‌ترین زمان پاسخ می‌دهند.'],
+  ];
+  ?>
+  <main class="wrap page">
+    <div class="page-title">
+      <h1>🎓 آموزش استفاده از بردخان</h1>
+      <p>راهنمای گام‌به‌گام استفاده از امکانات سایت + پاسخ سوالات پرتکرار</p>
     </div>
-  </div>
 
-  <!-- شروع سریع -->
-  <div class="section-head"><h2>🚀 شروع سریع در ۶ قدم</h2><p>از ثبت‌نام تا اولین درآمد</p></div>
-  <div class="tour-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
-    <?php foreach([
-      ['1','ثبت‌نام کنید','با شماره موبایل 091... ثبت‌نام کنید، کد تأیید را وارد کنید و '.money($s['invitee_credit']??10000).' تومان اعتبار هدیه بگیرید.','📱'],
-      ['2','پروفایل را کامل کنید','نام، بیوگرافی و تخصص‌تان را بنویسید تا به عنوان تعمیرکار تأییدشده شناخته شوید.','👤'],
-      ['3','اولین قلق را ثبت کنید','از دکمه + آپلود، عنوان (≥8 حرف)، توضیح کوتاه (≥20)، توضیح کامل (≥20)، نام دستگاه و برند و دسته را وارد کنید + حداقل ۱ عکس.','➕'],
-      ['4','منتظر تأیید مدیر باشید','قلق شما در صف pending می‌رود. مدیر آن را بررسی و منتشر می‌کند. در my-tips وضعیت را ببینید.','⏳'],
-      ['5','از ریلز استفاده کنید','مثل اینستاگرام بین قلق‌ها اسکرول کنید، لایک کنید (دابل‌تپ ❤️)، کامنت بگذارید و به اشتراک بگذارید.','🎬'],
-      ['6','کسب درآمد و برداشت','هر فروش قلق پولی = درآمد به کیف پول (بعد از کسر کمیسیون). از wallet درخواست تسویه با شبا بدهید.','💰'],
-    ] as $x):?>
-      <div class="tour-step" style="display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);padding:16px;border-radius:14px;position:relative;overflow:hidden">
-        <span class="num" style="width:36px;height:36px;border-radius:10px;background:var(--accent);color:#04110b;display:grid;place-items:center;font-weight:900;flex:none;font-size:16px"><?=h($x[0])?></span>
-        <div style="flex:1"><h3 style="font-size:14px;font-weight:900;margin:0 0 4px"><?=h($x[1])?> <span style="font-size:20px"><?=h($x[3])?></span></h3><p style="font-size:12px;color:var(--text-soft);margin:0;line-height:2"><?=h($x[2])?></p></div>
-      </div>
-    <?php endforeach;?>
-  </div>
-
-  <!-- 3 نوع دسترسی -->
-  <section class="section" id="access">
-    <div class="section-head"><div><h2>🔓 سه نوع دسترسی قلق‌ها - کامل</h2><p>رایگان، با لایک و پرداختی با محافظت کامل</p></div></div>
     <div class="grid grid-3">
-      <div class="card auth-card" style="padding:18px;border:1px solid rgba(16,185,129,.3)"><div style="font-size:32px">🟢</div><h3 style="margin:8px 0">رایگان</h3><p class="muted" style="font-size:12px;line-height:2">همهٔ توضیحات، عکس‌ها، ویدیو و مراحل گام‌به‌گام بلافاصله نمایش داده می‌شود. مناسب برای جذب دنبال‌کننده و افزایش امتیاز.</p><ul style="font-size:11px;color:var(--text-soft);line-height:2.2;margin:8px 0 0;padding-right:16px"><li>بدون نیاز به لایک یا پرداخت</li><li>تصاویر با واترمارک سبک</li><li>پاداش آپلود: <?=money($s['upload_reward']??50000)?> تومان</li></ul></div>
-      <div class="card auth-card" style="padding:18px;border:1px solid rgba(244,63,94,.3)"><div style="font-size:32px">❤️</div><h3 style="margin:8px 0">با لایک</h3><p class="muted" style="font-size:12px;line-height:2">تصاویر و مراحل قفل و محو (blur 16px) هستند. با یک لایک، برای همیشه برای آن کاربر باز می‌شود.</p><ul style="font-size:11px;color:var(--text-soft);line-height:2.2;margin:8px 0 0;padding-right:16px"><li>سقف لایک روزانه: <?=fa($s['daily_like_limit']??5)?> برای هر کاربر</li><li>پس از لایک، tip_accesses ثبت + likes_count +1</li><li>در ریلز: کلیک لایک = باز کردن خودکار</li></ul></div>
-      <div class="card auth-card" style="padding:18px;border:1px solid rgba(245,158,11,.3)"><div style="font-size:32px">💰</div><h3 style="margin:8px 0">پرداختی</h3><p class="muted" style="font-size:12px;line-height:2">با پرداخت از کیف پول، محتوای کامل باز می‌شود. درآمد پس از کسر کمیسیون به فروشنده می‌رسد.</p><ul style="font-size:11px;color:var(--text-soft);line-height:2.2;margin:8px 0 0;padding-right:16px"><li>کمیسیون سایت: <?=fa($s['commission_percent']??20)?>٪</li><li>سهم فروشنده: <?=fa(100-($s['commission_percent']??20))?>٪</li><li>پرداخت امن با debit تراکنشی</li><li>نشان first_sale و first_purchase خودکار</li></ul></div>
-    </div>
-  </section>
-
-  <!-- ریلز -->
-  <section class="section" id="reels">
-    <div class="section-head"><div><h2>🎬 ریلز قلق‌ها - اینستاگرام استایل</h2><p>اسکرول عمودی تمام‌صفحه با تعاملات کامل</p></div><a class="btn btn-primary btn-sm" href="<?=url('reels')?>">مشاهده ریلز واقعی</a><a class="btn btn-secondary btn-sm" href="<?=url('reels-demo')?>">🧪 دمو بدون DB</a></div>
-    <div class="grid grid-2">
-      <div class="card auth-card" style="padding:18px">
-        <h3>✨ ویژگی‌های ریلز</h3>
-        <ul style="font-size:12px;line-height:2.4;color:var(--text-soft);padding-right:18px;margin:8px 0 0">
-          <li>📱 اسکرول عمودی تمام‌صفحه با <code>scroll-snap-type:y mandatory</code></li>
-          <li>❤️ لایک با دابل‌تپ (300ms) + دابل‌کلیک + انیمیشن قلب pop</li>
-          <li>🖼️ تعویض بین چند عکس با کلیک روی تصویر + نقطه‌های <code>reel-dots</code></li>
-          <li>💬 پنل کامنت کشویی با آجاکس <code>/ajax-comments</code></li>
-          <li>➦ اشتراک با Web Share API + کپی لینک fallback</li>
-          <li>🔒 قفل هوشمند: like-type با لایک باز، paid-type با خرید از کیف پول</li>
-          <li>📊 پروگرس بار بالا + IntersectionObserver برای تشخیص ریل فعلی</li>
-          <li>⌨️ کیبورد: ArrowDown/Up برای جابجایی، Escape برای بستن کامنت</li>
-          <li>🛡️ محافظت: blur 18px + جلوگیری از کلیک راست فقط روی تصویر</li>
-        </ul>
+      <?php foreach ([
+        ['۱️⃣','ثبت‌نام و تأیید ایمیل','ایمیل و رمز را وارد کنید ← کد ۶ رقمی از ایمیل را در صفحهٔ تأیید بزنید ← حساب آماده است.'],
+        ['2️⃣','شارژ کیف پول','کیف پول ← «شارژ با درگاه» یا کارت‌به‌کارت ← مبلغ پس از تأیید قابل استفاده است.'],
+        ['3️⃣','خرید قلق','صفحهٔ قلق ← «پرداخت و باز کردن» ← در اولین بار تأیید ایمیل انجام می‌شود ← محتوای کامل باز می‌شود.'],
+        ['4️⃣','ثبت قلق جدید','منوی «آپلود قلق» ← عنوان، دسته، عکس/ویدیو و مراحل را پر کنید ← پس از تأیید مدیر منتشر و پاداش می‌گیرید.'],
+        ['5️⃣','درخواست تعمیر','اگر راه‌حلی پیدا نکردید «درخواست تعمیر» ثبت کنید تا تعمیرکاران پاسخ دهند؛ بهترین پاسخ پاداش می‌گیرد.'],
+        ['6️⃣','تیکت پشتیبانی','برای مشکلات حساب، پرداخت یا سفارش، تیکت با اولویت مناسب بزنید و پیگیری کنید.'],
+      ] as $g): ?>
+      <div class="card" style="padding:16px">
+        <div style="font-size:24px"><?=$g[0]?></div>
+        <h3 style="font-size:13.5px;margin:6px 0"><?=h($g[1])?></h3>
+        <p style="font-size:11.5px;color:var(--text-soft);line-height:2"><?=h($g[2])?></p>
       </div>
-      <div class="card auth-card" style="padding:18px">
-        <h3>🧪 تست ریلز</h3>
-        <p class="muted" style="font-size:12px">برای تست بدون نیاز به PHP/MySQL:</p>
-        <div class="flex gap" style="flex-wrap:wrap">
-          <a class="btn btn-primary btn-sm" href="<?=url('reels-demo')?>">دمو ۵ ریل (بدون DB)</a>
-          <a class="btn btn-secondary btn-sm" href="/tests/reels_visual_test.html">تست بصری مستقل</a>
-        </div>
-        <p class="muted" style="font-size:12px;margin-top:12px">برای تست با دیتابیس واقعی:</p>
-        <div class="flex gap" style="flex-wrap:wrap">
-          <a class="btn btn-secondary btn-sm" href="<?=url('reels')?>">ریلز واقعی (۶۰ قلق)</a>
-          <a class="btn btn-secondary btn-sm" href="<?=url('diag-version')?>" target="_blank">بررسی نسخه</a>
-        </div>
-        <div class="notice" style="font-size:11px;margin-top:12px">💡 باگ بحرانی <code>BKC={{}}</code> که باعث از کار افتادن کل JS ریلز می‌شد، در v4.1 رفع شد.</div>
+      <?php endforeach; ?>
+    </div>
+
+    <section class="section" id="faq" style="margin-top:26px">
+      <div class="section-head"><h2>❓ سوالات پرتکرار</h2></div>
+      <div class="card" style="padding:6px 18px">
+        <?php foreach ($faq as $q): ?>
+        <details style="padding:14px 0;border-bottom:1px solid var(--line)"><summary style="cursor:pointer;font-weight:900;font-size:13.5px;color:var(--text)"><?=h($q[0])?></summary><p class="muted" style="font-size:12px;margin:12px 0 0;line-height:2.2"><?=h($q[1])?></p></details>
+        <?php endforeach; ?>
       </div>
+    </section>
+
+    <div class="card mt" style="padding:16px;text-align:center">
+      <b>سوال دیگری دارید؟</b>
+      <p class="muted" style="font-size:12px;margin:6px 0 12px">تیم پشتیبانی بردخان پاسخگوی شماست.</p>
+      <a class="btn btn-primary btn-sm" href="<?=url('tickets')?>">✉ ثبت تیکت پشتیبانی</a>
+      <a class="btn btn-secondary btn-sm" href="<?=url('contact')?>">تماس با ما</a>
     </div>
-  </section>
-
-  <!-- فروشگاه برد -->
-  <section class="section" id="boards">
-    <div class="section-head"><div><h2>🏪 فروشگاه برد با امانت - خرید امن</h2><p>بردهای کارکرده، تعمیرشده یا نو با تضمین بردخان</p></div><a class="btn btn-secondary btn-sm" href="<?=url('boards')?>">مشاهده فروشگاه</a></div>
-    <div class="grid grid-3">
-      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">🛒</div><h3 style="font-size:13px;margin:6px 0">درخواست فروشندگی</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">متن ≥20 حرف درباره تخصص‌تان بنویسید. مدیر بررسی و تأیید می‌کند. فقط فروشندگان تأییدشده می‌توانند برد ثبت کنند.</p></div>
-      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">📦</div><h3 style="font-size:13px;margin:6px 0">ثبت برد</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">عنوان ≥5، توضیح ≥10، دسته leaf، قیمت ≥1000 تومان، موجودی، وضعیت کالا (نو/در حد نو/کارکرده/تعمیرشده) + حداقل ۱ عکس (خودکار کوچک می‌شود به 1920px).</p></div>
-      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">🛡️</div><h3 style="font-size:13px;margin:6px 0">خرید با امانت</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">مبلغ از کیف پول شما کسر و به حساب امانت مدیر می‌رود. فروشنده موظف به ثبت شرکت حمل (پست/تیپاکس/باربری/پیک) + کد رهگیری اجباری ≥6 حرف است.</p></div>
-      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">📮</div><h3 style="font-size:13px;margin:6px 0">ارسال</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">وضعیت paid → shipped پس از ثبت رهگیری. خریدار از طریق نوتیفیکیشن مطلع می‌شود.</p></div>
-      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">✔️</div><h3 style="font-size:13px;margin:6px 0">تأیید دریافت</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">خریدار دکمه تأیید دریافت را می‌زند → وجه از امانت آزاد → سهم فروشنده (منهای کمیسیون <?=fa($s['board_commission_percent']??10)?>٪) به کیف پولش واریز + 30 امتیاز.</p></div>
-      <div class="card auth-card" style="padding:16px"><div style="font-size:28px">↩️</div><h3 style="font-size:13px;margin:6px 0">لغو و بازگشت</h3><p style="font-size:11px;color:var(--text-soft);line-height:2">مدیر می‌تواند سفارش را لغو و وجه را به خریدار برگرداند (board_cancel).</p></div>
-    </div>
-  </section>
-
-  <!-- کیف پول -->
-  <section class="section" id="wallet">
-    <div class="section-head"><div><h2>👛 کیف پول و مالی - کامل</h2><p>شارژ، برداشت، معرفی دوستان، اشتراک ویژه</p></div><a class="btn btn-secondary btn-sm" href="<?=url('wallet')?>">کیف پول من</a></div>
-    <div class="grid grid-3">
-      <?php foreach([
-        ['💳','شارژ با درگاه واقعی','زرین‌پال، آیدی‌پی، زیبال با درخواست و verify خودکار + جدول bk_gateway_payments. حداقل '.money($s['gateway_min_charge']??100000).' تا '.money($s['gateway_max_charge']??50000000).' تومان.','درگاه'],
-        ['🏦','کارت‌به‌کارت با فیش','بانک + به نام + شماره کارت از تنظیمات مدیر. کاربر فیش آپلود می‌کند، مدیر در admin-finance تأیید/رد می‌کند.','کارت‌به‌کارت'],
-        ['💸','درخواست تسویه','شبا ≥20، کارت ≥16، کد ملی ≥10، حداقل '.money($s['min_withdrawal']??200000).' تومان. debit + ثبت در withdrawals + بررسی مدیر.','تسویه'],
-        ['🎁','معرفی دوستان','کد referral_code + لینک /register?ref=CODE. دعوت‌شونده '.money($s['invitee_credit']??10000).' هدیه، دعوت‌کننده '.money($s['referral_reward']??20000).' پس از اولین فعالیت موفق (آپلود/خرید).','رفرال'],
-        ['👑','اشتراک ویژه','۱/۳/۱۲ ماهه با قیمت‌های قابل تنظیم. دسترسی نامحدود به قلق‌های پولی + نشان premium + اولویت نمایش.','اشتراک'],
-        ['🧾','تاریخچه تراکنش‌ها','تمام تراکنش‌ها با نوع، مبلغ، موجودی بعد و توضیح. قابل مشاهده در wallet.','تراکنش'],
-      ] as $f):?>
-        <div class="card auth-card" style="padding:16px"><div style="font-size:28px"><?=h($f[0])?></div><h3 style="font-size:13px;margin:6px 0"><?=h($f[1])?></h3><p style="font-size:11px;color:var(--text-soft);line-height:2"><?=h($f[2])?></p><span class="pill blue" style="margin-top:6px"><?=h($f[3])?></span></div>
-      <?php endforeach;?>
-    </div>
-  </section>
-
-
-
-  <!-- امکانات کلیدی -->
-  <section class="section" id="features">
-    <div class="section-head"><div><h2>⭐ امکانات کلیدی - کامل</h2><p>چرا بردخان؟</p></div></div>
-    <div class="tour-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
-      <?php foreach([
-        ['🏪','فروشگاه برد با امانت','برد دست دوم/تعمیرشده را با تضمین بخرید؛ وجه نزد بردخان امن است تا تأیید دریافت.','امانت'],
-        ['🔓','۳ نوع دسترسی','رایگان، با لایک (blur + باز شدن دائمی)، پرداختی (کمیسیون 20٪).','دسترسی'],
-        ['🎬','ریلز اینستاگرامی','اسکرول تمام‌صفحه snap + لایک دابل‌تپ + کامنت آجاکس + اشتراک.','ریلز'],
-        ['👛','کیف پول داخلی','درگاه واقعی زرین‌پال/آیدی‌پی/زیبال + کارت‌به‌کارت + تسویه شبا.','مالی'],
-        ['🎁','معرفی دوستان','کد اختصاصی + پاداش دوطرفه پس از فعالیت موفق.','رفرال'],
-        ['🛠','درخواست تعمیر','مشکل را مطرح کنید، پاداش نقدی/لایکی تعیین کنید، بهترین پاسخ را انتخاب کنید.','تعمیر'],
-        ['🏆','گیمیفیکیشن','امتیاز، سطح تازه‌کار تا استاد، ۷ نشان خودکار، رتبه‌بندی.','بازی'],
-        ['🔍','جستجوی پیشرفته','فیلتر دسته، سختی، برند، قیمت، دسترسی + live search آجاکس.','جستجو'],
-        ['✉️','تیکت پشتیبانی','۳ مقصد (پشتیبانی/مدیریت/فروشنده) + اولویت + انتساب کارشناس.','پشتیبانی'],
-        ['📨','تماس با ما','فرم با honeypot + اطلاعات تماس قابل تنظیم + فعال/غیرفعال.','تماس'],
-        ['📱','PWA','نصب روی موبایل، آفلاین، بنر نصب + پشتیبانی iOS.','PWA'],
-        ['🛡️','امنیت','CSRF، XSS، SQLi، آپلود امن، media proxy با nonce + واترمارک.','امنیت'],
-        ['📊','پنل مدیریت کامل','داشبورد با چارت ۷ روزه + مدیریت قلق/برد/کاربر/مالی/تیکت/سئو.','مدیریت'],
-        ['📌','نوار شناور','قابل ویرایش از /admin-actionbar، ۸ آیتم max با نقش‌ها.','نوار'],
-      ] as $f):?>
-        <div class="card auth-card" style="padding:16px"><div style="font-size:26px"><?=h($f[0])?></div><div><h3 style="font-size:13px;margin:6px 0"><?=h($f[1])?></h3><p style="font-size:11px;color:var(--text-soft);line-height:2"><?=h($f[2])?></p><span class="pill blue" style="margin-top:6px"><?=h($f[3])?></span></div></div>
-      <?php endforeach;?>
-    </div>
-  </section>
-
-  <!-- FAQ کامل -->
-  <section class="section" id="faq">
-    <div class="section-head"><div><h2>❓ سوالات پرتکرار - کامل (۱۲ مورد)</h2><p>همه چیز درباره بردخان</p></div></div>
-    <div class="card" style="padding:20px">
-      <?php foreach([
-        ['چطور قلق ثبت کنم؟','وارد حساب شوید → دکمه + آپلود → عنوان ≥8 حرف، توضیح کوتاه ≥20، توضیح کامل ≥20، نام دستگاه و برند و دسته + حداقل ۱ عکس (JPG/PNG/WebP تا 10MB، خودکار کوچک به 1920px). گزینه‌های اختیاری (مدل، شماره برد، نوع خرابی، سختی، مراحل گام‌به‌گام، ابزار، تگ، ویدیو یوتیوب/آپارات یا MP4 تا 50MB) را می‌توانید باز کنید. سپس انتشار → وضعیت pending → تأیید مدیر → منتشرشده.'],
-        ['قلق من کی منتشر می‌شود؟','بعد از بررسی مدیر در /admin?tab=tips. اگر تکراری تشخیص داده شود (عنوان مشابه یا دستگاه+برند مشابه)، pending می‌ماند. در my-tips وضعیت را ببینید. پس از انتشار، پاداش آپلود به کیف پول‌تان می‌آید.'],
-        ['قلق لایکی یعنی چه؟','تصاویر و مراحل با blur 16px محو است. کاربر با یک لایک (favorite) آن را برای همیشه باز می‌کند. سقف لایک روزانه هر کاربر از تنظیمات (مثلاً 5) است. در ریلز، کلیک لایک = باز کردن خودکار.'],
-        ['قلق پولی چطور کار می‌کند؟','کاربر مبلغ را از کیف پول می‌پردازد (debit تراکنشی). کمیسیون سایت (20٪) کسر و سهم فروشنده (80٪) به کیف پولش واریز می‌شود. نشان first_purchase و first_sale خودکار اعطا می‌شود.'],
-        ['ریلز چیست و چطور کار می‌کند؟','ریلز مثل اینستاگرام است: اسکرول عمودی تمام‌صفحه بین 60 قلق آخر. امکانات: لایک با دابل‌تپ ❤️ (انیمیشن pop)، تعویض عکس با کلیک، کامنت آجاکس، اشتراک با Web Share API، باز کردن قفل پولی/لایکی، پروگرس بار، کیبورد ArrowUp/Down. برای تست بدون DB: /reels-demo'],
-        ['فروشگاه برد با امانت چطور امن است؟','خریدار مبلغ را می‌پردازد → وجه به حساب امانت مدیر (escrow) می‌رود (نه مستقیم به فروشنده) → فروشنده باید شرکت حمل (پست/تیپاکس/باربری/پیک) + کد رهگیری ≥6 حرف ثبت کند (board_ship) → وضعیت shipped → خریدار پس از دریافت، تأیید دریافت (board_confirm) → وجه از امانت آزاد و به فروشنده واریز (منهای کمیسیون 10٪). اگر مشکل بود، مدیر لغو و بازگشت وجه می‌زند.'],
-        ['چطور فروشنده شوم؟','وارد /seller-apply شوید، متن ≥20 حرف درباره تخصص‌تان بنویسید (مثلاً 8 سال تعمیر پاور و مادربرد). مدیر در /admin?tab=sellers تأیید می‌کند → seller_status=approved → می‌توانید در /boards/new برد ثبت کنید.'],
-        ['کیف پول را چطور شارژ کنم؟','از /wallet یا /wallet-plus: 1) درگاه آنلاین (زرین‌پال/آیدی‌پی/زیبال) - در admin-finance تنظیم می‌شود، 2) کارت‌به‌کارت: مبلغ به کارت مدیر واریز + فیش آپلود → مدیر در admin-finance تأیید می‌کند. حداقل و حداکثر شارژ از تنظیمات.'],
-        ['تسویه و برداشت چطور است؟','در /wallet فرم تسویه: شبا ≥20، کارت ≥16، کد ملی ≥10، مبلغ ≥ حداقل (200k) و ≤ موجودی. درخواست ثبت → مدیر در admin?tab=withdrawals یا admin-finance بررسی → واریز شد یا رد و برگشت وجه.'],
-        ['معرفی دوستان چقدر پاداش دارد؟','کد شما در /wallet و /referral: لینک /register?ref=CODE. دوست شما با کد شما ثبت‌نام کند → '.money($s['invitee_credit']??10000).' تومان هدیه می‌گیرد. شما پس از اولین فعالیت موفق او (آپلود قلق منتشرشده یا خرید) → '.money($s['referral_reward']??20000).' تومان پاداش می‌گیرید. فقط یک‌بار برای هر دعوت‌شده.'],
-        ['اگر مشکل داشتم چکار کنم؟','1) /diag-version را چک کنید (نسخه کد باید 4.0+ باشد)، 2) اگر OPcache فعال است /php-extended/opcache_clear.php?key=INSTALL_KEY را باز کنید، 3) تیکت در /tickets ثبت کنید (مقصد پشتیبانی/مدیریت/فروشنده + اولویت)، 4) یا فرم تماس با ما (اگر فعال باشد) یا اطلاعات تماس در /contact.'],
-      ] as $q):?>
-        <details style="padding:14px 0;border-bottom:1px solid var(--line)"><summary style="cursor:pointer;font-weight:900;font-size:14px;color:var(--text)"><?=h($q[0])?></summary><p class="muted" style="font-size:12px;margin:12px 0 0;line-height:2.2"><?=h($q[1])?></p></details>
-      <?php endforeach;?>
-    </div>
-  </section>
-
-  <!-- CTA نهایی -->
-  <section class="section">
-    <div class="card auth-card" style="text-align:center;padding:24px;background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(56,189,248,.06));border:1px solid rgba(16,185,129,.2)">
-      <h3 style="font-size:18px">🚀 آماده‌اید؟</h3>
-      <p class="muted" style="font-size:13px;max-width:600px;margin:8px auto 0;line-height:2">دانش تعمیراتی شما می‌تواند درآمد بسازد. همین حالا ثبت‌نام کنید، اولین قلق را ثبت کنید و در ریلز بدرخشید.</p>
-      <div class="flex center gap mt" style="flex-wrap:wrap;justify-content:center;margin-top:16px">
-        <a class="btn btn-amber btn-lg" href="<?=url('register')?>">✨ ثبت‌نام رایگان</a>
-        <a class="btn btn-primary" href="<?=url('upload')?>">➕ ثبت قلق</a>
-        <a class="btn btn-secondary" href="<?=url('reels')?>">🎬 ریلز</a>
-        <a class="btn btn-secondary" href="<?=url('boards')?>">🏪 فروشگاه</a>
-        <a class="btn btn-secondary" href="<?=url('tickets')?>">✉ پشتیبانی</a>
-      </div>
-      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - پنل حرفه‌ای مدیریت و کاربران</p>
-    </div>
-  </section>
-</main><?php footer_html();exit; }
+  </main>
+  <?php footer_html();exit; }
 header_html('صفحه پیدا نشد');?><main class="wrap page"><div class="card empty"><h1>صفحه پیدا نشد</h1><a class="btn btn-primary mt" href="<?=url()?>">بازگشت به خانه</a></div></main><?php footer_html();

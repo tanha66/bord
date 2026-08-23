@@ -46,13 +46,13 @@ required.forEach(f => {
 const index = read('index.php');
 
 // Routes
-const routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
+const routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','verify-email','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
 routes.forEach(r => {
   test(`Route ${r}`, () => index.includes(`'${r}'`) || index.includes(`"${r}"`) ? true : 'یافت نشد');
 });
 
 // Actions
-const actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','unlock','comment','rate','follow','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','repair_answer','repair_best','report','comment_vote'];
+const actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','unlock','comment','rate','follow','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','email_code_send','email_code_verify','email_code_resend','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','repair_answer','repair_best','report','comment_vote'];
 actions.forEach(a => {
   test(`Action ${a}`, () => index.includes(`'${a}'`) ? true : `ناموجود`);
 });
@@ -84,7 +84,7 @@ test('manifest valid', () => {
   try { const m = JSON.parse(read('manifest.webmanifest')); return m.name ? true : 'name ندارد'; } catch(e){ return 'JSON نامعتبر'; }
 });
 test('sw.js CACHE', () => read('sw.js').includes('CACHE') ? true : 'نیست');
-test('sw.js NO_CACHE', () => read('sw.js').includes('NO_CACHE') ? true : 'نیست');
+test('sw.js فقط assets کش می‌شود (HTML نه)', () => (read('sw.js').includes("pathname.startsWith('/assets/')") && read('sw.js').indexOf('bordkhan-pwa-v5') > -1) ? true : 'HTML هنوز کش می‌شود');
 
 // CSS
 const css = read('assets/style.css');

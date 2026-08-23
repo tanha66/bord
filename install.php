@@ -151,6 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('settings', 'og_image', 'og_image VARCHAR(500) NULL');
                     $ensureColumn('settings', 'google_analytics', 'google_analytics VARCHAR(100) NULL');
                     $ensureColumn('settings', 'board_commission_percent', 'board_commission_percent INT NOT NULL DEFAULT 10');
+                    $ensureColumn('users', 'email_verified', 'email_verified TINYINT(1) NOT NULL DEFAULT 0');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');

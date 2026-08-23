@@ -8,7 +8,7 @@ DROP TABLE IF EXISTS `notifications`, `badges`, `reports`, `media_access`, `book
 
 CREATE TABLE IF NOT EXISTS users (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  phone VARCHAR(30) NOT NULL UNIQUE,
+  phone VARCHAR(30) NULL UNIQUE,
   email VARCHAR(190) NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(120) NOT NULL,
@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   likes_used_today INT NOT NULL DEFAULT 0,
   likes_used_date DATE NULL,
   phone_verified TINYINT(1) NOT NULL DEFAULT 0,
+  email_verified TINYINT(1) NOT NULL DEFAULT 0,
   verified TINYINT(1) NOT NULL DEFAULT 0,
   is_banned TINYINT(1) NOT NULL DEFAULT 0,
   is_deleted TINYINT(1) NOT NULL DEFAULT 0,
@@ -317,6 +318,18 @@ CREATE TABLE IF NOT EXISTS board_orders (
   INDEX idx_orders_status (status),
   INDEX idx_orders_buyer (buyer_id),
   INDEX idx_orders_seller (seller_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- v5.5: کدهای تأیید ایمیل (ثبت‌نام و دروازهٔ خرید/آپلود)
+CREATE TABLE IF NOT EXISTS email_codes (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(190) NOT NULL,
+  code VARCHAR(10) NOT NULL,
+  purpose VARCHAR(20) NOT NULL DEFAULT 'gate',
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_email_codes_email (email, purpose),
+  INDEX idx_email_codes_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS settings (
