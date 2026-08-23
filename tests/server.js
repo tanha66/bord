@@ -64,6 +64,7 @@ function serveIndex(res) {
     <p style="color:#9fb0c3;font-size:13px">صفحه ریلز اینستاگرامی با رفع باگ‌های بحرانی و بهبود UX</p>
     <div>
       <a class="btn" href="/tests/reels_visual_test.html">تست بصری مستقل (۴ ریل)</a>
+      <a class="btn" href="/tests/bot_panel_visual_test.html">پیش‌نمایش پنل حرفه‌ای ربات v5</a>
       <a class="btn secondary" href="/reels-demo">دمو بدون DB (۵ ریل) - نیاز به PHP</a>
       <a class="btn secondary" href="/reels">ریلز اصلی - نیاز به PHP + DB</a>
     </div>
@@ -193,7 +194,7 @@ const server = http.createServer((req, res) => {
   // For PHP routes, show message that needs PHP server
   if (['/reels','/reels-demo','/reels-test','/tips','/boards','/login','/register','/admin','/wallet','/upload'].some(p => urlPath.startsWith(p))) {
     const msg = `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>نیاز به PHP</title><style>body{font-family:Tahoma;background:#0a0f14;color:#d7e0ea;padding:40px;max-width:700px;margin:auto;line-height:2} .card{background:#101722;border:1px solid #1e2a3a;border-radius:16px;padding:20px} a{color:#10b981} .btn{display:inline-block;padding:10px 18px;background:#10b981;color:#04110b;border-radius:12px;text-decoration:none;font-weight:800;margin-top:10px}</style></head><body>
-    <div class="card"><h2>⚠️ این صفحه نیاز به سرور PHP دارد</h2><p>شما در حال مشاهده سرور تست Node.js هستید که فقط فایل‌های استاتیک را سرو می‌کند.</p><p>برای تست <code>${urlPath}</code> نیاز به اجرای PHP دارید:</p><code>php -S 0.0.0.0:8000 -t /home/user/bord</code><p>یا از دمو بدون نیاز به PHP استفاده کنید:</p><a class="btn" href="/tests/reels_visual_test.html">🎬 تست بصری ریلز (بدون PHP)</a> <a class="btn" href="/">بازگشت به داشبورد</a></div></body></html>`;
+    <div class="card"><h2>⚠️ این صفحه نیاز به سرور PHP دارد</h2><p>شما در حال مشاهده سرور تست Node.js هستید که فقط فایل‌های استاتیک را سرو می‌کند.</p><p>برای تست <code>${urlPath}</code> نیاز به اجرای PHP دارید:</p><code>php -S 0.0.0.0:8000 -t /home/user/bord</code><p>یا از دمو بدون نیاز به PHP استفاده کنید:</p><a class="btn" href="/tests/reels_visual_test.html">🎬 تست بصری ریلز (بدون PHP)</a> <a class="btn" href="/tests/bot_panel_visual_test.html">🤖 پنل ربات v5</a> <a class="btn" href="/">بازگشت به داشبورد</a></div></body></html>`;
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return res.end(msg);
   }

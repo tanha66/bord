@@ -53,6 +53,11 @@ function bk_schema_columns(): array {
         ['settings', 'auto_collect_save_path', 'VARCHAR(100) NOT NULL DEFAULT "auto"'],
         ['settings', 'auto_collect_max_retries', 'INT NOT NULL DEFAULT 2'],
         ['settings', 'auto_collect_timeout', 'INT NOT NULL DEFAULT 12'],
+        // ربات پیشرفته v5.0 — محدودیت زمان، چرخش منابع، قفل اجرای همزمان
+        ['settings', 'auto_collect_time_limit', 'INT NOT NULL DEFAULT 100'],
+        ['settings', 'auto_collect_rotate', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['settings', 'auto_collect_last_offset', 'INT NOT NULL DEFAULT 0'],
+        ['settings', 'auto_collect_lock', 'DATETIME NULL'],
         ['bk_gateway_payments', 'order_id', 'VARCHAR(190) NULL'],
     ];
 }
@@ -92,6 +97,42 @@ function bk_schema_tables(): array {
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, verified_at DATETIME NULL,
             UNIQUE KEY uq_gateway_authority(gateway, authority), INDEX idx_gateway_user_status(user_id,status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        /* ربات پیشرفته v5.0 — تاریخچهٔ اجراها */
+        'bot_runs' => "CREATE TABLE bot_runs (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            trigger_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+            status VARCHAR(20) NOT NULL DEFAULT 'running',
+            requested INT NOT NULL DEFAULT 0,
+            created INT NOT NULL DEFAULT 0,
+            scanned INT NOT NULL DEFAULT 0,
+            duplicates INT NOT NULL DEFAULT 0,
+            errors INT NOT NULL DEFAULT 0,
+            images_downloaded INT NOT NULL DEFAULT 0,
+            sources_ok INT NOT NULL DEFAULT 0,
+            sources_failed INT NOT NULL DEFAULT 0,
+            duration_sec DECIMAL(7,1) NOT NULL DEFAULT 0,
+            dry_run TINYINT(1) NOT NULL DEFAULT 0,
+            regions_json VARCHAR(500) NULL,
+            message VARCHAR(500) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at DATETIME NULL,
+            INDEX idx_bot_runs_status(status), INDEX idx_bot_runs_created(created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        /* ربات پیشرفته v5.0 — سلامت منابع */
+        'bot_sources' => "CREATE TABLE bot_sources (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            url VARCHAR(500) NOT NULL UNIQUE,
+            region VARCHAR(20) NOT NULL DEFAULT 'western',
+            last_status VARCHAR(10) NOT NULL DEFAULT 'ok',
+            last_check DATETIME NULL,
+            last_items INT NOT NULL DEFAULT 0,
+            last_ms INT NOT NULL DEFAULT 0,
+            ok_count INT NOT NULL DEFAULT 0,
+            fail_count INT NOT NULL DEFAULT 0,
+            consecutive_fails INT NOT NULL DEFAULT 0,
+            last_error VARCHAR(300) NULL,
+            INDEX idx_bot_sources_status(last_status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
 }

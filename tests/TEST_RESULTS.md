@@ -155,3 +155,35 @@ http://localhost:8000/reels
 - `tests/reels_manual_test.md` - جدید
 - `tests/reels_visual_test.html` - جدید
 - `tests/TEST_RESULTS.md` - این فایل
+
+---
+
+# 🤖 ربات پیشرفته v5.0 + پنل حرفه‌ای — 2026-08-23
+
+## خلاصهٔ تغییرات
+
+- **موتور v5:** امتیازدهی کیفیت (score_candidate)، تشخیص تکرار ۳لایه (URL + عنوان + شباهت فازی جاکارد ۵۵٪)، قفل اجرای همزمان، گارد زمان (time_limit)، چرخش هوشمند منابع/کوئری‌ها، حالت آزمایشی dry_run، شمارش عکس‌های دانلودی و تفکیک منطقه‌ای
+- **جداول جدید:** `bot_runs` (تاریخچهٔ اجرا) و `bot_sources` (سلامت منابع) + ۴ ستون جدید settings
+- **پنل حرفه‌ای:** `pages/admin_collect_v5.php` با ۴ زیرتب (پیشخوان/اجرا، سلامت منابع، محتوای ربات، تنظیمات)، اجرای زندهٔ AJAX با نوار پیشرفت، KPI زنده از `/ajax-bot-status`
+- **اکشن‌های جدید:** `admin_bot_run`، `admin_bot_tip` + مسیر `ajax-bot-status` + cron ارتقایافته با لاگ
+- **نسخه:** BORDKHAN_VERSION → 5.0
+
+## نتایج تست
+
+| تست | نتیجه |
+| --- | --- |
+| `node tests/full_test_runner.js` | ✅ 121/121 PASS |
+| بررسی syntax همهٔ فایل‌های PHP تغییر یافته (php-parser) | ✅ OK |
+| تست‌های ایستای ربات v5 در `tests/full_project_test.php` | ✅ ۱۹ مورد جدید اضافه شد |
+
+## فایل‌های تغییر یافته
+
+- `index.php` — موتور v5 + اکشن‌ها + مسیرها + نسخه 5.0
+- `pages/admin.php` — تب collect به پنل v5 وصل شد
+- `pages/admin_collect_v5.php` — جدید (پنل حرفه‌ای)
+- `php-extended/schema_build.php` — جداول/ستون‌های جدید
+- `install.php` — ستون‌های جدید settings
+- `assets/style.css` — استایل پنل v5
+- `tests/full_project_test.php` — تست‌های v5
+- `tests/BOT_V5.md` — مستندات کامل v5
+- `README.md` — بخش ربات پیشرفته

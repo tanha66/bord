@@ -28,13 +28,13 @@ foreach($requiredFiles as $f){
 
 // 2. بررسی index.php برای routeهای اصلی
 $index = file_get_contents(__DIR__.'/../index.php');
-$routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','cron-collect','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
+$routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','cron-collect','ajax-bot-status','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
 foreach($routes as $r){
     add_test("Route $r", strpos($index, "'$r'")!==false || strpos($index, "\"$r\"")!==false, strpos($index, "'$r'")!==false ? 'یافت شد' : 'یافت نشد');
 }
 
 // 3. بررسی اکشن‌های POST
-$actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','my_tip_toggle','my_tip_resubmit','admin_tip_edit','admin_tip_delete','unlock','comment','rate','follow','repair_answer','repair_best','report','comment_vote','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','admin_collect','subscribe','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create'];
+$actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','my_tip_toggle','my_tip_resubmit','admin_tip_edit','admin_tip_delete','unlock','comment','rate','follow','repair_answer','repair_best','report','comment_vote','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','admin_collect','subscribe','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','admin_bot_run','admin_bot_tip'];
 foreach($actions as $a){
     add_test("Action $a", strpos($index, "'$a'")!==false, strpos($index, "'$a'")!==false ? 'موجود' : 'ناموجود - ممکن است باگ باشد');
 }
@@ -78,6 +78,33 @@ add_test('schema.sql جدول boards', strpos($schema, 'boards')!==false, 'مو�
 add_test('تابع fa() تبدیل اعداد', function_exists('fa') || strpos($index, 'function fa')!==false, 'موجود');
 add_test('تابع h() برای XSS', strpos($index, 'function h(')!==false, 'موجود');
 add_test('تابع url()', strpos($index, 'function url(')!==false, 'موجود');
+
+// 10. ربات پیشرفته v5.0
+$schemaBuild = file_get_contents(__DIR__.'/../php-extended/schema_build.php');
+$adminCollect = is_file(__DIR__.'/../pages/admin_collect_v5.php') ? file_get_contents(__DIR__.'/../pages/admin_collect_v5.php') : '';
+foreach([
+    ['موتور: score_candidate (امتیازدهی کیفیت)', $index, 'function score_candidate'],
+    ['موتور: bot_title_tokens + شباهت فازی', $index, 'function bot_titles_similar'],
+    ['موتور: قفل اجرای همزمان', $index, 'auto_collect_lock'],
+    ['موتور: چرخش منابع', $index, 'auto_collect_last_offset'],
+    ['موتور: گارد زمان اجرا', $index, 'timeLimit'],
+    ['موتور: حالت آزمایشی dry_run', $index, 'dry_run'],
+    ['لاگ اجراها: bot_run_start', $index, 'function bot_run_start'],
+    ['لاگ اجراها: bot_run_end', $index, 'function bot_run_end'],
+    ['پایش منابع: bot_update_source', $index, 'function bot_update_source'],
+    ['جدول bot_runs در اسکیما', $schemaBuild, "CREATE TABLE bot_runs"],
+    ['جدول bot_sources در اسکیما', $schemaBuild, "CREATE TABLE bot_sources"],
+    ['اکشن AJAX اجرای زنده', $index, "admin_bot_run"],
+    ['اکشن عملیات سریع قلق ربات', $index, "admin_bot_tip"],
+    ['مسیر وضعیت ربات', $index, "ajax-bot-status"],
+    ['پنل: فایل admin_collect_v5.php', $adminCollect, 'bkBotRunForm'],
+    ['پنل: زیرتب‌ها (run/sources/content/settings)', $adminCollect, "bk-subtabs"],
+    ['پنل: جدول تاریخچهٔ اجراها', $adminCollect, 'bot_runs'],
+    ['پنل: جدول سلامت منابع', $adminCollect, 'bot_sources'],
+    ['نسخهٔ 5.0', $index, "BORDKHAN_VERSION', '5.0'"],
+] as $bt){
+    add_test("ربات v5 — {$bt[0]}", is_string($bt[1]) && strpos($bt[1], $bt[2])!==false, 'بررسی کد');
+}
 
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";

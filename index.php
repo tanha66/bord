@@ -2,7 +2,7 @@
 require __DIR__ . '/config.php';
 
 /* نسخهٔ کد — برای تشخیص اینکه سرور واقعاً کدام نسخه را اجرا می‌کند */
-if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '4.0');
+if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.0');
 
 /* ---------- helper های مقاوم — حتی اگر config.php سرور قدیمی باشد ---------- */
 if (!function_exists('mb_strlen')) {
@@ -171,6 +171,10 @@ function settings(): array {
         'auto_collect_save_path'=>'auto',
         'auto_collect_max_retries'=>2,
         'auto_collect_timeout'=>12,
+        'auto_collect_time_limit'=>100,
+        'auto_collect_rotate'=>1,
+        'auto_collect_last_offset'=>0,
+        'auto_collect_lock'=>null,
         'contact_form_enabled'=>0,
         'contact_email'=>'',
         'contact_phone'=>'',
@@ -882,14 +886,146 @@ function chinese_repair_sites(): array {
         'dianyuan.com' => 'Dianyuan - چین (پاور)',
     ];
 }
+/* ================== ربات پیشرفته v5.0 — زیرساخت لاگ، سلامت منابع، امتیازدهی و تشخیص تکرار هوشمند ================== */
+
+/** آیا جدول ربات موجود است؟ (نصب‌های قدیمی بدون migrate هم کرش نمی‌کنند) */
+function bot_table_ready(string $table): bool {
+    static $cache = [];
+    if (!isset($cache[$table])) {
+        try {
+            $q = db()->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
+            $q->execute([$table]);
+            $cache[$table] = (bool)$q->fetchColumn();
+        } catch (Throwable $e) { $cache[$table] = false; }
+    }
+    return $cache[$table];
+}
+/** به‌روزرسانی سریع یک ستون تنظیمات (بدون کش static) */
+function bot_set_setting(string $key, $value): void {
+    try { db()->prepare('UPDATE settings SET `' . $key . '`=? WHERE id=1')->execute([$value]); } catch (Throwable $e) {}
+}
+/** خواندن خام یک ستون تنظیمات مستقیم از DB */
+function bot_get_setting(string $key) {
+    try { $q = db()->prepare('SELECT `' . $key . '` FROM settings WHERE id=1'); $q->execute(); return $q->fetchColumn(); } catch (Throwable $e) { return null; }
+}
+/** تشخیص منطقهٔ منبع از روی دامنه */
+function bot_region_for_host(?string $host): string {
+    $host = strtolower((string)$host);
+    if (preg_match('/(electronicsforu|circuitdigest|electronicshub|engineersgarage|electricaltechnology)/i', $host)) return 'indian';
+    if (preg_match('/(elecfans|21ic|eet-china|eepw|dianyuan|chinafix)/i', $host)) return 'chinese';
+    if (preg_match('/(\.jp$|co\.jp|sharp|panasonic|nihon|eldi)/i', $host)) return 'japanese';
+    return 'western';
+}
+/** توکن‌های عنوان برای تشخیص تکرار فازی (حذف کلمات عمومی فارسی/انگلیسی و علائم) */
+function bot_title_tokens(string $title): array {
+    $t = mb_strtolower(trim($title));
+    $t = preg_replace('/[\p{P}\p{S}\d]+/u', ' ', $t) ?? $t;
+    $stop = ['the','a','an','of','for','to','in','on','with','and','or','how','fix','repair','board','not','is','my','از','به','با','در','برای','و','که','این','آن','تعمیر','رفع','مشکل','راه','حل','آموزش','نصب'];
+    $tokens = [];
+    foreach (preg_split('/\s+/u', $t) ?: [] as $w) {
+        $w = trim($w);
+        if ($w === '' || mb_strlen($w) < 2 || in_array($w, $stop, true)) continue;
+        $tokens[] = $w;
+    }
+    return array_values(array_unique($tokens));
+}
+/** شباهت دو عنوان با ضریب جاکارد — آستانهٔ ۵۵٪ یعنی تکرار */
+function bot_titles_similar(array $a, array $b, float $threshold = 0.55): bool {
+    if (!$a || !$b) return false;
+    $inter = array_intersect($a, $b);
+    $union = array_unique(array_merge($a, $b));
+    return (count($inter) / max(1, count($union))) >= $threshold;
+}
+/** امتیاز کیفیت کاندید — ربات بهترین‌ها را اول انتخاب می‌کند نه اولین‌ها را */
+function score_candidate(array $c): int {
+    $score = 0;
+    $title = (string)($c['title'] ?? '');
+    $desc = (string)($c['description'] ?? '');
+    $tl = mb_strlen($title);
+    if ($tl >= 25 && $tl <= 95) $score += 25; elseif ($tl >= 15) $score += 12;
+    $dl = mb_strlen($desc);
+    if ($dl >= 600) $score += 30; elseif ($dl >= 300) $score += 22; elseif ($dl >= 120) $score += 12;
+    if (!empty($c['image']) || !empty($c['images'])) $score += 15;
+    $low = mb_strtolower($title . ' ' . $desc);
+    foreach (['no power','short circuit','backlight','capacitor','mosfet','bios','charger','آب‌خوردگی','خازن','ماسفت','بایوس','بک‌لایت','اتصال کوتاه','شارژ'] as $kw) {
+        if (mb_strpos($low, $kw) !== false) { $score += 6; break; }
+    }
+    foreach (['motherboard','laptop','tv','monitor','phone','gpu','psu','inverter','مادربرد','لپ','تلویزیون','موبایل','کارت','پاور'] as $kw) {
+        if (mb_strpos($low, $kw) !== false) { $score += 8; break; }
+    }
+    if (!empty($c['url']) && filter_var($c['url'], FILTER_VALIDATE_URL)) $score += 5;
+    $src = strtolower((string)($c['source'] ?? $c['source_name'] ?? ''));
+    foreach (['reddit' => 12, 'ifixit' => 12, 'eevblog' => 10, 'hackaday' => 8, 'stackexchange' => 10, 'electronicsforu' => 6, 'circuitdigest' => 6] as $dom => $pts) {
+        if (str_contains($src, $dom)) { $score += $pts; break; }
+    }
+    return min(120, $score);
+}
+/** ثبت سلامت منبع بعد از هر fetch */
+function bot_update_source(string $url, bool $ok, int $ms, int $items, string $region, string $error = ''): void {
+    if (!bot_table_ready('bot_sources')) return;
+    try {
+        $pdo = db();
+        if ($ok) {
+            $pdo->prepare("INSERT INTO bot_sources(url,region,last_status,last_check,last_items,last_ms,ok_count,fail_count,consecutive_fails,last_error) VALUES(?,?,'ok',NOW(),?,?,1,0,0,NULL) ON DUPLICATE KEY UPDATE region=VALUES(region),last_status='ok',last_check=NOW(),last_items=VALUES(last_items),last_ms=VALUES(last_ms),ok_count=ok_count+1,consecutive_fails=0,last_error=NULL")->execute([$url, $region, $items, $ms]);
+        } else {
+            $pdo->prepare("INSERT INTO bot_sources(url,region,last_status,last_check,last_items,last_ms,ok_count,fail_count,consecutive_fails,last_error) VALUES(?,?,'fail',NOW(),0,?,0,1,1,?) ON DUPLICATE KEY UPDATE region=VALUES(region),last_status='fail',last_check=NOW(),last_ms=VALUES(last_ms),fail_count=fail_count+1,consecutive_fails=consecutive_fails+1,last_error=VALUES(last_error)")->execute([$url, $region, $ms, mb_substr($error, 0, 280)]);
+        }
+    } catch (Throwable $e) {}
+}
+/** شروع لاگ اجرا — شناسهٔ اجرا را برمی‌گرداند (یا 0 اگر جدول نبود) */
+function bot_run_start(string $trigger, int $requested, bool $dryRun): int {
+    if (!bot_table_ready('bot_runs')) return 0;
+    try {
+        db()->prepare("INSERT INTO bot_runs(trigger_type,status,requested,dry_run) VALUES (?, 'running', ?, ?)")->execute([$trigger, $requested, $dryRun ? 1 : 0]);
+        return (int)db()->lastInsertId();
+    } catch (Throwable $e) { return 0; }
+}
+/** پایان لاگ اجرا */
+function bot_run_end(int $runId, array $r): void {
+    if (!$runId || !bot_table_ready('bot_runs')) return;
+    try {
+        db()->prepare('UPDATE bot_runs SET status=?, created=?, scanned=?, duplicates=?, errors=?, images_downloaded=?, sources_ok=?, sources_failed=?, duration_sec=?, regions_json=?, message=?, finished_at=NOW() WHERE id=?')
+            ->execute([
+                !empty($r['error']) ? 'failed' : 'completed',
+                (int)($r['created'] ?? 0), (int)($r['scanned'] ?? 0), (int)($r['duplicates'] ?? 0),
+                (int)($r['errors'] ?? 0), (int)($r['images_downloaded'] ?? 0),
+                (int)($r['sources_ok'] ?? 0), (int)($r['sources_failed'] ?? 0),
+                round((float)($r['duration'] ?? 0), 1),
+                json_encode($r['regions'] ?? [], JSON_UNESCAPED_UNICODE),
+                mb_substr((string)($r['error'] ?? $r['message'] ?? ''), 0, 480),
+                $runId,
+            ]);
+    } catch (Throwable $e) {}
+}
 function collect_tips_web(int $count, int $categoryId, string $access, array $sources, array $queries = [], array $extraSettings = []): array {
+    $startedAt = microtime(true);
     $pdo = db();
+    $dryRun = !empty($extraSettings['dry_run']);
+    $trigger = in_array($extraSettings['trigger'] ?? 'manual', ['manual', 'cron', 'panel'], true) ? ($extraSettings['trigger'] ?? 'manual') : 'manual';
     $botQ = $pdo->prepare("SELECT id FROM users WHERE phone='09100000000' LIMIT 1");
     $botQ->execute();
     $botId = (int)$botQ->fetchColumn();
     if (!$botId) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'حساب کاربر سیستم یافت نشد. نصب را دوباره اجرا کنید.'];
 
-    // تنظیمات پیشرفته ربات از extraSettings یا از settings() جدول - v4.3 کامل با هندی و چینی
+    // ---- قفل اجرای همزمان: از تداخل اجرای دستی و cron جلوگیری می‌کند (قفل قدیمی‌تر از ۱۰ دقیقه نادیده گرفته می‌شود)
+    $lock = bot_get_setting('auto_collect_lock');
+    $lockTs = $lock ? strtotime((string)$lock) : false;
+    $isStale = !$lockTs || (time() - $lockTs) > 600;
+    if (!$dryRun && !$isStale) {
+        return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'error' => 'اجرای همزمان مجاز نیست — یک اجرای دیگر همین الان در جریان است. چند لحظه بعد دوباره تلاش کنید.'];
+    }
+    if (!$dryRun) bot_set_setting('auto_collect_lock', date('Y-m-d H:i:s'));
+
+    $runId = bot_run_start($trigger, $count, $dryRun);
+    $finish = function (array $r) use ($startedAt, $runId, $dryRun): array {
+        $r['duration'] = round(microtime(true) - $startedAt, 1);
+        $r['duration_fa'] = fa($r['duration']);
+        bot_run_end($runId, $r);
+        if (!$dryRun) bot_set_setting('auto_collect_lock', null);
+        return $r;
+    };
+
+    // تنظیمات پیشرفته ربات از extraSettings یا از settings() جدول - v5.0 پیشرفته
     $s = settings();
     $indianEnabled = $extraSettings['indian_enabled'] ?? (int)($s['auto_collect_indian_enabled'] ?? 1) === 1;
     $chineseEnabled = $extraSettings['chinese_enabled'] ?? (int)($s['auto_collect_chinese_enabled'] ?? 0) === 1;
@@ -908,6 +1044,8 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     $savePath = $extraSettings['save_path'] ?? $s['auto_collect_save_path'] ?? 'auto';
     $maxRetries = max(1, min(5, (int)($extraSettings['max_retries'] ?? $s['auto_collect_max_retries'] ?? 2)));
     $timeout = max(5, min(30, (int)($extraSettings['timeout'] ?? $s['auto_collect_timeout'] ?? 12)));
+    $timeLimit = max(20, min(600, (int)($extraSettings['time_limit'] ?? $s['auto_collect_time_limit'] ?? 100)));
+    $rotate = $extraSettings['rotate'] ?? (int)($s['auto_collect_rotate'] ?? 1) === 1;
 
     $excludeList = array_filter(array_map('trim', preg_split('/[\n,]+/', $excludeKeywords)));
 
@@ -932,9 +1070,27 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         $sources = reputable_sources_by_region($indianEnabled, $chineseEnabled, $japaneseEnabled);
     }
 
+    /* ---- چرخش هوشمند منابع و کوئری‌ها (v5.0): هر اجرا از جای متفاوتی از لیست شروع می‌شود
+       تا همهٔ منابع به‌مرور استفاده شوند، نه همیشه ۶ تای اول */
+    $rotOffset = 0;
+    if ($rotate && count($sources) > 6) {
+        $rotOffset = max(0, (int)bot_get_setting('auto_collect_last_offset'));
+        bot_set_setting('auto_collect_last_offset', ($rotOffset + 6) % count($sources));
+    }
+    $rotSources = $sources;
+    if ($rotOffset > 0 && $rotate) {
+        $rotSources = array_merge(array_slice($sources, $rotOffset), array_slice($sources, 0, $rotOffset));
+    }
+    if ($rotate && count($queries) > 6) {
+        $qOffset = $rotOffset % count($queries);
+        $queries = array_merge(array_slice($queries, $qOffset), array_slice($queries, 0, $qOffset));
+    }
+
     $candidates = [];
     $seen = [];
     $seenUrls = [];
+    $sourcesOk = 0;
+    $sourcesFailed = 0;
     $add = function (array $c) use (&$candidates, &$seen, &$seenUrls, $minLength, $filterRepair, $excludeList, $contentType) {
         $title = trim((string)($c['title'] ?? ''));
         $desc = trim((string)($c['description'] ?? ''));
@@ -962,48 +1118,83 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         $candidates[] = $c;
     };
 
-    // 1. منابع RSS معتبر - حداکثر 10 منبع (قبلاً 8) با retry هوشمند
-    $srcsLimited = array_slice($sources, 0, 10);
+    // 1. منابع RSS معتبر - حداکثر 10 منبع با retry هوشمند + پایش سلامت و زمان پاسخ
+    $srcsLimited = array_slice($rotSources, 0, 10);
     foreach ($srcsLimited as $source) {
         $source = trim((string)$source);
         if ($source === '' || !filter_var($source, FILTER_VALIDATE_URL)) continue;
+        $t0 = microtime(true);
         $xml = null;
+        $lastErr = '';
         for ($retry=0; $retry<$maxRetries; $retry++) {
             $xml = fetch_url($source, $timeout);
             if ($xml !== null) break;
+            $lastErr = 'HTTP fetch failed after ' . ($retry+1) . ' try';
         }
-        if ($xml === null) continue;
-        $host = parse_url($source, PHP_URL_HOST) ?: 'RSS';
-        foreach (parse_rss_items($xml, $host) as $it) {
+        $host = parse_url($source, PHP_URL_HOST) ?: 'rss';
+        $region = bot_region_for_host($host);
+        if ($xml === null) {
+            $sourcesFailed++;
+            bot_update_source($source, false, (int)round((microtime(true)-$t0)*1000), 0, $region, $lastErr ?: 'no response');
+            continue;
+        }
+        $parsedItems = parse_rss_items($xml, $host);
+        bot_update_source($source, true, (int)round((microtime(true)-$t0)*1000), count($parsedItems), $region);
+        $sourcesOk++;
+        foreach ($parsedItems as $it) {
             $add($it);
         }
-        if (count($candidates) >= $count * 3) break;
+        if (count($candidates) >= $count * 4) break;
     }
 
-    // 2. جستجوی هوشمند - حداکثر 6 کوئری (قبلاً 5) با منطقه‌ای
+    // 2. جستجوی هوشمند - حداکثر 6 کوئری منطقه‌ای (با چرخش بین اجراها)
     $queriesLimited = array_slice($queries, 0, 6);
     if (!$queriesLimited) $queriesLimited = ['laptop no power fix', 'motherboard repair', 'tv backlight fix', 'mobile repair india', 'electronics repair china', 'inverter repair'];
     foreach ($queriesLimited as $query) {
         $query = trim((string)$query);
         if ($query === '') continue;
         foreach (discover_reddit($query, 3) as $r) $add($r);
-        if (count($candidates) < $count * 3) {
+        if (count($candidates) < $count * 4) {
             foreach (discover_web($query, 3) as $w) $add($w);
         }
-        if (count($candidates) >= $count * 5) break;
+        if (count($candidates) >= $count * 6) break;
     }
 
-    if (!$candidates) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'هیچ مطلبی از منابع معتبر (غربی/هندی/چینی) پیدا نشد. اینترنت سرور یا دسترسی به منابع را بررسی کنید.'];
+    if (!$candidates) return $finish(['created' => 0, 'scanned' => 0, 'errors' => 0, 'duplicates' => 0, 'sources_ok' => $sourcesOk, 'sources_failed' => $sourcesFailed, 'images_downloaded' => 0, 'error' => 'هیچ مطلبی از منابع معتبر (غربی/هندی/چینی) پیدا نشد. اینترنت سرور یا دسترسی به منابع را بررسی کنید.']);
+
+    /* ---- امتیازدهی کیفیت (v5.0): کاندیدها بر اساس امتیاز مرتب می‌شوند
+       تا ربات همیشه بهترین محتوا را انتخاب کند نه اولین نتیجه را */
+    foreach ($candidates as $i => $c) $candidates[$i]['_score'] = score_candidate($c);
+    usort($candidates, fn($a, $b) => $b['_score'] <=> $a['_score']);
+
+    /* ---- حافظهٔ تکرار فازی: عنوان‌های اخیر ربات از دیتابیس بارگیری می‌شود */
+    $dbTitleTokens = [];
+    try {
+        $q = $pdo->prepare('SELECT title FROM tips WHERE author_id=? ORDER BY id DESC LIMIT 800');
+        $q->execute([$botId]);
+        foreach ($q->fetchAll() as $row) {
+            $toks = bot_title_tokens((string)$row['title']);
+            if ($toks) $dbTitleTokens[] = $toks;
+        }
+    } catch (Throwable $e) {}
 
     $created = 0;
     $scanned = 0;
     $errors = 0;
+    $duplicates = 0;
+    $imagesDownloaded = 0;
+    $regions = ['western' => 0, 'indian' => 0, 'chinese' => 0, 'japanese' => 0];
+    $createdTitles = [];
 
     $status = $autoPublish ? 'published' : 'pending';
-    $insert = $pdo->prepare('INSERT INTO tips (author_id,category_id,title,short_description,description,device_name,brand,model,board_number,fault_type,difficulty,solution_json,tools,images_json,video_url,attachments_json,access_type,price,visibility,status,tags,version,versions_json,featured,views,likes_count,purchases_count,rating_sum,rating_count,duplicate_of,rejection_reason,source_url,source_name,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,0,0,0,0,0,NULL,NULL,?,?,?)');
+    if (!$dryRun) {
+        $insert = $pdo->prepare('INSERT INTO tips (author_id,category_id,title,short_description,description,device_name,brand,model,board_number,fault_type,difficulty,solution_json,tools,images_json,video_url,attachments_json,access_type,price,visibility,status,tags,version,versions_json,featured,views,likes_count,purchases_count,rating_sum,rating_count,duplicate_of,rejection_reason,source_url,source_name,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,0,0,0,0,0,NULL,NULL,?,?,?)');
+    }
 
     foreach ($candidates as $c) {
         if ($created >= $count) break;
+        /* گارد زمان (v5.0): اگر زمان مجاز تمام شد، اجرا با همان مقدار تولیدشده تمام می‌شود تا cron نصفه‌کاره نشود */
+        if ((microtime(true) - $startedAt) > $timeLimit) { break; }
         $scanned++;
 
         $fullText = (string)($c['description'] ?? '');
@@ -1027,16 +1218,26 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         if (mb_strlen($textForTip) < 60) $textForTip = $c['title'] . ' ' . $textForTip;
 
         // تشخیص منطقه برای ذخیره درست
-        $region = 'western';
-        $host = parse_url($c['url'] ?? '', PHP_URL_HOST) ?? $c['source'] ?? '';
-        if (preg_match('/(electronicsforu|circuitdigest|electronicshub|engineersgarage|electricaltechnology)/i', $host)) $region = 'indian';
-        elseif (preg_match('/(elecfans|21ic|eet-china|eepw|dianyuan|chinafix)/i', $host)) $region = 'chinese';
+        $host = parse_url($c['url'] ?? '', PHP_URL_HOST) ?: ($c['source'] ?? '');
+        $region = $savePath !== 'auto' ? $savePath : bot_region_for_host($host);
 
         $tip = build_persian_tip((string)$c['title'], $textForTip, (string)($c['url'] ?? ''), (string)($c['source_name'] ?? $c['source'] ?? $host));
 
-        $dq = $pdo->prepare('SELECT id FROM tips WHERE title=? OR source_url=? LIMIT 1');
-        $dq->execute([$tip['title'], $c['url'] ?? '']);
-        if ($dq->fetch()) { $errors++; continue; }
+        // ---- تشخیص تکرار سه‌لایه (v5.0): آدرس منبع + عنوان دقیق + شباهت فازی ۵۵٪
+        $dup = false;
+        if (!$dryRun) {
+            $dq = $pdo->prepare('SELECT id FROM tips WHERE title=? OR source_url=? LIMIT 1');
+            $dq->execute([$tip['title'], $c['url'] ?? '']);
+            if ($dq->fetch()) $dup = true;
+        }
+        $tipTokens = bot_title_tokens($tip['title']);
+        if (!$dup) {
+            foreach ($createdTitles as $ct) { if (bot_titles_similar($tipTokens, $ct)) { $dup = true; break; } }
+        }
+        if (!$dup) {
+            foreach ($dbTitleTokens as $dt) { if (bot_titles_similar($tipTokens, $dt)) { $dup = true; break; } }
+        }
+        if ($dup) { $duplicates++; continue; }
 
         $cat = category_for_device($tip['device'], $categoryId);
         if (!$cat) { $errors++; continue; }
@@ -1065,22 +1266,23 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         // ذخیره درست تصاویر در جای درست با منطقه
         $images = [];
         $remoteImages = array_values(array_unique(array_filter($remoteImages)));
-        if ($saveImages) {
+        if ($saveImages && !$dryRun) {
             foreach (array_slice($remoteImages, 0, $maxImages) as $remoteImg) {
                 $local = download_image($remoteImg, $region, $imgQuality);
                 if ($local) {
                     $images[] = $local;
+                    $imagesDownloaded++;
                 } else {
                     if ($access === 'free' && filter_var($remoteImg, FILTER_VALIDATE_URL)) {
                         $images[] = $remoteImg;
                     }
                 }
             }
-        } else {
+        } elseif (!$dryRun) {
             $images = array_slice($remoteImages, 0, $maxImages);
         }
 
-        if (!$images) {
+        if (!$images && !$dryRun) {
             $placeholderSeed = md5($tip['title'].$tip['device'].$tip['brand'].$region);
             $fallbacks = [
                 'https://picsum.photos/seed/'.$placeholderSeed.'/800/600',
@@ -1089,14 +1291,22 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
             foreach ($fallbacks as $fb) {
                 if ($saveImages) {
                     $local = download_image($fb, $region, $imgQuality);
-                    if ($local) { $images[] = $local; break; }
+                    if ($local) { $images[] = $local; $imagesDownloaded++; break; }
                 } else {
                     $images[] = $fb; break;
                 }
             }
         }
 
-        if (!$images) { $errors++; continue; }
+        if (!$images && !$dryRun) { $errors++; continue; }
+
+        // ---- حالت آزمایشی (dry-run): چیزی ذخیره نمی‌شود، فقط گزارش تولید می‌شود
+        if ($dryRun) {
+            $created++;
+            $createdTitles[] = bot_title_tokens($tip['title']);
+            if (isset($regions[$region])) $regions[$region]++; else $regions[$region] = 1;
+            continue;
+        }
 
         try {
             $insert->execute([
@@ -1110,12 +1320,29 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
                 date('Y-m-d H:i:s'),
             ]);
             $created++;
+            $createdTitles[] = bot_title_tokens($tip['title']);
+            if (isset($regions[$region])) $regions[$region]++; else $regions[$region] = 1;
         } catch (Throwable $e) {
             $errors++;
         }
     }
 
-    return ['created' => $created, 'scanned' => $scanned, 'errors' => $errors, 'settings_used' => ['indian'=>$indianEnabled, 'chinese'=>$chineseEnabled, 'japanese'=>$japaneseEnabled, 'max_images'=>$maxImages, 'save_images'=>$saveImages, 'region_count'=>count($srcsLimited)]];
+    return $finish([
+        'created' => $created,
+        'scanned' => $scanned,
+        'errors' => $errors,
+        'duplicates' => $duplicates,
+        'images_downloaded' => $imagesDownloaded,
+        'sources_ok' => $sourcesOk,
+        'sources_failed' => $sourcesFailed,
+        'regions' => $regions,
+        'dry_run' => $dryRun,
+        'status_used' => $status,
+        'message' => $dryRun
+            ? 'اجرای آزمایشی انجام شد — ' . fa($created) . ' قلق قابل تولید بود (چیزی ذخیره نشد).'
+            : 'اجرا کامل شد — ' . fa($created) . ' قلق جدید، ' . fa($duplicates) . ' تکراری رد شد.',
+        'settings_used' => ['indian'=>$indianEnabled, 'chinese'=>$chineseEnabled, 'japanese'=>$japaneseEnabled, 'max_images'=>$maxImages, 'save_images'=>$saveImages, 'region_count'=>count($srcsLimited), 'rotate'=>$rotate, 'time_limit'=>$timeLimit],
+    ]);
 }
 function escrow_admin_id(): int { static $id = null; if ($id === null) { $q = db()->query("SELECT id FROM users WHERE role IN ('superadmin','admin') ORDER BY id LIMIT 1"); $id = (int)($q->fetchColumn() ?: 0); } return $id; }
 function is_seller(array $u): bool { return ($u['seller_status'] ?? 'none') === 'approved' || in_array($u['role'] ?? '', ['admin','superadmin'], true); }
@@ -1464,6 +1691,9 @@ if($action==='admin_collect'){
     $savePath=in_array($_POST['save_path']??'auto',['auto','western','indian','chinese'],true)?$_POST['save_path']:'auto';
     $maxRetries=max(1,min(5,(int)($_POST['max_retries']??2)));
     $timeout=max(5,min(30,(int)($_POST['timeout']??12)));
+    // v5.0 — محدودیت زمان اجرا و چرخش منابع
+    $timeLimit=max(20,min(600,(int)($_POST['time_limit']??100)));
+    $rotate=!empty($_POST['rotate'])?1:0;
 
     // بررسی وجود ستون‌های جدید (برای سازگاری با نصب‌های قدیمی)
     $have=[];try{foreach($pdo->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='settings'")->fetchAll() as $c)$have[$c['COLUMN_NAME']]=true;}catch(Throwable $e){}
@@ -1493,6 +1723,8 @@ if($action==='admin_collect'){
         'auto_collect_save_path'=>$savePath,
         'auto_collect_max_retries'=>$maxRetries,
         'auto_collect_timeout'=>$timeout,
+        'auto_collect_time_limit'=>$timeLimit,
+        'auto_collect_rotate'=>$rotate,
     ];
     foreach($map as $k=>$v){if(isset($have[$k]) || empty($have)){$sets[]='`'.$k.'`=?';$vals[]=$v;}}
     if($sets){$pdo->prepare('UPDATE settings SET '.implode(',',$sets).' WHERE id=1')->execute($vals);}
@@ -1518,6 +1750,9 @@ if($action==='admin_collect'){
                 'save_path'=>$savePath,
                 'max_retries'=>$maxRetries,
                 'timeout'=>$timeout,
+                'time_limit'=>$timeLimit,
+                'rotate'=> (bool)$rotate,
+                'trigger'=>'panel',
             ];
             $result=collect_tips_web($count,$cat?:0,$access,$sources,$queries,$extra);
             if(!empty($result['error'])){flash($result['error'],'error');}
@@ -1533,6 +1768,35 @@ if($action==='admin_collect'){
     }else{flash('تنظیمات جمع‌آوری هوشمند ذخیره شد.');}
     redirect_to('admin?tab=collect');
 }
+    /* ---- ربات پیشرفته v5.0: اجرای زندهٔ AJAX از پنل (بدون رفرش صفحه) ---- */
+    if($action==='admin_bot_run'){ $a=require_admin();
+        $s=settings();
+        $count=max(1,min(100,(int)($_POST['count']??10)));
+        $dryRun=!empty($_POST['dry_run']);
+        $access=in_array($_POST['access']??'free',['free','like','paid'],true)?$_POST['access']:'free';
+        $cat=(int)($_POST['category']??0)?:0;
+        $sources=json_decode_array($s['auto_collect_sources']??'[]');
+        $queries=preg_split('/\r?\n/',(string)($s['auto_collect_queries']??''));
+        $queries=array_values(array_filter(array_map('trim',$queries)));
+        @set_time_limit(max(120,(int)($s['auto_collect_time_limit']??100)+30));
+        try{
+            $extra=['trigger'=>'panel','dry_run'=>$dryRun,'time_limit'=>(int)($s['auto_collect_time_limit']??100),'rotate'=>(int)($s['auto_collect_rotate']??1)===1];
+            $result=collect_tips_web($count,$cat,$access,$sources,$queries,$extra);
+            $ok=empty($result['error']);
+            bk_json_out(['ok'=>$ok,'result'=>$result,'error'=>$result['error']??null]);
+        }catch(Throwable $e){ bk_json_out(['ok'=>false,'error'=>'خطای اجرای ربات: '.$e->getMessage()],500); }
+    }
+    /* ---- ربات پیشرفته v5.0: عملیات سریع روی قلق‌های ربات از پنل ---- */
+    if($action==='admin_bot_tip'){ $a=require_admin();
+        $id=(int)($_POST['tip_id']??0);$op=(string)($_POST['op']??'');
+        $q=$pdo->prepare("SELECT id FROM tips WHERE id=? AND author_id=(SELECT id FROM users WHERE phone='09100000000' LIMIT 1)");
+        $q->execute([$id]);$t=$q->fetch();
+        if(!$t){flash('قلق ربات یافت نشد.','error');redirect_to('admin?tab=collect&st=content');}
+        if($op==='publish'){$pdo->prepare("UPDATE tips SET status='published',published_at=COALESCE(published_at,NOW()) WHERE id=?")->execute([$id]);flash('قلق منتشر شد.');}
+        elseif($op==='unpublish'){$pdo->prepare("UPDATE tips SET status='pending' WHERE id=?")->execute([$id]);flash('قلق به حالت در انتظار بررسی رفت.');}
+        elseif($op==='delete'){$pdo->prepare('DELETE FROM tips WHERE id=?')->execute([$id]);flash('قلق ربات حذف شد.');}
+        redirect_to('admin?tab=collect&st=content');
+    }
     if($action==='subscribe'){ $u=require_login();$months=(int)($_POST['months']??1);$prices=[1=>(int)settings()['premium_1'],3=>(int)settings()['premium_3'],12=>(int)settings()['premium_12']];$amount=$prices[$months]??$prices[1];if(!debit($u['id'],$amount,'subscription','خرید اشتراک ویژه '.$months.' ماهه')){flash('موجودی کیف پول کافی نیست.','error');redirect_to('wallet');}$base=($u['premium_until']&&strtotime($u['premium_until'])>time())?strtotime($u['premium_until']):time();$until=date('Y-m-d H:i:s',$base+$months*30*86400);$pdo->prepare('UPDATE users SET premium_until=? WHERE id=?')->execute([$until,$u['id']]);award_badge((int)$u['id'],'premium');flash('اشتراک ویژه با موفقیت فعال شد.');redirect_to('premium');}
     if($action==='profile_update'){ $u=require_login();$name=clean_text($_POST['name']??$u['name']);$bio=trim($_POST['bio']??'');if(mb_strlen($name)<3){flash('نام معتبر نیست.','error');redirect_to('settings');}$pdo->prepare('UPDATE users SET name=?,bio=? WHERE id=?')->execute([$name,$bio,$u['id']]);flash('پروفایل ذخیره شد.');redirect_to('settings');}
     if($action==='suggest_category'){ $u=require_login();$name=clean_text($_POST['name']??'');$parent=(int)($_POST['parent_id']??0)?:null;if(mb_strlen($name)<2){flash('نام دسته را وارد کنید.','error');redirect_to('upload');}$q=$pdo->prepare('SELECT id FROM categories WHERE name=? LIMIT 1');$q->execute([$name]);if($q->fetch()){flash('این دسته قبلاً ثبت شده است.','error');redirect_to('upload');}$pdo->prepare('INSERT INTO categories(parent_id,name,slug,icon,status) VALUES(?,?,?,?,?)')->execute([$parent,$name,'cat-'.md5($name.time()),null,'pending']);flash('پیشنهاد دسته شما ثبت شد و پس از تأیید مدیر اضافه می‌شود.');redirect_to('upload');}
@@ -1570,7 +1834,26 @@ if($page==='admin-actionbar'&&is_file(__DIR__.'/php-extended/bk_actionbar.php'))
 if(in_array($page,['admin-boards','admin-users','admin-tips'],true)&&is_file(__DIR__.'/php-extended/bk_admin_extra.php')){$GLOBALS['bkx_page']=$page;require __DIR__.'/php-extended/bk_admin_extra.php';exit;}
 
 if($page==='serve'||$page==='serve.php'){require __DIR__.'/serve.php';exit;}
-if($page==='cron-collect'){ $s=settings();$key=(string)($_GET['key']??'');$enabled=(int)($s['auto_collect_enabled']??0);$cronKey=(string)($s['auto_collect_cron_key']??'');if(!$enabled||$cronKey===''||!hash_equals($cronKey,$key)){http_response_code(403);exit('forbidden');}$count=max(1,min(100,(int)($s['auto_collect_count']??10)));$cat=(int)($s['auto_collect_category']??0);$access=in_array($s['auto_collect_access']??'free',['free','like','paid'],true)?$s['auto_collect_access']:'free';$sources=json_decode_array($s['auto_collect_sources']??'[]');$queries=preg_split('/\r?\n/',(string)($s['auto_collect_queries']??''));$queries=array_values(array_filter(array_map('trim',$queries)));$result=collect_tips_web($count,$cat,$access,$sources,$queries);header('Content-Type: application/json; charset=utf-8');echo json_encode($result,JSON_UNESCAPED_UNICODE);exit; }
+if($page==='cron-collect'){ $s=settings();$key=(string)($_GET['key']??'');$enabled=(int)($s['auto_collect_enabled']??0);$cronKey=(string)($s['auto_collect_cron_key']??'');if(!$enabled||$cronKey===''||!hash_equals($cronKey,$key)){http_response_code(403);exit('forbidden');}$count=max(1,min(100,(int)($s['auto_collect_count']??10)));$cat=(int)($s['auto_collect_category']??0);$access=in_array($s['auto_collect_access']??'free',['free','like','paid'],true)?$s['auto_collect_access']:'free';$sources=json_decode_array($s['auto_collect_sources']??'[]');$queries=preg_split('/\r?\n/',(string)($s['auto_collect_queries']??''));$queries=array_values(array_filter(array_map('trim',$queries)));@set_time_limit(max(120,(int)($s['auto_collect_time_limit']??100)+30));$result=collect_tips_web($count,$cat,$access,$sources,$queries,['trigger'=>'cron','time_limit'=>(int)($s['auto_collect_time_limit']??100),'rotate'=>(int)($s['auto_collect_rotate']??1)===1]);header('Content-Type: application/json; charset=utf-8');echo json_encode($result,JSON_UNESCAPED_UNICODE);exit; }
+if($page==='ajax-bot-status'){ require_admin();
+    $botQ=db()->prepare("SELECT id FROM users WHERE phone='09100000000' LIMIT 1");$botQ->execute();$botId=(int)$botQ->fetchColumn();
+    $kpi=['total'=>0,'published'=>0,'pending'=>0,'week'=>0];
+    if($botId){
+        try{
+            $kpi['total']=(int)db()->query("SELECT COUNT(*) FROM tips WHERE author_id=$botId")->fetchColumn();
+            $kpi['published']=(int)db()->query("SELECT COUNT(*) FROM tips WHERE author_id=$botId AND status='published'")->fetchColumn();
+            $kpi['pending']=(int)db()->query("SELECT COUNT(*) FROM tips WHERE author_id=$botId AND status='pending'")->fetchColumn();
+            $kpi['week']=(int)db()->query("SELECT COUNT(*) FROM tips WHERE author_id=$botId AND created_at>=DATE(NOW())-INTERVAL 7 DAY")->fetchColumn();
+        }catch(Throwable $e){}
+    }
+    $runs=[];
+    if(bot_table_ready('bot_runs')){
+        try{foreach(db()->query('SELECT id,trigger_type,status,requested,created,scanned,duplicates,errors,images_downloaded,sources_ok,sources_failed,duration_sec,dry_run,regions_json,message,created_at,finished_at FROM bot_runs ORDER BY id DESC LIMIT 10') as $r){
+            $runs[]=['id'=>(int)$r['id'],'trigger'=>$r['trigger_type'],'status'=>$r['status'],'requested'=>(int)$r['requested'],'created'=>(int)$r['created'],'scanned'=>(int)$r['scanned'],'duplicates'=>(int)$r['duplicates'],'errors'=>(int)$r['errors'],'images'=>(int)$r['images_downloaded'],'sources_ok'=>(int)$r['sources_ok'],'sources_failed'=>(int)$r['sources_failed'],'duration'=>(float)$r['duration_sec'],'dry_run'=>(int)$r['dry_run'],'regions'=>json_decode_array($r['regions_json']),'message'=>$r['message'],'ago'=>ago($r['created_at'])];
+        }}catch(Throwable $e){}
+    }
+    bk_json_out(['ok'=>true,'kpi'=>$kpi,'runs'=>$runs,'has_runs_table'=>bot_table_ready('bot_runs'),'version'=>'5.0']);
+}
 
 if($page==='home'){require __DIR__.'/pages/home.php';exit;}
 function _legacy_home(){
@@ -2478,7 +2761,7 @@ if($page==='tour'){
 
   <!-- ربات جمع‌آوری -->
   <section class="section" id="bot">
-    <div class="section-head"><div><h2>🤖 ربات جمع‌آوری خودکار - هوشمند و بهینه v4.1</h2><p>۱۴ سایت معتبر + ذخیره درست تصاویر در /uploads/</p></div><a class="btn btn-secondary btn-sm" href="<?=url('admin',['tab'=>'collect'])?>">تنظیمات ربات</a></div>
+    <div class="section-head"><div><h2>🤖 ربات پیشرفته v5.0 — پنل حرفه‌ای</h2><p>اجرای زنده + لاگ اجراها + پایش سلامت منابع + تشخیص تکرار ۳لایه</p></div><a class="btn btn-secondary btn-sm" href="<?=url('admin',['tab'=>'collect'])?>">تنظیمات ربات</a></div>
     <div class="grid grid-2">
       <div class="card auth-card" style="padding:18px">
         <h3>🌐 سایت‌های معتبر (۱۴ مورد)</h3>
@@ -2546,7 +2829,7 @@ if($page==='tour'){
         ['چطور فروشنده شوم؟','وارد /seller-apply شوید، متن ≥20 حرف درباره تخصص‌تان بنویسید (مثلاً 8 سال تعمیر پاور و مادربرد). مدیر در /admin?tab=sellers تأیید می‌کند → seller_status=approved → می‌توانید در /boards/new برد ثبت کنید.'],
         ['کیف پول را چطور شارژ کنم؟','از /wallet یا /wallet-plus: 1) درگاه آنلاین (زرین‌پال/آیدی‌پی/زیبال) - در admin-finance تنظیم می‌شود، 2) کارت‌به‌کارت: مبلغ به کارت مدیر واریز + فیش آپلود → مدیر در admin-finance تأیید می‌کند. حداقل و حداکثر شارژ از تنظیمات.'],
         ['تسویه و برداشت چطور است؟','در /wallet فرم تسویه: شبا ≥20، کارت ≥16، کد ملی ≥10، مبلغ ≥ حداقل (200k) و ≤ موجودی. درخواست ثبت → مدیر در admin?tab=withdrawals یا admin-finance بررسی → واریز شد یا رد و برگشت وجه.'],
-        ['ربات جمع‌آوری خودکار چیست؟','در /admin?tab=collect تنظیم می‌شود: 14 سایت معتبر (Reddit AskElectronics, iFixit, Hackaday...) + 16 query فارسی/انگلیسی. ربات هوشمند محتوای کامل مقاله را با extract_article_text می‌خواند، تصاویر را با download_image به /uploads/auto-*.jpg دانلود می‌کند (نه لینک خارجی)، به فارسی ترجمه و دسته‌بندی خودکار می‌کند و به عنوان قلق منتشر می‌کند. Cron هر 6 ساعت: wget به /cron-collect?key=KEY'],
+        ['ربات پیشرفته v5 چیست؟','در /admin?tab=collect پنل حرفه‌ای ربات با ۴ بخش (پیشخوان و اجرای زنده، سلامت منابع، محتوای ربات، تنظیمات) در دسترس است. ربات از منابع معتبر غربی/هندی/چینی جمع‌آوری می‌کند، محتوای کامل مقاله را می‌خواند، تصاویر را به /uploads/auto/{region}/ دانلود می‌کند، به فارسی ترجمه و دسته‌بندی خودکار می‌کند. v5 افزود: اجرای زندهٔ AJAX با نوار پیشرفت، حالت آزمایشی، امتیازدهی کیفیت و انتخاب بهترین‌ها، تشخیص تکرار ۳لایه (URL + عنوان + شباهت فازی)، چرخش هوشمند منابع، قفل اجرای همزمان، گارد زمان، لاگ کامل اجراها (bot_runs) و پایش سلامت منابع (bot_sources). Cron هر 6 ساعت: wget به /cron-collect?key=KEY'],
         ['معرفی دوستان چقدر پاداش دارد؟','کد شما در /wallet و /referral: لینک /register?ref=CODE. دوست شما با کد شما ثبت‌نام کند → '.money($s['invitee_credit']??10000).' تومان هدیه می‌گیرد. شما پس از اولین فعالیت موفق او (آپلود قلق منتشرشده یا خرید) → '.money($s['referral_reward']??20000).' تومان پاداش می‌گیرید. فقط یک‌بار برای هر دعوت‌شده.'],
         ['اگر مشکل داشتم چکار کنم؟','1) /diag-version را چک کنید (نسخه کد باید 4.0+ باشد)، 2) اگر OPcache فعال است /php-extended/opcache_clear.php?key=INSTALL_KEY را باز کنید، 3) تیکت در /tickets ثبت کنید (مقصد پشتیبانی/مدیریت/فروشنده + اولویت)، 4) یا فرم تماس با ما (اگر فعال باشد) یا اطلاعات تماس در /contact.'],
       ] as $q):?>
@@ -2567,7 +2850,7 @@ if($page==='tour'){
         <a class="btn btn-secondary" href="<?=url('boards')?>">🏪 فروشگاه</a>
         <a class="btn btn-secondary" href="<?=url('tickets')?>">✉ پشتیبانی</a>
       </div>
-      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - تست شده 121/121 PASS - ربات هوشمند v4.1</p>
+      <p style="font-size:10px;color:var(--text-dim);margin-top:14px">نسخه <?=h(BORDKHAN_VERSION)?> - ربات پیشرفته v5.0 + پنل حرفه‌ای</p>
     </div>
   </section>
 </main><?php footer_html();exit; }

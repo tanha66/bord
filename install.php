@@ -170,6 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('settings', 'auto_collect_save_path', 'auto_collect_save_path VARCHAR(100) NOT NULL DEFAULT "auto"');
                     $ensureColumn('settings', 'auto_collect_max_retries', 'auto_collect_max_retries INT NOT NULL DEFAULT 2');
                     $ensureColumn('settings', 'auto_collect_timeout', 'auto_collect_timeout INT NOT NULL DEFAULT 12');
+                    $ensureColumn('settings', 'auto_collect_time_limit', 'auto_collect_time_limit INT NOT NULL DEFAULT 100');
+                    $ensureColumn('settings', 'auto_collect_rotate', 'auto_collect_rotate TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_last_offset', 'auto_collect_last_offset INT NOT NULL DEFAULT 0');
+                    $ensureColumn('settings', 'auto_collect_lock', 'auto_collect_lock DATETIME NULL');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');
