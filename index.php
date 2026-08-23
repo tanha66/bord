@@ -2,7 +2,7 @@
 require __DIR__ . '/config.php';
 
 /* نسخهٔ کد — برای تشخیص اینکه سرور واقعاً کدام نسخه را اجرا می‌کند */
-if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.2');
+if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.3');
 
 /* ---------- helper های مقاوم — حتی اگر config.php سرور قدیمی باشد ---------- */
 if (!function_exists('mb_strlen')) {
@@ -51,6 +51,8 @@ function redirect_to(string $path): never {
 }
 function fa($value): string { $digits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; return strtr((string)$value, array_combine(range(0,9), $digits)); }
 function media_url(string $path, string $type, int $tipId, ?int $userId = null): string {
+    /* v5.3: تصاویر خارجی (http/https) مستقیم از منبع سرو می‌شوند — پروکسی serve فقط برای فایل‌های محلی است */
+    if (preg_match('#^https?://#i', trim($path))) return $path;
     $f = ltrim($path, '/');
     $uid = $userId ?? (int)($_SESSION['user_id'] ?? 0);
     $uidStr = $uid > 0 ? (string)$uid : 'guest';
@@ -651,7 +653,10 @@ function build_persian_tip(string $rawTitle, string $rawDesc, string $sourceUrl 
     $brand = detect_brand($combined);
     $device = detect_device($combined);
     $fault = detect_fault($combined);
-    $translatedDesc = translate_en2fa(mb_substr(strip_tags($rawDesc), 0, 1200));
+    /* v5.3: متن واقعی مطلب — قبلاً فقط ۵۰۰ کاراکتر در blockquote می‌رفت و باقی محتوا
+       با قالب‌های ثابت جایگزین می‌شد؛ حالا کل محتوای استخراج‌شده وارد قلق می‌شود */
+    $cleanDesc = trim(preg_replace('/\\s+/u', ' ', strip_tags((string)$rawDesc)));
+    $translatedDesc = translate_en2fa(mb_substr($cleanDesc, 0, 1600));
 
     // عنوان‌های هوشمند متنوع
     $templates = [
@@ -663,30 +668,56 @@ function build_persian_tip(string $rawTitle, string $rawDesc, string $sourceUrl 
     ];
     $title = $templates[array_rand($templates)];
 
-    // توضیح کوتاه هوشمند
-    $short = "در این قلق آموزشی، روش تشخیص و رفع مشکل «{$fault}» در {$device} {$brand} به‌صورت گام‌به‌گام و تست‌شده توضیح داده شده است.";
+    // توضیح کوتاه: ساختار فارسی + جملهٔ اول مطلب واقعی (ترجمه‌شده)
+    $firstSentence = '';
+    if ($cleanDesc !== '') {
+        $parts = preg_split('/(?<=[.!?؟])\\s+/u', $cleanDesc) ?: [];
+        $firstSentence = trim($parts[0] ?? '');
+    }
+    $short = "روش تشخیص و رفع «{$fault}» در {$device} {$brand} به‌صورت گام‌به‌گام و تست‌شده";
+    if ($firstSentence !== '' && mb_strlen($firstSentence) > 25) {
+        $short .= ' — ' . mb_substr(translate_en2fa(mb_substr($firstSentence, 0, 140)), 0, 160);
+    }
 
-    // توضیح کامل
+    /* مراحل واقعی از متن مطلب (v5.3): اگر متن کافی بود، گام‌ها از خود مقاله ساخته می‌شوند،
+       نه از قالب ثابت؛ فقط وقتی متن کم است به قالب خرابی برمی‌گردیم */
+    $realSteps = [];
+    if (mb_strlen($cleanDesc) >= 320) {
+        $realSteps = build_steps_from_text($cleanDesc);
+        if (count($realSteps) < 2) $realSteps = [];
+    }
+    $steps = !empty($realSteps) ? $realSteps : build_fault_steps($fault, $device, $brand);
+
+    // توضیح کامل: ساختار فارسی + خلاصهٔ ترجمه‌شده + محتوای کامل مطلب اصلی
     $desc = "<p>{$device} {$brand} با مشکل «{$fault}» مواجه شده است. این مشکل یکی از خرابی‌های رایج در تعمیرات است و در ادامه ابتدا علت‌های اصلی و سپس روش تعمیر مرحله‌به‌مرحله با ابزار دقیق آموزش داده می‌شود.</p>";
-    if ($translatedDesc !== '' && mb_strlen($translatedDesc) > 20) {
-        $desc .= '<blockquote>' . h(mb_substr($translatedDesc, 0, 500)) . '</blockquote>';
+    if ($translatedDesc !== '' && mb_strlen($translatedDesc) > 40) {
+        $desc .= '<p><b>خلاصهٔ مطلب:</b> ' . h(mb_substr($translatedDesc, 0, 900)) . '</p>';
+    }
+    if (mb_strlen($cleanDesc) > 80) {
+        $desc .= '<h3>محتوای کامل استخراج‌شده از مطلب اصلی</h3>';
+        $chunks = str_split($cleanDesc, 700) ?: [];
+        foreach ($chunks as $ch) {
+            if (trim($ch) === '') continue;
+            $desc .= '<p dir="auto">' . h(trim($ch)) . '</p>';
+        }
     }
     $desc .= '<p><b>ابزار مورد نیاز:</b> مولتی‌متر دیجیتال، هویه، هیتر، فلاکس، لوپ.</p>';
     $desc .= '<p>⚠️ قبل از هر اقدام، دستگاه را از برق و باتری جدا کنید و از دستبند آنتی‌استاتیک استفاده نمایید.</p>';
-    if ($sourceName !== '') {
-        $desc .= '<p style="font-size:11px;color:#8b98a5">منبع اصلی: ' . h($sourceName) . '</p>';
+    if ($sourceName !== '' || $sourceUrl !== '') {
+        $desc .= '<p style="font-size:11px;color:#8b98a5">منبع اصلی: ' . h($sourceName ?: (string)parse_url($sourceUrl, PHP_URL_HOST)) . '</p>';
     }
 
     return [
         'title' => $title,
         'short_description' => $short,
         'description' => $desc,
-        'steps' => build_fault_steps($fault, $device, $brand),
+        'steps' => $steps,
         'device' => $device,
         'brand' => $brand,
         'fault' => $fault,
         'source_url' => $sourceUrl,
         'source_name' => $sourceName,
+        'used_real_steps' => !empty($realSteps),
     ];
 }
 function discover_reddit(string $query, int $limit = 4): array {
@@ -747,7 +778,7 @@ function discover_web(string $query, int $limit = 5): array {
 function fetch_article_details(string $url): array {
     $html = fetch_url($url, 12);
     if ($html === null) return ['text'=>'', 'images'=>[], 'html'=>''];
-    $text = extract_article_text($html, 4000);
+    $text = extract_article_text($html, 8000); // v5.3: محتوای کاملتر
     $images = extract_images_from_html($html, $url, 5);
     return ['text'=>$text, 'images'=>$images, 'html'=>$html];
 }
@@ -1233,6 +1264,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     $errors = 0;
     $duplicates = 0;
     $imagesDownloaded = 0;
+    $imagesRemoteTotal = 0;
     $regions = ['western' => 0, 'indian' => 0, 'chinese' => 0, 'japanese' => 0];
     $createdTitles = [];
 
@@ -1320,22 +1352,27 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         $tags = implode(',', array_unique(array_filter([$tip['brand'], $tip['device'], $tip['fault'], 'تعمیرات', 'برد', $region==='indian'?'هند':'', $region==='chinese'?'چین':'', $language])));
 
         // ذخیره درست تصاویر در جای درست با منطقه
+        /* v5.3: اگر دانلود عکس به هاست ممکن نشد، همان URL اصلی ذخیره می‌شود و مستقیم از
+           منبع نمایش داده می‌شود (media_url دیگر URLهای خارجی را به پروکسی serve نمی‌فرستد) */
         $images = [];
+        $imagesRemote = 0;
         $remoteImages = array_values(array_unique(array_filter($remoteImages)));
-        if ($saveImages && !$dryRun) {
-            foreach (array_slice($remoteImages, 0, $maxImages) as $remoteImg) {
-                $local = download_image($remoteImg, $region, $imgQuality);
-                if ($local) {
-                    $images[] = $local;
-                    $imagesDownloaded++;
-                } else {
-                    if ($access === 'free' && filter_var($remoteImg, FILTER_VALIDATE_URL)) {
+        if (!$dryRun) {
+            if ($saveImages) {
+                foreach (array_slice($remoteImages, 0, $maxImages) as $remoteImg) {
+                    $local = download_image($remoteImg, $region, $imgQuality);
+                    if ($local) {
+                        $images[] = $local;
+                        $imagesDownloaded++;
+                    } elseif (filter_var($remoteImg, FILTER_VALIDATE_URL)) {
                         $images[] = $remoteImg;
+                        $imagesRemote++;
                     }
                 }
+            } else {
+                $images = array_slice($remoteImages, 0, $maxImages);
+                $imagesRemote = count($images);
             }
-        } elseif (!$dryRun) {
-            $images = array_slice($remoteImages, 0, $maxImages);
         }
 
         if (!$images && !$dryRun) {
@@ -1358,6 +1395,8 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
            قبلاً اینجا errors++ و skip بود که روی هاست‌های با دانلود بلاک‌شده،
            هیچ قلگی هرگز ثبت نمی‌شد. عکس‌ها فقط امتیاز اضافه‌اند نه شرط. */
         if (!$images && !$dryRun) { /* بدون عکس ادامه می‌دهیم */ }
+
+        $imagesRemoteTotal += $imagesRemote;
 
         // ---- حالت آزمایشی (dry-run): چیزی ذخیره نمی‌شود، فقط گزارش تولید می‌شود
         if ($dryRun) {
@@ -1392,6 +1431,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         'errors' => $errors,
         'duplicates' => $duplicates,
         'images_downloaded' => $imagesDownloaded,
+        'images_remote' => $imagesRemoteTotal,
         'sources_ok' => $sourcesOk,
         'sources_failed' => $sourcesFailed,
         'sources_skipped' => $sourcesSkipped,
@@ -1401,6 +1441,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         'message' => $dryRun
             ? 'اجرای آزمایشی انجام شد — ' . fa($created) . ' قلق قابل تولید بود (چیزی ذخیره نشد).'
             : 'اجرا کامل شد — ' . fa($created) . ' قلق جدید، ' . fa($duplicates) . ' تکراری رد شد.'
+              . ($imagesRemoteTotal > 0 ? ' · ' . fa($imagesRemoteTotal) . ' عکس با لینک مستقیم منبع (دانلود روی هاست ممکن نبود).' : '')
               . ($sourcesFailed > 0 ? ' · ' . fa($sourcesFailed) . ' منبع در دسترس نبود.' : '')
               . ($sourcesSkipped > 0 ? ' · ' . fa($sourcesSkipped) . ' منبع خراب رد شد (circuit breaker).' : '')
               . (($status === 'pending') ? ' · قلق‌ها در حالت «در انتظار بررسی» ذخیره شدند — از تب «محتوای ربات» منتشر کنید.' : ''),
@@ -1964,7 +2005,7 @@ if($page==='tip'){
 <div class="tip-action-row">
 <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="bookmark"><input type="hidden" name="tip_id" value="<?=$id?>"><input type="hidden" name="back" value="<?=h('tip/'.$id)?>"><button class="btn btn-secondary btn-sm">🔖 <?=has_bookmark($id,$u)?'حذف نشانک':'نشانک'?></button></form>
 <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="favorite"><input type="hidden" name="tip_id" value="<?=$id?>"><input type="hidden" name="back" value="<?=h('tip/'.$id)?>"><button class="btn btn-<?=has_favorite($id,$u)?'danger':'secondary'?> btn-sm"><?=has_favorite($id,$u)?'♥ پسندیده شد':'♡ پسندیدم'?></button></form>
-</div><?php if(!$access):?><div class="locked"><div class="lock">🔒</div><?php if($t['access_type']==='like'):?><h2>این قلق با یک لایک باز می‌شود</h2><p><?=h($t['short_description'])?></p><p>بعد از لایک، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php else:?><h2>این قلق پولی است</h2><p><?=h($t['short_description'])?></p><p>با پرداخت <?=money($t['price'])?> تومان، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php endif;?><?php if(!$u):?><a class="btn btn-primary" href="<?=url('login')?>">برای باز کردن قلق وارد شوید</a><?php else:?><form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="unlock"><input type="hidden" name="tip_id" value="<?=$id?>"><button class="btn <?=$t['access_type']==='like'?'btn-danger':'btn-primary'?>"><?=$t['access_type']==='like'?'♥ لایک و باز کردن':'🛒 پرداخت و باز کردن — '.money($t['price']).' تومان'?></button></form><?php endif;?></div><?php else:?><div class="rich"><?=safe_rich($t['description'])?></div><h2 class="section-head" style="margin-top:30px;font-size:19px">🔧 راه‌حل گام‌به‌گام</h2><div class="steps"><?php foreach(tip_solution($t) as $i=>$step):?><div class="step"><span class="step-num"><?=fa($i+1)?></span><div><h3><?=h($step['title']??'')?></h3><p><?=h($step['body']??'')?></p></div></div><?php endforeach;?></div><?php if($t['tools']):?><div class="mt"><b style="font-size:14px">ابزار لازم</b><div class="tip-meta" style="margin-top:8px"><?php foreach(explode('،',$t['tools']) as $tool):?><span class="pill blue"><?=h(trim($tool))?></span><?php endforeach;?></div></div><?php endif;?><?=video_embed($t['video_url'] ?? '', $t, $u)?><div class="card" id="rating" style="padding:16px;margin-top:25px"><b>به این قلق امتیاز دهید</b><form method="post" class="tip-meta" style="margin-top:8px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="rate"><input type="hidden" name="tip_id" value="<?=$id?>"><?php for($star=1;$star<=5;$star++):?><button name="stars" value="<?=$star?>" class="btn btn-secondary btn-sm" style="color:#d99711;font-size:17px">★</button><?php endfor;?></form></div><?php endif;?><div class="comments" id="comments"><h2 style="font-size:19px">نظرات (<?=fa(count($comments))?>)</h2><?php if($u):?><form method="post" class="card" style="padding:15px;margin-bottom:15px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment"><input type="hidden" name="tip_id" value="<?=$id?>"><textarea class="field" name="body" rows="3" placeholder="نظر یا تجربه خود را بنویسید…"></textarea><button class="btn btn-primary btn-sm mt">ثبت نظر</button></form><?php else:?><div class="card empty"><a href="<?=url('login')?>" class="check">برای ثبت نظر وارد شوید</a></div><?php endif;?><?php foreach($comments as $c):$cv=(int)($voteTotals[(int)$c['id']]??0);$cmv=$voteMine[(int)$c['id']]??0;?><div class="card comment" id="comment-<?=$c['id']?>"><div class="comment-head"><span class="avatar small"><?=h(mb_substr($c['user_name'],0,1))?></span><b style="font-size:12px"><?=h($c['user_name'])?></b><small class="muted"><?=ago($c['created_at'])?></small></div><?php if(!$c['is_deleted']):?><p class="comment-body"><?=nl2br(h($c['body']))?></p><div class="flex aicenter gap" style="margin-top:8px"><form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="1"><button class="btn btn-sm <?=$cmv===1?'btn-primary':'btn-secondary'?>" title="مفید بود">👍 <?=fa($cv)?></button></form><form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="-1"><button class="btn btn-sm <?=$cmv===-1?'btn-danger':'btn-secondary'?>" title="مفید نبود">👎</button></form></div><?php else:?><p class="comment-body">این نظر حذف شده است.</p><?php endif;?></div><?php endforeach;?></div></article><aside><div class="card side-card"><h3>مشخصات دستگاه</h3><div class="info-list"><div><span>دستگاه</span><b><?=h($t['device_name'])?></b></div><div><span>برند</span><b><?=h($t['brand'])?></b></div><div><span>مدل</span><b><?=h($t['model']?:'—')?></b></div><div><span>شماره برد</span><b><?=h($t['board_number']?:'—')?></b></div><div><span>نوع خرابی</span><b><?=h($t['fault_type'])?></b></div></div></div><div class="card side-card"><h3>آمار قلق</h3><div class="stat-grid"><div><b><?=fa($t['views'])?></b><small>بازدید</small></div><div><b><?=fa($t['likes_count'])?></b><small>لایک</small></div><div><b><?=fa($t['purchases_count'])?></b><small>خرید</small></div></div></div><div class="card side-card"><h3>شما هم قلق دارید؟</h3><p class="muted" style="font-size:12px">دانش تعمیراتی خود را ثبت کنید و پاداش آپلود بگیرید.</p><a class="btn btn-primary btn-full btn-sm" href="<?=url('upload')?>">آپلود قلق جدید</a></div></aside></div><?php if($related):?><section class="section"><div class="section-head"><h2>قلق‌های مرتبط</h2></div><div class="grid grid-4"><?php foreach($related as $r)tip_card($r);?></div></section><?php endif;?></main><?php footer_html();exit; }
+</div><?php if(!$access):?><div class="locked"><div class="lock">🔒</div><?php if($t['access_type']==='like'):?><h2>این قلق با یک لایک باز می‌شود</h2><p><?=h($t['short_description'])?></p><p>بعد از لایک، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php else:?><h2>این قلق پولی است</h2><p><?=h($t['short_description'])?></p><p>با پرداخت <?=money($t['price'])?> تومان، همه عکس‌ها، ویدیو و مراحل گام‌به‌گام تعمیر برای شما نمایش داده می‌شود.</p><?php endif;?><?php if(!$u):?><a class="btn btn-primary" href="<?=url('login')?>">برای باز کردن قلق وارد شوید</a><?php else:?><form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="unlock"><input type="hidden" name="tip_id" value="<?=$id?>"><button class="btn <?=$t['access_type']==='like'?'btn-danger':'btn-primary'?>"><?=$t['access_type']==='like'?'♥ لایک و باز کردن':'🛒 پرداخت و باز کردن — '.money($t['price']).' تومان'?></button></form><?php endif;?></div><?php else:?><div class="rich"><?=safe_rich($t['description'])?></div><h2 class="section-head" style="margin-top:30px;font-size:19px">🔧 راه‌حل گام‌به‌گام</h2><div class="steps"><?php foreach(tip_solution($t) as $i=>$step):?><div class="step"><span class="step-num"><?=fa($i+1)?></span><div><h3><?=h($step['title']??'')?></h3><p><?=h($step['body']??'')?></p></div></div><?php endforeach;?></div><?php if($t['tools']):?><div class="mt"><b style="font-size:14px">ابزار لازم</b><div class="tip-meta" style="margin-top:8px"><?php foreach(explode('،',$t['tools']) as $tool):?><span class="pill blue"><?=h(trim($tool))?></span><?php endforeach;?></div></div><?php endif;?><?=video_embed($t['video_url'] ?? '', $t, $u)?><div class="card" id="rating" style="padding:16px;margin-top:25px"><b>به این قلق امتیاز دهید</b><form method="post" class="tip-meta" style="margin-top:8px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="rate"><input type="hidden" name="tip_id" value="<?=$id?>"><?php for($star=1;$star<=5;$star++):?><button name="stars" value="<?=$star?>" class="btn btn-secondary btn-sm" style="color:#d99711;font-size:17px">★</button><?php endfor;?></form></div><?php endif;?><div class="comments" id="comments"><h2 style="font-size:19px">نظرات (<?=fa(count($comments))?>)</h2><?php if($u):?><form method="post" class="card" style="padding:15px;margin-bottom:15px"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment"><input type="hidden" name="tip_id" value="<?=$id?>"><textarea class="field" name="body" rows="3" placeholder="نظر یا تجربه خود را بنویسید…"></textarea><button class="btn btn-primary btn-sm mt">ثبت نظر</button></form><?php else:?><div class="card empty"><a href="<?=url('login')?>" class="check">برای ثبت نظر وارد شوید</a></div><?php endif;?><?php foreach($comments as $c):$cv=(int)($voteTotals[(int)$c['id']]??0);$cmv=$voteMine[(int)$c['id']]??0;?><div class="card comment" id="comment-<?=$c['id']?>"><div class="comment-head"><span class="avatar small"><?=h(mb_substr($c['user_name'],0,1))?></span><b style="font-size:12px"><?=h($c['user_name'])?></b><small class="muted"><?=ago($c['created_at'])?></small></div><?php if(!$c['is_deleted']):?><p class="comment-body"><?=nl2br(h($c['body']))?></p><div class="flex aicenter gap" style="margin-top:8px"><form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="1"><button class="btn btn-sm <?=$cmv===1?'btn-primary':'btn-secondary'?>" title="مفید بود">👍 <?=fa($cv)?></button></form><form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="comment_vote"><input type="hidden" name="comment_id" value="<?=$c['id']?>"><input type="hidden" name="vote" value="-1"><button class="btn btn-sm <?=$cmv===-1?'btn-danger':'btn-secondary'?>" title="مفید نبود">👎</button></form></div><?php else:?><p class="comment-body">این نظر حذف شده است.</p><?php endif;?></div><?php endforeach;?></div></article><aside><div class="card side-card"><h3>مشخصات دستگاه</h3><div class="info-list"><div><span>دستگاه</span><b><?=h($t['device_name'])?></b></div><div><span>برند</span><b><?=h($t['brand'])?></b></div><div><span>مدل</span><b><?=h($t['model']?:'—')?></b></div><div><span>شماره برد</span><b><?=h($t['board_number']?:'—')?></b></div><div><span>نوع خرابی</span><b><?=h($t['fault_type'])?></b></div></div></div><div class="card side-card"><h3>آمار قلق</h3><div class="stat-grid"><div><b><?=fa($t['views'])?></b><small>بازدید</small></div><div><b><?=fa($t['likes_count'])?></b><small>لایک</small></div><div><b><?=fa($t['purchases_count'])?></b><small>خرید</small></div></div></div><?php if (!empty($t['source_url']) && staff($u)): ?><div class="card side-card"><h3>🔗 مطلب اصلی (ربات)</h3><p style="font-size:11px;direction:ltr;text-align:left;word-break:break-all;line-height:1.9"><a class="check" href="<?=h($t['source_url'])?>" target="_blank" rel="noopener"><?=h($t['source_url'])?></a></p><?php if (!empty($t['source_name'])): ?><small class="muted">منبع: <?=h($t['source_name'])?></small><?php endif; ?></div><?php endif; ?><div class="card side-card"><h3>شما هم قلق دارید؟</h3><p class="muted" style="font-size:12px">دانش تعمیراتی خود را ثبت کنید و پاداش آپلود بگیرید.</p><a class="btn btn-primary btn-full btn-sm" href="<?=url('upload')?>">آپلود قلق جدید</a></div></aside></div><?php if($related):?><section class="section"><div class="section-head"><h2>قلق‌های مرتبط</h2></div><div class="grid grid-4"><?php foreach($related as $r)tip_card($r);?></div></section><?php endif;?></main><?php footer_html();exit; }
 
 
 

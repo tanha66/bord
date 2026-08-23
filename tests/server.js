@@ -65,7 +65,7 @@ function serveIndex(res) {
     <div>
       <a class="btn" href="/tests/reels_visual_test.html">تست بصری مستقل (۴ ریل)</a>
       <a class="btn" href="/tests/bot_panel_visual_test.html">پیش‌نمایش پنل حرفه‌ای ربات v5</a>
-      <a class="btn" href="/bordkhan-v5.2-full-install.zip" download>⬇️ دانلود بستهٔ کامل نصب v5.1 (737KB)</a>
+      <a class="btn" href="/bordkhan-v5.3-full-install.zip" download>⬇️ دانلود بستهٔ کامل نصب v5.1 (737KB)</a>
       <a class="btn secondary" href="/reels-demo">دمو بدون DB (۵ ریل) - نیاز به PHP</a>
       <a class="btn secondary" href="/reels">ریلز اصلی - نیاز به PHP + DB</a>
     </div>

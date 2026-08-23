@@ -356,14 +356,16 @@ $pages = max(1, (int)ceil($botTotal / $per));
     <p class="muted" style="font-size:12px">قلقی از ربات ثبت نشده — از تب «پیشخوان و اجرای زنده» شروع کنید.</p>
   <?php else: ?>
   <div class="table-wrap"><table class="bk-table">
-    <thead><tr><th>#</th><th>عنوان</th><th>وضعیت</th><th>منبع</th><th>👁</th><th>♥</th><th>زمان</th><th>عملیات سریع</th></tr></thead>
+    <thead><tr><th>#</th><th>عنوان</th><th>وضعیت</th><th>منبع</th><th>لینک مطلب اصلی</th><th>عکس</th><th>👁</th><th>♥</th><th>زمان</th><th>عملیات سریع</th></tr></thead>
     <tbody>
     <?php foreach ($botTips as $bt): ?>
       <tr>
         <td><?=fa((int)$bt['id'])?></td>
         <td style="max-width:300px"><a class="check" href="<?=url('tip/' . (int)$bt['id'])?>" target="_blank"><?=h(mb_substr($bt['title'], 0, 70))?></a></td>
         <td><span class="pill <?=$bt['status'] === 'published' ? 'green' : ($bt['status'] === 'pending' ? 'amber' : 'rose')?>"><?=h(status_label($bt['status']))?></span></td>
-        <td class="muted" style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?=h($bt['source_name'] ?? '')?>"><?=h($bt['source_name'] ?: '—')?></td>
+        <td class="muted" style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?=h($bt['source_name'] ?? '')?>"><?=h($bt['source_name'] ?: '—')?></td>
+        <td><?php if (!empty($bt['source_url'])): ?><a class="btn btn-sm btn-secondary" style="font-size:10px" href="<?=h($bt['source_url'])?>" target="_blank" rel="noopener" title="<?=h($bt['source_url'])?>">🔗 مشاهدهٔ مطلب اصلی</a><?php else: ?><span class="muted">—</span><?php endif; ?></td>
+        <td><?php $bimgs = json_decode_array($bt['images_json'] ?? ''); $brem = 0; foreach ($bimgs as $bi) if (preg_match('#^https?://#i', (string)$bi)) $brem++; if ($bimgs): ?><span class="pill <?=($bimgs && $brem === count($bimgs)) ? 'amber' : 'green'?>" title="<?=($bimgs && $brem === count($bimgs)) ? 'نمایش با لینک مستقیم منبع (هاست دانلود نکرده)' : 'ذخیره‌شده روی هاست'?>"><?=fa(count($bimgs))?><?=($bimgs && $brem === count($bimgs)) ? ' 🔗' : ''?></span><?php else: ?><span class="muted">بدون عکس</span><?php endif; ?></td>
         <td><?=fa((int)$bt['views'])?></td>
         <td><?=fa((int)$bt['likes_count'])?></td>
         <td><?=ago($bt['created_at'])?></td>
