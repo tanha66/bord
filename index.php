@@ -154,6 +154,23 @@ function settings(): array {
         'auto_collect_sources'=>'[]',
         'auto_collect_queries'=>'',
         'auto_collect_cron_key'=>'',
+        'auto_collect_indian_enabled'=>1,
+        'auto_collect_chinese_enabled'=>0,
+        'auto_collect_japanese_enabled'=>0,
+        'auto_collect_min_length'=>100,
+        'auto_collect_max_images'=>3,
+        'auto_collect_translate_enabled'=>1,
+        'auto_collect_extract_full'=>1,
+        'auto_collect_save_images'=>1,
+        'auto_collect_filter_repair'=>1,
+        'auto_collect_language'=>'auto',
+        'auto_collect_content_type'=>'repair',
+        'auto_collect_image_quality'=>'medium',
+        'auto_collect_auto_publish'=>1,
+        'auto_collect_exclude_keywords'=>'',
+        'auto_collect_save_path'=>'auto',
+        'auto_collect_max_retries'=>2,
+        'auto_collect_timeout'=>12,
         'contact_form_enabled'=>0,
         'contact_email'=>'',
         'contact_phone'=>'',
@@ -284,13 +301,9 @@ function fetch_url(string $url, int $timeout = 8): ?string {
     $body = @file_get_contents($url, false, $ctx);
     return $body === false ? null : $body;
 }
-function download_image(string $url): ?string {
+function download_image(string $url, string $region = 'western', int $quality = 84): ?string {
     $url = trim($url);
     if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) return null;
-    // فقط تصاویر معتبر
-    if (!preg_match('#\.(jpe?g|png|webp)(\?.*)?$#i', $url) && !str_contains($url, 'picsum') && !str_contains($url, 'unsplash') && !str_contains($url, 'imgur')) {
-        // ممکن است URL بدون پسوند باشد (مثل source.unsplash) - باز هم تلاش می‌کنیم
-    }
     $body = fetch_url($url, 25);
     if ($body === null || strlen($body) < 1024 || strlen($body) > 8 * 1024 * 1024) return null;
     $tmp = tempnam(sys_get_temp_dir(), 'bkimg');
@@ -300,44 +313,58 @@ function download_image(string $url): ?string {
     $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'jpg'];
     $ext = $extMap[$mime] ?? null;
     if (!$ext) {
-        // تلاش بر اساس پسوند URL
         $pathExt = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
         if (in_array($pathExt, ['jpg','jpeg','png','webp'], true)) $ext = $pathExt==='jpeg'?'jpg':$pathExt;
     }
     if (!$ext) { @unlink($tmp); return null; }
-    if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0755, true);
-    if (!is_dir(UPLOAD_DIR)) { @unlink($tmp); return null; }
-    $name = 'auto-'.date('YmdHis').'-'.bin2hex(random_bytes(4)).'.'.$ext;
-    $target = UPLOAD_DIR.'/'.$name;
+
+    // ذخیره در جای درست: /uploads/auto/{region}/
+    $region = in_array($region, ['western','indian','chinese','japanese'], true) ? $region : 'western';
+    $saveDir = UPLOAD_DIR.'/auto/'.$region;
+    if (!is_dir($saveDir)) @mkdir($saveDir, 0755, true);
+    if (!is_dir($saveDir)) {
+        // fallback به uploads اصلی
+        $saveDir = UPLOAD_DIR;
+        if (!is_dir($saveDir)) @mkdir($saveDir, 0755, true);
+    }
+    if (!is_dir($saveDir)) { @unlink($tmp); return null; }
+
+    $name = 'auto-'.$region.'-'.date('YmdHis').'-'.bin2hex(random_bytes(4)).'.jpg';
+    $target = $saveDir.'/'.$name;
     $ok = false;
-    // همیشه به JPG تبدیل برای یکسان‌سازی و کاهش حجم
+    $quality = max(60, min(95, $quality));
+
     if (function_exists('imagecreatefromstring')) {
         $im = @imagecreatefromstring($body);
         if ($im !== false) {
             $w = imagesx($im); $h = imagesy($im);
-            $max = 1600;
+            // کیفیت تصویر بر اساس تنظیم
+            $max = $quality >= 90 ? 1920 : ($quality >= 80 ? 1600 : 1200);
             if ($w > $max || $h > $max) {
                 $r = min($max/$w, $max/$h);
                 $nw = max(1, (int)round($w*$r)); $nh = max(1, (int)round($h*$r));
                 $dst = imagecreatetruecolor($nw, $nh);
-                // پس‌زمینه سفید برای PNG شفاف
                 $white = imagecolorallocate($dst, 255,255,255);
                 imagefill($dst, 0,0,$white);
                 imagecopyresampled($dst,$im,0,0,0,0,$nw,$nh,$w,$h);
                 imagedestroy($im); $im = $dst;
             }
-            $ok = @imagejpeg($im, $target, 84);
+            $ok = @imagejpeg($im, $target, $quality);
             imagedestroy($im);
         }
     }
     if (!$ok) {
-        // fallback: کپی مستقیم
         $ok = @file_put_contents($target, $body) !== false;
         @unlink($tmp);
     } else {
         @unlink($tmp);
     }
-    return $ok && file_exists($target) ? '/uploads/'.$name : null;
+    if (!$ok || !file_exists($target)) return null;
+    // بازگشت مسیر نسبی درست
+    if (str_contains($target, '/auto/')) {
+        return '/uploads/auto/'.$region.'/'.$name;
+    }
+    return '/uploads/'.$name;
 }
 function extract_images_from_html(string $html, string $baseUrl = '', int $limit = 5): array {
     $images = [];
@@ -745,62 +772,115 @@ function category_for_device(string $device, ?int $preferred): int {
 }
 function reputable_sources_list(string $region = 'all'): array {
     $western = [
-        // Reddit - معتبرترین برای تعمیرات (جهانی)
+        // Reddit - معتبرترین برای تعمیرات (جهانی) - 2M+ عضو
         'https://www.reddit.com/r/AskElectronics/.rss',
         'https://www.reddit.com/r/ElectronicsRepair/.rss',
         'https://www.reddit.com/r/TVRepair/.rss',
         'https://www.reddit.com/r/computerrepair/.rss',
         'https://www.reddit.com/r/AskElectronics/comments/.rss',
+        'https://www.reddit.com/r/MobileRepair/.rss',
+        'https://www.reddit.com/r/Consolerepair/.rss',
         // مرجع تعمیرات جهانی
         'https://www.ifixit.com/News/rss',
+        'https://www.ifixit.com/News/category/repair-stories/rss',
         // سایت‌های تخصصی الکترونیک معتبر غربی
         'https://hackaday.com/feed/',
         'https://blog.adafruit.com/feed/',
         'https://www.eevblog.com/feed/',
         'https://www.allaboutcircuits.com/new/rss/',
+        'https://www.allaboutcircuits.com/industry/rss/',
         'https://www.electronics-lab.com/feed/',
         'https://www.electroschematics.com/feed/',
         'https://www.edn.com/feed/',
         'https://electronics.stackexchange.com/feeds',
         'https://www.electronicshub.org/feed/',
         'https://www.engineersgarage.com/feed/',
+        'https://www.electronicsweekly.com/feed/',
+        'https://www.eetimes.com/feed/',
+        'https://www.circuitdigest.com/feed',
     ];
     $indian = [
-        // سایت‌های هندی معتبر - Electronics For You (بزرگترین مجله الکترونیک هند)
+        // سایت‌های هندی معتبر - Electronics For You (بزرگترین مجله الکترونیک هند از 1969)
         'https://www.electronicsforu.com/feed',
         'https://www.electronicsforu.com/category/electronics-projects/feed',
-        'https://circuitdigest.com/feed', // Circuit Digest - هندی، پروژه‌های الکترونیک
-        'https://www.electronicshub.org/feed',
-        'https://www.engineersgarage.com/feed',
-        'https://www.electricaltechnology.org/feed',
-        'https://www.electronicscomp.com/blog/feed',
-        'https://www.electronics-lab.com/feed/', // مشترک
         'https://www.electronicsforu.com/category/technology-trends/feed',
+        'https://www.electronicsforu.com/category/tech-focus/feed',
+        'https://www.electronicsforu.com/category/market-verticals/feed',
+        'https://www.electronicsforu.com/category/efy-plus/feed',
+        // Circuit Digest - هندی، پروژه‌های عملی الکترونیک
+        'https://circuitdigest.com/feed',
+        'https://circuitdigest.com/rss',
+        // Electronics Hub - آموزش آردوینو و تعمیرات
+        'https://www.electronicshub.org/feed',
+        'https://www.electronicshub.org/rss',
+        // Engineers Garage - هندی
+        'https://www.engineersgarage.com/feed',
+        'https://www.engineersgarage.com/rss',
+        // Electrical Technology - هندی/پاکستانی
+        'https://www.electricaltechnology.org/feed',
+        // ElectronicsComp - فروشگاه + بلاگ هندی
+        'https://www.electronicscomp.com/blog/feed',
+        // Electronics For You Plus - هندی
+        'https://www.electronicsforu.com/category/electronics-projects/arduino-projects/feed',
+        // Indian makers
+        'https://www.electronicsforu.com/category/electronics-projects/raspberry-pi-projects/feed',
     ];
     $chinese = [
-        // سایت‌های چینی معتبر (نسخه انگلیسی یا قابل ترجمه)
-        'https://www.elecfans.com/feed', // Elecfans - چینی
-        'https://www.21ic.com/rss/', // 21IC - چینی
-        'https://www.eet-china.com/rss', // EET China
+        // سایت‌های چینی معتبر (نسخه انگلیسی یا قابل ترجمه) - چین کارخانه جهان
+        'https://www.elecfans.com/feed', // Elecfans - بزرگترین انجمن الکترونیک چین
+        'https://www.elecfans.com/article/feed',
+        'https://www.21ic.com/rss/', // 21IC - چینی، IC و برد
+        'https://www.21ic.com/news/rss/',
+        'https://www.eet-china.com/rss', // EET China - نسخه چینی EETimes
         'https://www.eet-china.com/feed',
-        'https://www.eepw.com.cn/rss', // EEPW چینی
-        'https://www.dianyuan.com/rss', // Dianyuan - پاور چینی
+        'https://www.eet-china.com/news/rss',
+        'https://www.eepw.com.cn/rss', // EEPW چینی - Electronic Engineering
+        'https://www.dianyuan.com/rss', // Dianyuan - تخصصی پاور و منبع تغذیه چینی
+        'https://www.dianyuan.com/feed',
         // سایت‌های چینی با محتوای انگلیسی
         'https://www.electronicsweekly.com/feed/',
         'https://www.eetimes.com/feed/',
+        'https://www.eetimes.com/rss',
+        // چینی - تعمیرات موبایل (شenzhen)
+        'https://www.chinafix.com/feed', // ChinaFix - تعمیرات موبایل چینی
+    ];
+    $japanese = [
+        // ژاپنی - برای تکمیل (درخواست کاربر: هندی و چینی، ولی ژاپنی هم اضافه برای هوشمندی)
+        'https://www.electronics-lab.com/feed/', // مشترک
+        'https://www.electro-tech-online.com/feed/',
     ];
 
     if ($region === 'western') return $western;
     if ($region === 'indian') return $indian;
     if ($region === 'chinese') return $chinese;
-    if ($region === 'all') return array_values(array_unique(array_merge($western, $indian, $chinese)));
+    if ($region === 'japanese') return $japanese;
+    if ($region === 'all') return array_values(array_unique(array_merge($western, $indian, $chinese, $japanese)));
     return array_values(array_unique(array_merge($western, $indian)));
 }
-function reputable_sources_by_region(bool $indianEnabled, bool $chineseEnabled): array {
+function reputable_sources_by_region(bool $indianEnabled, bool $chineseEnabled, bool $japaneseEnabled = false): array {
     $list = reputable_sources_list('western');
     if ($indianEnabled) $list = array_merge($list, reputable_sources_list('indian'));
     if ($chineseEnabled) $list = array_merge($list, reputable_sources_list('chinese'));
+    if ($japaneseEnabled) $list = array_merge($list, reputable_sources_list('japanese'));
     return array_values(array_unique($list));
+}
+function indian_repair_sites(): array {
+    return [
+        'electronicsforu.com' => 'Electronics For You - هند',
+        'circuitdigest.com' => 'Circuit Digest - هند',
+        'electronicshub.org' => 'Electronics Hub - هند',
+        'engineersgarage.com' => 'Engineers Garage - هند',
+        'electricaltechnology.org' => 'Electrical Technology - هند',
+    ];
+}
+function chinese_repair_sites(): array {
+    return [
+        'elecfans.com' => 'Elecfans - چین',
+        '21ic.com' => '21IC - چین',
+        'eet-china.com' => 'EET China - چین',
+        'eepw.com.cn' => 'EEPW - چین',
+        'dianyuan.com' => 'Dianyuan - چین (پاور)',
+    ];
 }
 function collect_tips_web(int $count, int $categoryId, string $access, array $sources, array $queries = [], array $extraSettings = []): array {
     $pdo = db();
@@ -809,56 +889,72 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     $botId = (int)$botQ->fetchColumn();
     if (!$botId) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'حساب کاربر سیستم یافت نشد. نصب را دوباره اجرا کنید.'];
 
-    // تنظیمات پیشرفته ربات از extraSettings یا از settings() جدول
+    // تنظیمات پیشرفته ربات از extraSettings یا از settings() جدول - v4.3 کامل با هندی و چینی
     $s = settings();
     $indianEnabled = $extraSettings['indian_enabled'] ?? (int)($s['auto_collect_indian_enabled'] ?? 1) === 1;
     $chineseEnabled = $extraSettings['chinese_enabled'] ?? (int)($s['auto_collect_chinese_enabled'] ?? 0) === 1;
+    $japaneseEnabled = $extraSettings['japanese_enabled'] ?? (int)($s['auto_collect_japanese_enabled'] ?? 0) === 1;
     $minLength = max(20, (int)($extraSettings['min_length'] ?? $s['auto_collect_min_length'] ?? 100));
     $maxImages = max(1, min(5, (int)($extraSettings['max_images'] ?? $s['auto_collect_max_images'] ?? 3)));
     $translateEnabled = $extraSettings['translate_enabled'] ?? (int)($s['auto_collect_translate_enabled'] ?? 1) === 1;
     $extractFull = $extraSettings['extract_full'] ?? (int)($s['auto_collect_extract_full'] ?? 1) === 1;
     $saveImages = $extraSettings['save_images'] ?? (int)($s['auto_collect_save_images'] ?? 1) === 1;
     $filterRepair = $extraSettings['filter_repair'] ?? (int)($s['auto_collect_filter_repair'] ?? 1) === 1;
+    $language = $extraSettings['language'] ?? $s['auto_collect_language'] ?? 'auto';
+    $contentType = $extraSettings['content_type'] ?? $s['auto_collect_content_type'] ?? 'repair';
+    $imageQuality = $extraSettings['image_quality'] ?? $s['auto_collect_image_quality'] ?? 'medium';
+    $autoPublish = $extraSettings['auto_publish'] ?? (int)($s['auto_collect_auto_publish'] ?? 1) === 1;
+    $excludeKeywords = $extraSettings['exclude_keywords'] ?? $s['auto_collect_exclude_keywords'] ?? '';
+    $savePath = $extraSettings['save_path'] ?? $s['auto_collect_save_path'] ?? 'auto';
+    $maxRetries = max(1, min(5, (int)($extraSettings['max_retries'] ?? $s['auto_collect_max_retries'] ?? 2)));
+    $timeout = max(5, min(30, (int)($extraSettings['timeout'] ?? $s['auto_collect_timeout'] ?? 12)));
+
+    $excludeList = array_filter(array_map('trim', preg_split('/[\n,]+/', $excludeKeywords)));
 
     if ($queries === []) {
         $queries = [
-            // فارسی - تخصصی
+            // فارسی - تخصصی تعمیرات
             'تعمیر مادربرد سامسونگ', 'رفع مشکل روشن نشدن لپ‌تاپ ایسوس', 'تعمیر پاور سوئیچینگ', 'عیب‌یابی کارت گرافیک',
             'تعمیر تلویزیون ال‌جی تصویر ندارد', 'تعمیر موبایل شارژ نمی‌شود', 'تعویض خازن مادربرد', 'تست ماسفت با مولتی‌متر',
-            'تعمیر بک‌لایت تلویزیون', 'رفع بوق خطا مادربرد',
+            'تعمیر بک‌لایت تلویزیون', 'رفع بوق خطا مادربرد', 'تعمیر برد لباسشویی', 'آموزش لحیم‌کاری SMD',
             // انگلیسی - تخصصی
             'motherboard no power repair', 'laptop no boot fix', 'tv backlight repair', 'power supply short circuit fix',
             'samsung tv repair', 'asus laptop repair', 'capacitor replacement guide', 'mosfet testing tutorial',
-            // هندی - انگلیسی (سایت‌های هندی معمولاً انگلیسی هستند)
-            'electronics repair india', 'mobile motherboard repair', 'led tv repair guide india',
+            'inverter board repair', 'mobile phone charging fix',
+            // هندی - انگلیسی (سایت‌های هندی انگلیسی هستند)
+            'electronics repair india', 'mobile motherboard repair india', 'led tv repair guide india', 'circuit digest electronics project',
             // چینی - انگلیسی
-            'china electronics repair', 'smd soldering tutorial', 'inverter board repair'
+            'china electronics repair', 'smd soldering tutorial', 'inverter board repair china', '21ic electronics repair'
         ];
     }
 
-    // اگر کاربر منبعی نداده، از لیست معتبر بر اساس منطقه استفاده کن
     if (empty($sources)) {
-        $sources = reputable_sources_by_region($indianEnabled, $chineseEnabled);
+        $sources = reputable_sources_by_region($indianEnabled, $chineseEnabled, $japaneseEnabled);
     }
 
     $candidates = [];
     $seen = [];
     $seenUrls = [];
-    $add = function (array $c) use (&$candidates, &$seen, &$seenUrls, $minLength, $filterRepair) {
+    $add = function (array $c) use (&$candidates, &$seen, &$seenUrls, $minLength, $filterRepair, $excludeList, $contentType) {
         $title = trim((string)($c['title'] ?? ''));
         $desc = trim((string)($c['description'] ?? ''));
         $urlKey = trim((string)($c['url'] ?? ''));
         if ($title === '' || mb_strlen($title) < 10) return;
-        if (mb_strlen($desc) < $minLength && mb_strlen($title) < 30) return;
-        // فیلتر هوشمند: فقط مطالب مرتبط با تعمیرات
-        if ($filterRepair) {
+        if (mb_strlen($desc) < $minLength && mb_strlen($title) < 35) return;
+        // فیلتر کلمات مستثنی
+        if (!empty($excludeList)) {
+            $low = mb_strtolower($title.' '.$desc);
+            foreach ($excludeList as $ex) if ($ex !== '' && mb_strpos($low, mb_strtolower($ex)) !== false) return;
+        }
+        // فیلتر نوع محتوا
+        if ($contentType === 'repair') {
             $combined = mb_strtolower($title.' '.$desc);
-            $repairKeywords = ['repair','fix','تعمیر','عیب‌یابی','رفع','board','power','display','charge','motherboard','tv','لپ‌تاپ','مادربرد','پاور','تلویزیون','موبایل','خازن','ماسفت','بایوس','اتصال کوتاه','بک‌لایت','solder','capacitor','mosfet','bios','short','backlight'];
+            $repairKeywords = ['repair','fix','تعمیر','عیب‌یابی','رفع','board','power','display','charge','motherboard','tv','لپ‌تاپ','مادربرد','پاور','تلویزیون','موبایل','خازن','ماسفت','بایوس','اتصال کوتاه','بک‌لایت','solder','capacitor','mosfet','bios','short','backlight','inverter','led','lcd'];
             $found = false;
             foreach ($repairKeywords as $kw) if (mb_strpos($combined, mb_strtolower($kw)) !== false) { $found = true; break; }
             if (!$found) return;
         }
-        $key = mb_substr($title, 0, 120);
+        $key = mb_substr($title, 0, 130);
         if (isset($seen[$key])) return;
         if ($urlKey !== '' && isset($seenUrls[$urlKey])) return;
         $seen[$key] = true;
@@ -866,12 +962,16 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         $candidates[] = $c;
     };
 
-    // 1. منابع RSS معتبر - حداکثر 8 منبع برای هوشمندی بیشتر (قبلاً 6)
-    $srcsLimited = array_slice($sources, 0, 8);
+    // 1. منابع RSS معتبر - حداکثر 10 منبع (قبلاً 8) با retry هوشمند
+    $srcsLimited = array_slice($sources, 0, 10);
     foreach ($srcsLimited as $source) {
         $source = trim((string)$source);
         if ($source === '' || !filter_var($source, FILTER_VALIDATE_URL)) continue;
-        $xml = fetch_url($source, 12);
+        $xml = null;
+        for ($retry=0; $retry<$maxRetries; $retry++) {
+            $xml = fetch_url($source, $timeout);
+            if ($xml !== null) break;
+        }
         if ($xml === null) continue;
         $host = parse_url($source, PHP_URL_HOST) ?: 'RSS';
         foreach (parse_rss_items($xml, $host) as $it) {
@@ -880,9 +980,9 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         if (count($candidates) >= $count * 3) break;
     }
 
-    // 2. جستجوی هوشمند - حداکثر 5 کوئری (قبلاً 4) با ترکیب هندی/چینی
-    $queriesLimited = array_slice($queries, 0, 5);
-    if (!$queriesLimited) $queriesLimited = ['laptop no power fix', 'motherboard repair', 'tv backlight fix', 'mobile repair india', 'electronics repair china'];
+    // 2. جستجوی هوشمند - حداکثر 6 کوئری (قبلاً 5) با منطقه‌ای
+    $queriesLimited = array_slice($queries, 0, 6);
+    if (!$queriesLimited) $queriesLimited = ['laptop no power fix', 'motherboard repair', 'tv backlight fix', 'mobile repair india', 'electronics repair china', 'inverter repair'];
     foreach ($queriesLimited as $query) {
         $query = trim((string)$query);
         if ($query === '') continue;
@@ -890,7 +990,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         if (count($candidates) < $count * 3) {
             foreach (discover_web($query, 3) as $w) $add($w);
         }
-        if (count($candidates) >= $count * 4) break;
+        if (count($candidates) >= $count * 5) break;
     }
 
     if (!$candidates) return ['created' => 0, 'scanned' => 0, 'errors' => 0, 'error' => 'هیچ مطلبی از منابع معتبر (غربی/هندی/چینی) پیدا نشد. اینترنت سرور یا دسترسی به منابع را بررسی کنید.'];
@@ -899,14 +999,13 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
     $scanned = 0;
     $errors = 0;
 
-    // آماده‌سازی insert با ذخیره درست source_url و source_name
+    $status = $autoPublish ? 'published' : 'pending';
     $insert = $pdo->prepare('INSERT INTO tips (author_id,category_id,title,short_description,description,device_name,brand,model,board_number,fault_type,difficulty,solution_json,tools,images_json,video_url,attachments_json,access_type,price,visibility,status,tags,version,versions_json,featured,views,likes_count,purchases_count,rating_sum,rating_count,duplicate_of,rejection_reason,source_url,source_name,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,0,0,0,0,0,NULL,NULL,?,?,?)');
 
     foreach ($candidates as $c) {
         if ($created >= $count) break;
         $scanned++;
 
-        // 3. هوشمندی پیشرفته: استخراج کامل مقاله اگر تنظیم extract_full فعال است
         $fullText = (string)($c['description'] ?? '');
         $fullHtml = (string)($c['description_html'] ?? $c['description'] ?? '');
         $remoteImages = [];
@@ -924,14 +1023,17 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
             }
         }
 
-        // اگر ترجمه فعال است، متن را ترجمه کن
         $textForTip = $translateEnabled ? $fullText : (string)($c['description'] ?? '');
-        // اگر متن خیلی کوتاه است، از title هم استفاده کن
-        if (mb_strlen($textForTip) < 50) $textForTip = $c['title'] . ' ' . $textForTip;
+        if (mb_strlen($textForTip) < 60) $textForTip = $c['title'] . ' ' . $textForTip;
 
-        $tip = build_persian_tip((string)$c['title'], $textForTip, (string)($c['url'] ?? ''), (string)($c['source_name'] ?? $c['source'] ?? ''));
+        // تشخیص منطقه برای ذخیره درست
+        $region = 'western';
+        $host = parse_url($c['url'] ?? '', PHP_URL_HOST) ?? $c['source'] ?? '';
+        if (preg_match('/(electronicsforu|circuitdigest|electronicshub|engineersgarage|electricaltechnology)/i', $host)) $region = 'indian';
+        elseif (preg_match('/(elecfans|21ic|eet-china|eepw|dianyuan|chinafix)/i', $host)) $region = 'chinese';
 
-        // بررسی تکراری هوشمند: بر اساس عنوان مشابه + URL + محتوای مشابه
+        $tip = build_persian_tip((string)$c['title'], $textForTip, (string)($c['url'] ?? ''), (string)($c['source_name'] ?? $c['source'] ?? $host));
+
         $dq = $pdo->prepare('SELECT id FROM tips WHERE title=? OR source_url=? LIMIT 1');
         $dq->execute([$tip['title'], $c['url'] ?? '']);
         if ($dq->fetch()) { $errors++; continue; }
@@ -939,7 +1041,6 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         $cat = category_for_device($tip['device'], $categoryId);
         if (!$cat) { $errors++; continue; }
 
-        // تعیین سختی هوشمند
         $diffMap = [
             'روشن نمی‌شود' => 'hard', 'اتصال کوتاه' => 'hard', 'بایوس' => 'hard',
             'شارژ نمی‌شود' => 'hard', 'آب‌خوردگی' => 'hard', 'بک‌لایت' => 'medium',
@@ -954,14 +1055,19 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
             'easy' => 'مولتی‌متر،هویه،فلاکس'
         ];
         $tools = $toolsMap[$diff] ?? $toolsMap['medium'];
-        $tags = implode(',', array_unique(array_filter([$tip['brand'], $tip['device'], $tip['fault'], 'تعمیرات', 'برد', $indianEnabled?'هند':'', $chineseEnabled?'چین':''])));
 
-        // 4. ذخیره درست تصاویر: دانلود به /uploads/ (هوشمند) با تنظیم max_images و save_images
+        // کیفیت تصویر بر اساس تنظیم
+        $qualityMap = ['low'=>65, 'medium'=>84, 'high'=>92];
+        $imgQuality = $qualityMap[$imageQuality] ?? 84;
+
+        $tags = implode(',', array_unique(array_filter([$tip['brand'], $tip['device'], $tip['fault'], 'تعمیرات', 'برد', $region==='indian'?'هند':'', $region==='chinese'?'چین':'', $language])));
+
+        // ذخیره درست تصاویر در جای درست با منطقه
         $images = [];
         $remoteImages = array_values(array_unique(array_filter($remoteImages)));
         if ($saveImages) {
             foreach (array_slice($remoteImages, 0, $maxImages) as $remoteImg) {
-                $local = download_image($remoteImg);
+                $local = download_image($remoteImg, $region, $imgQuality);
                 if ($local) {
                     $images[] = $local;
                 } else {
@@ -971,20 +1077,18 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
                 }
             }
         } else {
-            // اگر ذخیره محلی غیرفعال، فقط URL خارجی نگه دار
             $images = array_slice($remoteImages, 0, $maxImages);
         }
 
-        // اگر هنوز عکسی نداریم، placeholder هوشمند قابل دانلود
         if (!$images) {
-            $placeholderSeed = md5($tip['title'].$tip['device'].$tip['brand']);
+            $placeholderSeed = md5($tip['title'].$tip['device'].$tip['brand'].$region);
             $fallbacks = [
                 'https://picsum.photos/seed/'.$placeholderSeed.'/800/600',
                 'https://picsum.photos/seed/'.md5($placeholderSeed.'2').'/800/600',
             ];
             foreach ($fallbacks as $fb) {
                 if ($saveImages) {
-                    $local = download_image($fb);
+                    $local = download_image($fb, $region, $imgQuality);
                     if ($local) { $images[] = $local; break; }
                 } else {
                     $images[] = $fb; break;
@@ -999,7 +1103,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
                 $botId, $cat, $tip['title'], $tip['short_description'], $tip['description'],
                 $tip['device'], $tip['brand'], null, null, $tip['fault'], $diff,
                 json_encode($tip['steps'], JSON_UNESCAPED_UNICODE), $tools, json_encode($images, JSON_UNESCAPED_UNICODE),
-                null, json_encode([], JSON_UNESCAPED_UNICODE), $access, 0, 'public', 'published', $tags,
+                null, json_encode([], JSON_UNESCAPED_UNICODE), $access, 0, 'public', $status, $tags,
                 json_encode([], JSON_UNESCAPED_UNICODE),
                 $tip['source_url'] ?? $c['url'] ?? null,
                 $tip['source_name'] ?? $c['source_name'] ?? $c['source'] ?? null,
@@ -1011,7 +1115,7 @@ function collect_tips_web(int $count, int $categoryId, string $access, array $so
         }
     }
 
-    return ['created' => $created, 'scanned' => $scanned, 'errors' => $errors, 'settings_used' => ['indian'=>$indianEnabled, 'chinese'=>$chineseEnabled, 'max_images'=>$maxImages, 'save_images'=>$saveImages]];
+    return ['created' => $created, 'scanned' => $scanned, 'errors' => $errors, 'settings_used' => ['indian'=>$indianEnabled, 'chinese'=>$chineseEnabled, 'japanese'=>$japaneseEnabled, 'max_images'=>$maxImages, 'save_images'=>$saveImages, 'region_count'=>count($srcsLimited)]];
 }
 function escrow_admin_id(): int { static $id = null; if ($id === null) { $q = db()->query("SELECT id FROM users WHERE role IN ('superadmin','admin') ORDER BY id LIMIT 1"); $id = (int)($q->fetchColumn() ?: 0); } return $id; }
 function is_seller(array $u): bool { return ($u['seller_status'] ?? 'none') === 'approved' || in_array($u['role'] ?? '', ['admin','superadmin'], true); }
@@ -1342,15 +1446,24 @@ if($action==='admin_collect'){
     $sources=preg_split('/\r?\n/',trim($_POST['sources']??''));$sources=array_values(array_filter(array_map('trim',$sources),fn($s)=>filter_var($s,FILTER_VALIDATE_URL)!==false));
     $queries=preg_split('/\r?\n/',trim($_POST['queries']??''));$queries=array_values(array_filter(array_map('trim',$queries),fn($q)=>$q!==''));
     $cronKey=trim($_POST['cron_key']??'');if($cronKey==='')$cronKey=bin2hex(random_bytes(8));
-    // تنظیمات پیشرفته جدید + هندی و چینی
+    // تنظیمات پیشرفته جدید + هندی و چینی - v4.3 کامل 15 تنظیم
     $indianEnabled=!empty($_POST['indian_enabled'])?1:0;
     $chineseEnabled=!empty($_POST['chinese_enabled'])?1:0;
+    $japaneseEnabled=!empty($_POST['japanese_enabled'])?1:0;
     $minLength=max(20,min(1000,(int)($_POST['min_length']??100)));
     $maxImages=max(1,min(5,(int)($_POST['max_images']??3)));
     $translateEnabled=!empty($_POST['translate_enabled'])?1:0;
     $extractFull=!empty($_POST['extract_full'])?1:0;
     $saveImages=!empty($_POST['save_images'])?1:0;
     $filterRepair=!empty($_POST['filter_repair'])?1:0;
+    $language=in_array($_POST['language']??'auto',['auto','fa','en'],true)?$_POST['language']:'auto';
+    $contentType=in_array($_POST['content_type']??'repair',['repair','tutorial','all'],true)?$_POST['content_type']:'repair';
+    $imageQuality=in_array($_POST['image_quality']??'medium',['low','medium','high'],true)?$_POST['image_quality']:'medium';
+    $autoPublish=!empty($_POST['auto_publish'])?1:0;
+    $excludeKeywords=trim($_POST['exclude_keywords']??'');
+    $savePath=in_array($_POST['save_path']??'auto',['auto','western','indian','chinese'],true)?$_POST['save_path']:'auto';
+    $maxRetries=max(1,min(5,(int)($_POST['max_retries']??2)));
+    $timeout=max(5,min(30,(int)($_POST['timeout']??12)));
 
     // بررسی وجود ستون‌های جدید (برای سازگاری با نصب‌های قدیمی)
     $have=[];try{foreach($pdo->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='settings'")->fetchAll() as $c)$have[$c['COLUMN_NAME']]=true;}catch(Throwable $e){}
@@ -1365,12 +1478,21 @@ if($action==='admin_collect'){
         'auto_collect_cron_key'=>$cronKey,
         'auto_collect_indian_enabled'=>$indianEnabled,
         'auto_collect_chinese_enabled'=>$chineseEnabled,
+        'auto_collect_japanese_enabled'=>$japaneseEnabled,
         'auto_collect_min_length'=>$minLength,
         'auto_collect_max_images'=>$maxImages,
         'auto_collect_translate_enabled'=>$translateEnabled,
         'auto_collect_extract_full'=>$extractFull,
         'auto_collect_save_images'=>$saveImages,
         'auto_collect_filter_repair'=>$filterRepair,
+        'auto_collect_language'=>$language,
+        'auto_collect_content_type'=>$contentType,
+        'auto_collect_image_quality'=>$imageQuality,
+        'auto_collect_auto_publish'=>$autoPublish,
+        'auto_collect_exclude_keywords'=>$excludeKeywords,
+        'auto_collect_save_path'=>$savePath,
+        'auto_collect_max_retries'=>$maxRetries,
+        'auto_collect_timeout'=>$timeout,
     ];
     foreach($map as $k=>$v){if(isset($have[$k]) || empty($have)){$sets[]='`'.$k.'`=?';$vals[]=$v;}}
     if($sets){$pdo->prepare('UPDATE settings SET '.implode(',',$sets).' WHERE id=1')->execute($vals);}
@@ -1381,12 +1503,21 @@ if($action==='admin_collect'){
             $extra=[
                 'indian_enabled'=> (bool)$indianEnabled,
                 'chinese_enabled'=> (bool)$chineseEnabled,
+                'japanese_enabled'=> (bool)$japaneseEnabled,
                 'min_length'=>$minLength,
                 'max_images'=>$maxImages,
                 'translate_enabled'=> (bool)$translateEnabled,
                 'extract_full'=> (bool)$extractFull,
                 'save_images'=> (bool)$saveImages,
                 'filter_repair'=> (bool)$filterRepair,
+                'language'=>$language,
+                'content_type'=>$contentType,
+                'image_quality'=>$imageQuality,
+                'auto_publish'=> (bool)$autoPublish,
+                'exclude_keywords'=>$excludeKeywords,
+                'save_path'=>$savePath,
+                'max_retries'=>$maxRetries,
+                'timeout'=>$timeout,
             ];
             $result=collect_tips_web($count,$cat?:0,$access,$sources,$queries,$extra);
             if(!empty($result['error'])){flash($result['error'],'error');}

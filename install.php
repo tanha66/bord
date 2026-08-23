@@ -152,15 +152,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('settings', 'google_analytics', 'google_analytics VARCHAR(100) NULL');
                     $ensureColumn('settings', 'auto_collect_queries', 'auto_collect_queries TEXT NULL');
                     $ensureColumn('settings', 'board_commission_percent', 'board_commission_percent INT NOT NULL DEFAULT 10');
-                    // ربات هوشمند - تنظیمات بیشتر + هندی و چینی
+                    // ربات هوشمند - تنظیمات بیشتر + هندی و چینی - v4.3 کامل
                     $ensureColumn('settings', 'auto_collect_indian_enabled', 'auto_collect_indian_enabled TINYINT(1) NOT NULL DEFAULT 1');
                     $ensureColumn('settings', 'auto_collect_chinese_enabled', 'auto_collect_chinese_enabled TINYINT(1) NOT NULL DEFAULT 0');
+                    $ensureColumn('settings', 'auto_collect_japanese_enabled', 'auto_collect_japanese_enabled TINYINT(1) NOT NULL DEFAULT 0');
                     $ensureColumn('settings', 'auto_collect_min_length', 'auto_collect_min_length INT NOT NULL DEFAULT 100');
                     $ensureColumn('settings', 'auto_collect_max_images', 'auto_collect_max_images INT NOT NULL DEFAULT 3');
                     $ensureColumn('settings', 'auto_collect_translate_enabled', 'auto_collect_translate_enabled TINYINT(1) NOT NULL DEFAULT 1');
                     $ensureColumn('settings', 'auto_collect_extract_full', 'auto_collect_extract_full TINYINT(1) NOT NULL DEFAULT 1');
                     $ensureColumn('settings', 'auto_collect_save_images', 'auto_collect_save_images TINYINT(1) NOT NULL DEFAULT 1');
                     $ensureColumn('settings', 'auto_collect_filter_repair', 'auto_collect_filter_repair TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_language', 'auto_collect_language VARCHAR(20) NOT NULL DEFAULT "auto"');
+                    $ensureColumn('settings', 'auto_collect_content_type', 'auto_collect_content_type VARCHAR(30) NOT NULL DEFAULT "repair"');
+                    $ensureColumn('settings', 'auto_collect_image_quality', 'auto_collect_image_quality VARCHAR(20) NOT NULL DEFAULT "medium"');
+                    $ensureColumn('settings', 'auto_collect_auto_publish', 'auto_collect_auto_publish TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_exclude_keywords', 'auto_collect_exclude_keywords TEXT NULL');
+                    $ensureColumn('settings', 'auto_collect_save_path', 'auto_collect_save_path VARCHAR(100) NOT NULL DEFAULT "auto"');
+                    $ensureColumn('settings', 'auto_collect_max_retries', 'auto_collect_max_retries INT NOT NULL DEFAULT 2');
+                    $ensureColumn('settings', 'auto_collect_timeout', 'auto_collect_timeout INT NOT NULL DEFAULT 12');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');
