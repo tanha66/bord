@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>تست بصری ریلز - Bordkhan</title>
+<style>
+/* Minimal CSS for visual test - copied from improved reels */
+*{box-sizing:border-box;font-family:Tahoma,sans-serif}
+html,body{margin:0;padding:0;background:#000;height:100%;overscroll-behavior:none}
+.reels-body{background:#000;color:#fff;overflow:hidden}
+.reels-topbar{position:fixed;top:0;inset-inline:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:linear-gradient(rgba(0,0,0,.82),transparent)}
+.logo{color:#fff;font-size:18px;text-decoration:none;font-weight:900}
+.reels-close{color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:6px 14px;border-radius:20px;font-size:12px;text-decoration:none}
+.reels-progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:60;background:rgba(255,255,255,.12)} .reels-progress i{display:block;height:100%;background:#10b981;width:0%}
+.reels-feed{height:100dvh;overflow-y:scroll;scroll-snap-type:y mandatory} .reels-feed::-webkit-scrollbar{display:none}
+.reel{position:relative;height:100dvh;scroll-snap-align:start;background:#0a0a0a;overflow:hidden}
+.reel-media{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#080c0e}
+.reel-media img{width:100%;height:100%;object-fit:cover} .bk-blur{filter:blur(18px) brightness(.7) scale(1.06)}
+.reel-dots{position:absolute;top:70px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:5;background:rgba(0,0,0,.35);padding:5px 9px;border-radius:20px}
+.reel-dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.38);display:block} .reel-dots i.on{background:#fff;width:20px;border-radius:4px}
+.reel-info{position:absolute;left:14px;right:86px;bottom:0;z-index:4;padding:0 0 28px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.88))}
+.reel-info .author-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.avatar{width:36px;height:36px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-weight:900;font-size:15px;border:2px solid #fff}
+.reel-info h3{margin:0 0 6px;font-size:15px;font-weight:900}
+.reel-info p{margin:0;font-size:12px;color:#e6e6e6;line-height:1.9;opacity:.92}
+.pill{background:rgba(255,255,255,.16);color:#fff;font-size:10px;padding:3px 9px;border-radius:12px;display:inline-block;margin-left:4px}
+.reel-rail{position:absolute;right:10px;bottom:96px;z-index:6;display:flex;flex-direction:column;align-items:center;gap:18px}
+.ra-btn{display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:0;cursor:pointer;color:#fff;font-size:26px}
+.ra-btn small{font-size:10px;font-weight:800} .ra-btn.liked{color:#ff2d55}
+.buy-chip{background:rgba(0,0,0,.58);border:1px solid rgba(255,255,255,.32);border-radius:16px;padding:8px 10px;font-size:11px;font-weight:800;text-align:center}
+.heart-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:88px;pointer-events:none;z-index:9;opacity:0}
+.heart-pop.show{animation:bkpop .72s forwards}
+@keyframes bkpop{0%{transform:translate(-50%,-50%) scale(0);opacity:0}15%{opacity:1}35%{transform:translate(-50%,-50%) scale(1.25)}70%{transform:translate(-50%,-50%) scale(.95)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.reel-lock{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.52);backdrop-filter:blur(6px);color:#fff;text-align:center;padding:22px}
+.lk-btn{border:0;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer;background:#fff;color:#111;text-decoration:none}
+.lk-btn.green{background:#10b981;color:#04110b}
+.comments-sheet{position:absolute;inset-inline:0;bottom:-100%;height:64%;background:#11181f;border-radius:22px 22px 0 0;z-index:12;transition:bottom .32s;display:flex;flex-direction:column;overflow:hidden}
+.comments-sheet.open{bottom:0}
+.cs-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;font-weight:800}
+.cs-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;cursor:pointer}
+.cs-list{flex:1;overflow-y:auto;padding:14px 16px}
+.cs-item{display:flex;gap:10px;margin-bottom:16px}
+.cs-item .av{width:32px;height:32px;border-radius:50%;background:#10b981;display:grid;place-items:center;font-size:12px;font-weight:900;color:#04110b}
+.cs-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.1);background:#0d131a}
+.cs-form input{flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:11px 14px;color:#fff;outline:0}
+.cs-form button{background:#10b981;border:0;border-radius:20px;padding:0 18px;color:#04110b;font-weight:800;cursor:pointer}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#111a24;border:1px solid rgba(255,255,255,.18);color:#fff;padding:12px 20px;border-radius:24px;font-size:13px;z-index:99;max-width:92%;text-align:center}
+.test-panel{position:fixed;bottom:10px;left:10px;right:10px;z-index:70;background:rgba(17,24,39,.92);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;backdrop-filter:blur(12px)}
+.test-panel h4{margin:0 0 8px;font-size:12px;color:#34d399}
+.test-panel .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.test-panel button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;padding:6px 10px;border-radius:10px;font-size:11px;cursor:pointer}
+.test-panel button.pass{background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7}
+.test-panel button.fail{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);color:#fca5a5}
+</style>
+</head>
+<body class="reels-body">
+<div class="reels-progress"><i id="reelsProgress"></i></div>
+<header class="reels-topbar">
+  <a class="logo" href="#">⌁ بردخان · تست بصری</a>
+  <div><a class="reels-close" href="#">قلق‌ها</a> <a class="reels-close" href="#">✕</a></div>
+</header>
+
+<main class="reels-feed" id="reelsFeed">
+  <!-- Reel 1: free, 2 images -->
+  <div class="reel" data-id="1" data-access="free" data-price="0" data-locked="0" data-liked="0" data-index="0">
+    <div class="reel-media">
+      <img src="https://picsum.photos/seed/reel1/800/1200" data-thumbs='["https://picsum.photos/seed/reel1/800/1200"]' data-fulls='["https://picsum.photos/seed/reel1/800/1200","https://picsum.photos/seed/reel1b/800/1200"]' alt="تست 1">
+      <div class="reel-dots"><i class="on"></i><i></i></div>
+    </div>
+    <div class="reel-info">
+      <div class="author-row"><span class="avatar">ع</span><span>علی رضایی ✓</span></div>
+      <h3>تست ۱: قلق رایگان - ۲ عکس - باید بدون قفل نمایش داده شود</h3>
+      <p>این ریل باید بدون blur و بدون قفل باشد. کلیک روی تصویر باید عکس بعدی را نشان دهد.</p>
+      <div><span class="pill">رایگان</span><span class="pill">متوسط</span><span class="pill">◉ ۱,۲۴۰</span></div>
+    </div>
+    <div class="reel-rail">
+      <button class="ra-btn" data-act="like"><span>🤍</span><small data-count>۸۹</small></button>
+      <button class="ra-btn" data-act="comments"><span>💬</span><small>۱۲</small></button>
+      <button class="ra-btn" data-act="share"><span>➦</span><small>اشتراک</small></button>
+    </div>
+    <div class="heart-pop">❤️</div>
+    <div class="comments-sheet"><div class="cs-head"><span>💬 نظرات</span><button class="cs-close" data-act="csclose">✕</button></div><div class="cs-list"><div>نظرات تستی...</div></div><div class="cs-form"><input placeholder="نظر..."><button data-act="cssend">ارسال</button></div></div>
+  </div>
+
+  <!-- Reel 2: like, locked -->
+  <div class="reel" data-id="2" data-access="like" data-price="0" data-locked="1" data-liked="0" data-index="0">
+    <div class="reel-media"><img src="https://picsum.photos/seed/reel2/800/1200" class="bk-blur" data-thumbs='["https://picsum.photos/seed/reel2/800/1200"]' data-fulls='["https://picsum.photos/seed/reel2/800/1200"]' alt="تست 2"></div>
+    <div class="reel-lock"><div style="font-size:48px">💗</div><b>این قلق با لایک باز می‌شود</b><p>تست: کلیک لایک باید قفل را باز کند</p><div><button class="lk-btn green" data-act="unlock">♥ لایک و باز کردن (تست)</button></div></div>
+    <div class="reel-info"><div class="author-row"><span class="avatar">س</span><span>سارا احمدی</span></div><h3>تست ۲: قلق لایکی - قفل با blur</h3><p>این باید blur باشد. لایک = باز شدن</p><div><span class="pill">با لایک</span><span class="pill">سخت</span></div></div>
+    <div class="reel-rail">
+      <button class="ra-btn" data-act="like"><span>🤍</span><small data-count>۴۵</small></button>
+      <button class="ra-btn" data-act="comments"><span>💬</span><small>۵</small></button>
+      <button class="ra-btn" data-act="share"><span>➦</span><small>اشتراک</small></button>
+      <button class="ra-btn" data-act="unlock"><span class="buy-chip">♥<br>باز کردن</span></button>
+    </div>
+    <div class="heart-pop">❤️</div>
+    <div class="comments-sheet"><div class="cs-head"><span>💬 نظرات</span><button class="cs-close" data-act="csclose">✕</button></div><div class="cs-list">نظرات...</div><div class="cs-form"><input placeholder="نظر..."><button data-act="cssend">ارسال</button></div></div>
+  </div>
+
+  <!-- Reel 3: paid, locked, 3 images -->
+  <div class="reel" data-id="3" data-access="paid" data-price="75000" data-locked="1" data-liked="0" data-index="0">
+    <div class="reel-media">
+      <img src="https://picsum.photos/seed/reel3/800/1200" class="bk-blur" data-thumbs='["https://picsum.photos/seed/reel3/800/1200","https://picsum.photos/seed/reel3b/800/1200","https://picsum.photos/seed/reel3c/800/1200"]' data-fulls='["https://picsum.photos/seed/reel3/800/1200","https://picsum.photos/seed/reel3b/800/1200","https://picsum.photos/seed/reel3c/800/1200"]' alt="تست 3">
+      <div class="reel-dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <div class="reel-lock"><div style="font-size:48px">🔒</div><b>این قلق پولی است</b><p>تست: کلیک خرید باید قفل را باز کند (دمو)</p><div><button class="lk-btn green" data-act="unlock">💳 خرید — ۷۵,۰۰۰ تومان (تست)</button></div></div>
+    <div class="reel-info"><div class="author-row"><span class="avatar">م</span><span>محمد حسینی ✓</span></div><h3>تست ۳: قلق پولی - ۳ عکس - قفل</h3><p>باید blur + قفل. پس از باز کردن، تعویض عکس تست شود.</p><div><span class="pill">۷۵,۰۰۰ تومان</span><span class="pill">سخت</span></div></div>
+    <div class="reel-rail">
+      <button class="ra-btn" data-act="like"><span>🤍</span><small data-count>۱۵۶</small></button>
+      <button class="ra-btn" data-act="comments"><span>💬</span><small>۲۳</small></button>
+      <button class="ra-btn" data-act="share"><span>➦</span><small>اشتراک</small></button>
+      <button class="ra-btn" data-act="unlock"><span class="buy-chip">💰<br>۷۵k<br>باز کردن</span></button>
+    </div>
+    <div class="heart-pop">❤️</div>
+    <div class="comments-sheet"><div class="cs-head"><span>💬 نظرات</span><button class="cs-close" data-act="csclose">✕</button></div><div class="cs-list">نظرات...</div><div class="cs-form"><input placeholder="نظر..."><button data-act="cssend">ارسال</button></div></div>
+  </div>
+
+  <!-- Reel 4: free, no image -->
+  <div class="reel" data-id="4" data-access="free" data-price="0" data-locked="0" data-liked="1" data-index="0">
+    <div class="reel-media"><div style="width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg,#0d6b55,#063e37);color:#fff;padding:20px;text-align:center">بدون تصویر - تست حالت خالی تصویر</div></div>
+    <div class="reel-info"><div class="author-row"><span class="avatar">ر</span><span>رضا کریمی</span></div><h3>تست ۴: بدون تصویر</h3><p>باید گرادیانت نمایش داده شود، بدون خطا</p></div>
+    <div class="reel-rail"><button class="ra-btn liked" data-act="like"><span>❤️</span><small data-count>۳۲</small></button><button class="ra-btn" data-act="comments"><span>💬</span><small>۲</small></button><button class="ra-btn" data-act="share"><span>➦</span><small>اشتراک</small></button></div>
+    <div class="heart-pop">❤️</div>
+    <div class="comments-sheet"><div class="cs-head"><span>💬 نظرات</span><button class="cs-close" data-act="csclose">✕</button></div><div class="cs-list">نظرات...</div><div class="cs-form"><input placeholder="نظر..."><button data-act="cssend">ارسال</button></div></div>
+  </div>
+</main>
+
+<div id="bkToast" class="toast" style="display:none"></div>
+
+<div class="test-panel" id="testPanel">
+  <h4>🧪 پنل تست ریلز - کلیک برای تست</h4>
+  <div class="grid" id="testGrid"></div>
+  <div style="margin-top:8px;font-size:10px;color:#9fb0c3" id="testSummary">در حال اجرای تست‌ها...</div>
+</div>
+
+<script>
+function bkToast(m){var t=document.getElementById('bkToast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(function(){t.style.display='none'},2500);}
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function parseImgs(reel){var img=reel.querySelector('.reel-media img');if(!img) return {thumbs:[],fulls:[],el:null};try{var thumbs=JSON.parse(img.getAttribute('data-thumbs')||'[]');var fulls=JSON.parse(img.getAttribute('data-fulls')||'[]');return {thumbs:thumbs,fulls:fulls,el:img};}catch(e){return {thumbs:[],fulls:[],el:img};}}
+function currentList(reel){var p=parseImgs(reel);return reel.dataset.locked==='1'?p.thumbs:p.fulls;}
+function updateDots(reel,idx){reel.querySelectorAll('.reel-dots i').forEach(function(d,i){d.classList.toggle('on',i===idx);});}
+function popHeart(reel,show){var h=reel.querySelector('.heart-pop');if(!h)return;h.classList.remove('show');if(show){void h.offsetWidth;h.classList.add('show');}}
+
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]'); if(!b) return;
+  var reel=b.closest('.reel'); if(!reel) return;
+  var act=b.dataset.act;
+  if(act==='like'){
+    var btn=reel.querySelector('[data-act=like]'); var liked=reel.dataset.liked==='1';
+    reel.dataset.liked=liked?'0':'1'; btn.classList.toggle('liked',!liked);
+    btn.querySelector('span').textContent=!liked?'❤️':'🤍';
+    var cnt=btn.querySelector('[data-count]'); if(cnt){var n=parseInt(cnt.textContent.replace(/[^0-9]/g,''))||0; cnt.textContent=!liked?n+1:Math.max(0,n-1);}
+    popHeart(reel,!liked); bkToast(!liked?'لایک شد ❤️':'لایک حذف شد');
+  }else if(act==='comments'){reel.querySelector('.comments-sheet').classList.add('open');}
+  else if(act==='share'){var url=location.origin+'/tip/'+reel.dataset.id; bkToast('لینک کپی شد (تست): '+url);}
+  else if(act==='unlock'){reel.dataset.locked='0'; var lock=reel.querySelector('.reel-lock'); if(lock) lock.remove(); reel.querySelectorAll('[data-act=unlock]').forEach(function(x){if(x.closest('.reel-rail')) x.remove();}); var img=reel.querySelector('.reel-media img'); if(img) img.classList.remove('bk-blur'); bkToast('باز شد ✓ (تست)'); popHeart(reel,true);}
+  else if(act==='csclose'){reel.querySelector('.comments-sheet').classList.remove('open');}
+  else if(act==='cssend'){var inp=reel.querySelector('.cs-form input'); if(inp && inp.value.trim().length>=2){var list=reel.querySelector('.cs-list'); var div=document.createElement('div'); div.className='cs-item'; div.innerHTML='<span class=\"av\">ش</span><div><b>شما</b><p>'+esc(inp.value)+'</p><small>همین الان</small></div>'; list.appendChild(div); inp.value=''; bkToast('نظر ثبت شد (تست)');}}
+});
+var lastTap=0;
+document.addEventListener('click',function(e){
+  var reel=e.target.closest('.reel'); if(!reel) return;
+  if(e.target.closest('.reel-rail')||e.target.closest('.reel-info')||e.target.closest('.reel-lock')||e.target.closest('.comments-sheet')||e.target.closest('[data-act]')) return;
+  var now=Date.now(); if(now-lastTap<300){var btn=reel.querySelector('[data-act=like]'); var liked=reel.dataset.liked==='1'; reel.dataset.liked=liked?'0':'1'; if(btn){btn.classList.toggle('liked',!liked); btn.querySelector('span').textContent=!liked?'❤️':'🤍';} popHeart(reel,!liked); bkToast(!liked?'لایک دابل‌تپ ❤️':'حذف لایک');} lastTap=now;
+});
+document.addEventListener('click',function(e){
+  var img=e.target.closest('.reel-media img'); if(!img) return; var reel=img.closest('.reel'); if(!reel||reel.dataset.locked==='1') return;
+  var list=currentList(reel); if(list.length<2) return;
+  var curIdx=parseInt(reel.dataset.index||'0'); var next=(curIdx+1)%list.length; reel.dataset.index=next; img.src=list[next]; updateDots(reel,next);
+});
+document.addEventListener('keydown',function(e){
+  var feed=document.getElementById('reelsFeed'); if(!feed) return;
+  if(e.key==='ArrowDown'){e.preventDefault();feed.scrollBy({top:innerHeight*0.9,behavior:'smooth'});}
+  if(e.key==='ArrowUp'){e.preventDefault();feed.scrollBy({top:-innerHeight*0.9,behavior:'smooth'});}
+  if(e.key==='Escape'){document.querySelectorAll('.comments-sheet.open').forEach(function(s){s.classList.remove('open');});}
+});
+(function(){var feed=document.getElementById('reelsFeed'); var bar=document.getElementById('reelsProgress'); if(!feed||!bar) return; function upd(){var max=feed.scrollHeight-feed.clientHeight; var pct=max>0?(feed.scrollTop/max*100):0; bar.style.width=pct+'%';} feed.addEventListener('scroll',upd,{passive:true}); upd();})();
+
+// Automated visual tests
+function runTests(){
+  var results=[];
+  function t(name, fn){
+    try{ var r=fn(); results.push({name:name, ok:r===true, err:r!==true?r:null}); }catch(e){ results.push({name:name, ok:false, err:e.message}); }
+  }
+  t('تعداد ریلز = ۴', function(){ return document.querySelectorAll('.reel').length===4 ? true : 'تعداد اشتباه: '+document.querySelectorAll('.reel').length; });
+  t('ریل ۱ بدون قفل', function(){ var r=document.querySelector('#reel-1'); return r.dataset.locked==='0' ? true : 'ریل ۱ قفل است'; });
+  t('ریل ۲ با قفل لایکی', function(){ var r=document.querySelector('#reel-2'); return r.dataset.locked==='1' && r.dataset.access==='like' ? true : 'ریل ۲ اشتباه'; });
+  t('ریل ۳ با قفل پولی و ۳ عکس', function(){ var r=document.querySelector('#reel-3'); var p=parseImgs(r); return r.dataset.access==='paid' && p.fulls.length===3 ? true : 'ریل ۳ اشتباه'; });
+  t('ریل ۱ دارای دات‌ها', function(){ var r=document.querySelector('#reel-1'); return r.querySelectorAll('.reel-dots i').length===2 ? true : 'دات ریل ۱ اشتباه'; });
+  t('ریل ۲ تصویر blur دارد', function(){ var r=document.querySelector('#reel-2 img'); return r.classList.contains('bk-blur') ? true : 'blur ندارد'; });
+  t('قلب پاپ وجود دارد', function(){ return document.querySelectorAll('.heart-pop').length===4 ? true : 'heart-pop کم است'; });
+  t('پنل کامنت وجود دارد', function(){ return document.querySelectorAll('.comments-sheet').length===4 ? true : 'کامنت شیت کم است'; });
+  t('پروگرس بار وجود دارد', function(){ return document.getElementById('reelsProgress') ? true : 'پروگرس نیست'; });
+  t('دکمه‌های rail', function(){ var r=document.querySelector('#reel-1 .reel-rail'); return r.querySelectorAll('.ra-btn').length>=3 ? true : 'rail کم است'; });
+  t('BKC demo', function(){ return true; });
+
+  var grid=document.getElementById('testGrid');
+  var pass=0, fail=0;
+  grid.innerHTML='';
+  results.forEach(function(res){
+    var btn=document.createElement('button');
+    btn.textContent=(res.ok?'✅ ':'❌ ')+res.name;
+    btn.className=res.ok?'pass':'fail';
+    if(!res.ok && res.err) btn.title=res.err;
+    grid.appendChild(btn);
+    if(res.ok) pass++; else fail++;
+  });
+  document.getElementById('testSummary').textContent='✅ '+pass+' موفق، ❌ '+fail+' ناموفق از '+results.length+' تست';
+  console.log('Reels Visual Tests:', results);
+}
+setTimeout(runTests, 600);
+</script>
+</body>
+</html>

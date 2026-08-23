@@ -1,0 +1,8 @@
+# پوشهٔ آپلودها که هنگام نصب ساخته می‌شود
+/uploads/
+
+# پیکربندی محلی (در صورت ساخته‌شدن نسخهٔ سرور)
+/config.local.php
+node_modules/
+package-lock.json
+package.json

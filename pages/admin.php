@@ -16,8 +16,9 @@ $TABS = [
     'categories' => '🗂 دسته‌بندی‌ها',
     'withdrawals' => '🏦 تسویه‌ها',
     'transactions' => '🧾 تراکنش‌ها',
+    'contact' => '📨 پیام‌های تماس',
     'settings' => '⚙️ تنظیمات سایت',
-    'collect' => '🤖 جمع‌آوری خودکار',
+    'collect' => '🤖 ربات پیشرفته v5',
 ];
 
 header_html('پنل مدیریت');
@@ -44,117 +45,16 @@ $flash = pull_flash();
         <a href="<?=url('tickets')?>">✉ تیکت‌ها</a>
       </nav>
       <div class="notice" style="font-size:11px;line-height:2;margin-top:12px">
-        از همین پنل می‌توانید محتوا را تأیید/رد کنید، نقش کاربران را تغییر دهید، تسویه‌ها را بررسی کنید و تنظیمات مالی و سئو را تغییر دهید.
+        از همین پنل می‌توانید محتوا را تأیید/رد کنید، نقش کاربران را تغییر دهید، تسویه‌ها را بررسی کنید و تنظیمات مالی و سئو را تغییر دهید.<br>
+        <b>نسخهٔ کد: <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></b> — اگر کمتر از 4.0 بود، فایل‌های جدید روی سرور آپلود نشده‌اند (<a class="check" href="<?=url('diag-version')?>" target="_blank">بررسی</a>).
       </div>
     </aside>
 
     <section class="admin-main">
 <?php
-/* ---------------- DASHBOARD ---------------- */
+/* ---------------- DASHBOARD (پیشخوان حرفه‌ای v5) ---------------- */
 if ($tab === 'dashboard') {
-    $stats = [
-        'users' => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
-        'tips' => (int)$pdo->query('SELECT COUNT(*) FROM tips')->fetchColumn(),
-        'published' => (int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn(),
-        'pending' => (int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='pending'")->fetchColumn(),
-        'reports' => (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status='open'")->fetchColumn(),
-        'withdrawals' => (int)$pdo->query("SELECT COUNT(*) FROM withdrawals WHERE status IN ('pending','reviewing')")->fetchColumn(),
-        'sales' => (int)$pdo->query("SELECT COALESCE(SUM(price_paid),0) FROM tip_accesses WHERE access_type='purchase'")->fetchColumn(),
-        'balance' => (int)$pdo->query('SELECT COALESCE(SUM(balance),0) FROM users')->fetchColumn(),
-    ];
-    $tips7 = $pdo->query("SELECT DATE(created_at) d, COUNT(*) c FROM tips WHERE created_at >= DATE(NOW())-INTERVAL 6 DAY GROUP BY DATE(created_at)")->fetchAll();
-    $users7 = $pdo->query("SELECT DATE(created_at) d, COUNT(*) c FROM users WHERE created_at >= DATE(NOW())-INTERVAL 6 DAY GROUP BY DATE(created_at)")->fetchAll();
-    $recent = $pdo->query("SELECT t.id,t.title,t.status,t.created_at,u.name FROM tips t JOIN users u ON u.id=t.author_id ORDER BY t.created_at DESC LIMIT 8")->fetchAll();
-    function chart_series(array $rows): array {
-        $out = []; for ($i = 6; $i >= 0; $i--) { $d = date('Y-m-d', strtotime("-{$i} day")); $out[$d] = 0; }
-        foreach ($rows as $r) if (isset($out[$r['d']])) $out[$r['d']] = (int)$r['c'];
-        return $out;
-    }
-    $tipsSeries = chart_series($tips7);
-    $usersSeries = chart_series($users7);
-    ?>
-    <div class="admin-cards">
-      <?php foreach ([
-        ['کاربران', $stats['users'], '👥'], ['کل قلق‌ها', $stats['tips'], '🔧'],
-        ['منتشرشده', $stats['published'], '✅'], ['در انتظار بررسی', $stats['pending'], '⏳'],
-        ['گزارش‌های باز', $stats['reports'], '🚩'], ['تسویه در انتظار', $stats['withdrawals'], '🏦'],
-        ['حجم فروش (تومان)', $stats['sales'], '💳'], ['موجودی کاربران (تومان)', $stats['balance'], '💰'],
-      ] as $card): ?>
-        <div class="card">
-          <div class="k"><?=$card[2]?> <?=h($card[0])?></div>
-          <div class="v"><?=fa(number_format($card[1]))?></div>
-        </div>
-      <?php endforeach; ?>
-    </div>
-
-    <div class="grid grid-2">
-      <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:16px">📈 قلق‌های جدید (۷ روز اخیر)</h3>
-        <div class="bar-chart">
-          <?php foreach ($tipsSeries as $d => $c): $max = max(1, max($tipsSeries)); ?>
-            <div class="bar" style="height:<?=max(3, round($c / $max * 110))?>px">
-              <span><?=fa($c)?></span><i><?=fa(date('m/d', strtotime($d)))?></i>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:16px">👥 ثبت‌نام‌های جدید (۷ روز اخیر)</h3>
-        <div class="bar-chart">
-          <?php foreach ($usersSeries as $d => $c): $max = max(1, max($usersSeries)); ?>
-            <div class="bar" style="height:<?=max(3, round($c / $max * 110))?>px">
-              <span><?=fa($c)?></span><i><?=fa(date('m/d', strtotime($d)))?></i>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-    </div>
-
-    <div class="card mt" style="padding:18px">
-      <h3 style="margin-bottom:8px">🕒 آخرین قلق‌های ثبت‌شده</h3>
-      <?php foreach ($recent as $r): ?>
-        <div class="activity-item">
-          <a class="grow" href="<?=url('tip/' . $r['id'])?>" style="font-weight:bold"><?=h(mb_substr($r['title'], 0, 60))?></a>
-          <span class="pill <?=$r['status'] === 'published' ? 'green' : ($r['status'] === 'pending' ? 'amber' : 'rose')?>"><?=h(status_label($r['status']))?></span>
-          <small class="muted"><?=ago($r['created_at'])?></small>
-        </div>
-      <?php endforeach; ?>
-    </div>
-
-    <!-- Quick action cards row -->
-    <div class="grid grid-3 mt">
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'collect'])?>">
-        <div style="font-size:30px">🤖</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">جمع‌آوری خودکار</strong>
-        <small class="muted">مطالب فارسی از اینترنت</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'boards'])?>">
-        <div style="font-size:30px">🏪</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">فروشگاه برد</strong>
-        <small class="muted">مدیریت بردها و سفارش‌ها</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'withdrawals'])?>">
-        <div style="font-size:30px">🏦</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">تسویه‌ها</strong>
-        <small class="muted">درخواست‌های برداشت</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'sellers'])?>">
-        <div style="font-size:30px">🛒</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">فروشندگان</strong>
-        <small class="muted">تأیید و مدیریت</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'settings'])?>">
-        <div style="font-size:30px">⚙️</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">تنظیمات سایت</strong>
-        <small class="muted">متن‌ها، قیمت‌ها و سئو</small>
-      </a>
-      <a class="card" style="padding:20px;text-align:center" href="<?=url('admin',['tab'=>'reports'])?>">
-        <div style="font-size:30px">🚩</div>
-        <strong style="display:block;margin-top:8px;font-size:13px">گزارش‌ها</strong>
-        <small class="muted">بررسی محتوای مشکوک</small>
-      </a>
-    </div>
-    <?php
+    require __DIR__ . '/admin_dashboard_v5.php';
 }
 
 /* ---------------- TIPS ---------------- */
@@ -202,13 +102,36 @@ elseif ($tab === 'orders') {
 }
 
 elseif ($tab === 'tips') {
-    $items = $pdo->query("SELECT t.*,u.name author_name FROM tips t JOIN users u ON u.id=t.author_id ORDER BY FIELD(t.status,'pending','published','draft','rejected','removed'),t.created_at DESC LIMIT 150")->fetchAll();
+    $tf = in_array($_GET['f'] ?? '', ['pending','published','draft','rejected','removed'], true) ? $_GET['f'] : '';
+    $tq = trim($_GET['q'] ?? '');
+    $where = ''; $params = [];
+    if ($tf !== '') { $where = 'WHERE t.status=?'; $params[] = $tf; }
+    if ($tq !== '') { $where .= ($where === '' ? 'WHERE ' : ' AND ') . '(t.title LIKE ? OR t.device_name LIKE ? OR t.brand LIKE ?)'; $params[] = '%'.$tq.'%'; $params[] = '%'.$tq.'%'; $params[] = '%'.$tq.'%'; }
+    $tstmt = $pdo->prepare("SELECT t.*,u.name author_name FROM tips t JOIN users u ON u.id=t.author_id $where ORDER BY FIELD(t.status,'pending','published','draft','rejected','removed'),t.created_at DESC LIMIT 500");
+    $tstmt->execute($params);
+    $items = $tstmt->fetchAll();
     $published=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn();
     $pending=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='pending'")->fetchColumn();
     $draft=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='draft'")->fetchColumn();
+    $rejected=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='rejected'")->fetchColumn();
+    $removed=(int)$pdo->query("SELECT COUNT(*) FROM tips WHERE status='removed'")->fetchColumn();
     $totalViews=(int)$pdo->query('SELECT COALESCE(SUM(views),0) FROM tips')->fetchColumn();
     $totalSales=(int)$pdo->query("SELECT COALESCE(SUM(purchases_count),0) FROM tips")->fetchColumn();
     ?>
+    <div class="flex between items-center mb" style="gap:10px;flex-wrap:wrap">
+      <div class="tip-meta">
+        <a class="pill <?=$tf===''?'green':''?>" href="<?=url('admin',['tab'=>'tips'])?>">همه</a>
+        <a class="pill <?=$tf==='pending'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'pending'])?>">⏳ در انتظار (<?=fa($pending)?>)</a>
+        <a class="pill <?=$tf==='published'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'published'])?>">✅ منتشرشده (<?=fa($published)?>)</a>
+        <a class="pill <?=$tf==='rejected'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'rejected'])?>">ردشده (<?=fa($rejected)?>)</a>
+        <a class="pill <?=$tf==='removed'?'green':''?>" href="<?=url('admin',['tab'=>'tips','f'=>'removed'])?>">حذفشده (<?=fa($removed)?>)</a>
+      </div>
+      <form method="get" style="display:flex;gap:6px;max-width:300px">
+        <input type="hidden" name="r" value="admin"><input type="hidden" name="tab" value="tips">
+        <input class="field" style="padding:8px" name="q" value="<?=h($tq)?>" placeholder="جستجوی قلق…">
+        <button class="btn btn-secondary btn-sm">جستجو</button>
+      </form>
+    </div>
     <div class="grid grid-4 mb">
       <div class="card stat-card"><strong><?=fa($published)?></strong><small>منتشرشده</small></div>
       <div class="card stat-card"><strong><?=fa($pending)?></strong><small>در انتظار بررسی</small></div>
@@ -245,16 +168,11 @@ elseif ($tab === 'tips') {
               <input type="hidden" name="csrf" value="<?=csrf()?>">
               <input type="hidden" name="action" value="admin_tip">
               <input type="hidden" name="tip_id" value="<?=$x['id']?>">
-              <?php if ($x['status'] !== 'published'): ?><button class="btn btn-primary btn-sm" name="mod_action" value="publish">تأیید</button><?php endif; ?>
+              <?php if ($x['status'] !== 'published'): ?><button class="btn btn-primary btn-sm" name="mod_action" value="publish" title="تأیید و انتشار">تأیید</button><?php endif; ?>
               <button class="btn btn-secondary btn-sm" name="mod_action" value="feature">⭐</button>
               <?php if ($x['status'] !== 'removed'): ?><button class="btn btn-danger btn-sm" name="mod_action" value="remove">حذف</button><?php endif; ?>
               <a class="btn btn-secondary btn-sm" href="<?=url('tip/'.$x['id'])?>" target="_blank">👁</a>
-              <form method="post" style="display:inline" onsubmit="return confirm('حذف نهایی و بدون برگشت؟')">
-                <input type="hidden" name="csrf" value="<?=csrf()?>">
-                <input type="hidden" name="action" value="admin_tip_delete">
-                <input type="hidden" name="tip_id" value="<?=$x['id']?>">
-                <button class="btn btn-danger btn-sm">🗑</button>
-              </form>
+              <button class="btn btn-danger btn-sm" name="mod_action" value="delete_forever" onclick="return confirm('حذف نهایی و بدون برگشت؟')" title="حذف برای همیشه">🗑</button>
             </form>
           </td>
         </tr>
@@ -264,48 +182,9 @@ elseif ($tab === 'tips') {
     <?php
 }
 
-/* ---------------- USERS ---------------- */
+/* ---------------- USERS (مدیریت کاربران حرفه‌ای v5) ---------------- */
 elseif ($tab === 'users') {
-    $q = trim($_GET['q'] ?? '');
-    $where = ''; $params = [];
-    if ($q !== '') { $where = "WHERE name LIKE ? OR phone LIKE ?"; $params = ["%$q%", "%$q%"]; }
-    $stmt = $pdo->prepare("SELECT * FROM users $where ORDER BY created_at DESC LIMIT 150");
-    $stmt->execute($params);
-    $items = $stmt->fetchAll();
-    ?>
-    <form method="get" class="mb" style="max-width:320px">
-      <input type="hidden" name="r" value="admin"><input type="hidden" name="tab" value="users">
-      <input class="field" name="q" value="<?=h($q)?>" placeholder="جستجوی نام یا موبایل…">
-    </form>
-    <div class="card table-wrap">
-      <table class="table">
-        <tr><th>کاربر</th><th>نقش</th><th>امتیاز</th><th>موجودی</th><th>وضعیت</th><th>ذخیره</th></tr>
-        <?php foreach ($items as $x): ?>
-        <tr>
-          <td><?=h($x['name'])?><br><small dir="ltr" class="muted"><?=h($x['phone'])?></small></td>
-          <td>
-            <form method="post" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-              <input type="hidden" name="csrf" value="<?=csrf()?>">
-              <input type="hidden" name="action" value="admin_user">
-              <input type="hidden" name="user_id" value="<?=$x['id']?>">
-              <select class="field" name="role" style="width:135px">
-                <?php foreach (['member'=>'کاربر عادی','expert'=>'تعمیرکار','moderator'=>'ناظر','admin'=>'مدیر','superadmin'=>'سوپرادمین'] as $rv => $rl): ?>
-                  <option value="<?=$rv?>" <?=$x['role']===$rv?'selected':''?>><?=h($rl)?></option>
-                <?php endforeach; ?>
-              </select>
-          </td>
-          <td><?=fa($x['points'])?></td>
-          <td><?=money($x['balance'])?></td>
-          <td>
-              <label style="font-size:11px"><input type="checkbox" name="verified" value="1" <?=$x['verified']?'checked':''?>> تأیید</label>
-              <label style="font-size:11px"><input type="checkbox" name="banned" value="1" <?=$x['is_banned']?'checked':''?>> مسدود</label>
-          </td>
-          <td><button class="btn btn-primary btn-sm">ذخیره</button></form></td>
-        </tr>
-        <?php endforeach; ?>
-      </table>
-    </div>
-    <?php
+    require __DIR__ . '/admin_users_v5.php';
 }
 
 /* ---------------- REPORTS ---------------- */
@@ -341,9 +220,15 @@ elseif ($tab === 'reports') {
 
 /* ---------------- CATEGORIES ---------------- */
 elseif ($tab === 'categories') {
-    $items = $pdo->query('SELECT c.*,p.name parent_name FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name')->fetchAll();
+    $items = $pdo->query('SELECT c.*,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name')->fetchAll();
     $parents = $pdo->query('SELECT * FROM categories WHERE parent_id IS NULL ORDER BY name')->fetchAll();
     ?>
+    <div class="flex between items-center mb" style="gap:10px;flex-wrap:wrap">
+      <p class="muted" style="font-size:11px;margin:0">اگر نامی را دوبار (با والد یکسان) می‌بینید، با دکمهٔ «حذف موارد تکراری» یک‌باره پاک‌سازی کنید.</p>
+      <form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="admin_category"><input type="hidden" name="op" value="dedupe"><button class="btn btn-secondary btn-sm" onclick="return confirm('دسته‌های تکراری (نام + والد یکسان) حذف شوند؟')">🧹 حذف موارد تکراری</button></form>
+    </div>
+    <div class="form-group mb" style="max-width:340px"><label class="field-label">🔍 جستجوی زندهٔ دسته‌ها (آجاکس)</label><input class="field" id="catSearch" type="text" placeholder="مثلاً: سامسونگ، موبایل، هواوی…"></div>
+    <div id="catResults"></div>
     <div class="grid grid-2">
       <div class="card" style="padding:18px">
         <h3 style="margin-bottom:12px">افزودن دسته جدید</h3>
@@ -361,12 +246,12 @@ elseif ($tab === 'categories') {
           <button class="btn btn-primary btn-full">افزودن دسته</button>
         </form>
       </div>
-      <div class="card table-wrap">
+      <div class="card table-wrap" id="catStatic">
         <table class="table">
           <tr><th>دسته</th><th>والد</th><th>وضعیت</th><th>عملیات</th></tr>
           <?php foreach ($items as $x): ?>
           <tr>
-            <td><?=h(($x['icon'] ?: '📁') . ' ' . $x['name'])?></td>
+            <td><?=h(($x['icon'] ?: '📁') . ' ' . $x['name'])?><?php if ((int)$x['child_count'] > 0): ?><small class="muted" style="display:block"><?=(int)$x['child_count']?> زیرمجموعه</small><?php endif; ?></td>
             <td><?=h($x['parent_name'] ?: 'اصلی')?></td>
             <td><span class="pill <?=$x['status']==='active'?'green':'amber'?>"><?=h($x['status']==='active'?'فعال':'پیشنهادی')?></span></td>
             <td>
@@ -383,6 +268,9 @@ elseif ($tab === 'categories') {
         </table>
       </div>
     </div>
+    <script>
+(function(){var inp=document.getElementById('catSearch');if(!inp)return;var out=document.getElementById('catResults');var stat=document.getElementById('catStatic');var csrf=<?=json_encode(csrf())?>;var timer=null;function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}function render(rows){if(!rows.length){out.innerHTML='<div class="card empty">دسته‌ای با این عبارت پیدا نشد.</div>';return;}var h='<div class="card table-wrap"><table class="table"><tr><th>دسته</th><th>والد</th><th>وضعیت</th><th>عملیات</th></tr>';rows.forEach(function(x){h+='<tr><td>'+esc((x.icon||'📁')+' '+x.name)+((+x.child_count)>0?'<small class="muted" style="display:block">'+x.child_count+' زیرمجموعه</small>':'')+'</td><td>'+esc(x.parent_name||'اصلی')+'</td><td><span class="pill '+(x.status==='active'?'green':'amber')+'">'+esc(x.status==='active'?'فعال':'پیشنهادی')+'</span></td><td><form method="post" style="display:flex;gap:4px"><input type="hidden" name="csrf" value="'+esc(csrf)+'"><input type="hidden" name="action" value="admin_category"><input type="hidden" name="category_id" value="'+x.id+'">'+(x.status!=='active'?'<button class="btn btn-primary btn-sm" name="op" value="approve">تأیید</button>':'')+'<button class="btn btn-danger btn-sm" name="op" value="delete" onclick="return confirm(\'این دسته حذف شود؟\')">حذف</button></form></td></tr>';});h+='</table></div>';out.innerHTML=h;}inp.addEventListener('input',function(){clearTimeout(timer);var q=inp.value.trim();if(q===''){out.innerHTML='';if(stat)stat.style.display='';return;}timer=setTimeout(function(){fetch('/ajax-categories?q='+encodeURIComponent(q),{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json();}).then(function(j){if(j&&j.rows){if(stat)stat.style.display='none';render(j.rows);}}).catch(function(){out.innerHTML='<div class="notice error">خطا در دریافت نتایج.</div>';});},250);});})();
+</script>
     <?php
 }
 
@@ -439,6 +327,60 @@ elseif ($tab === 'transactions') {
     <?php
 }
 
+/* ---------------- CONTACT MESSAGES ---------------- */
+elseif ($tab === 'contact') {
+    $statusFilter = in_array($_GET['status'] ?? '', ['new','answered','closed'], true) ? $_GET['status'] : '';
+    try {
+        if ($statusFilter === '') {
+            $rows = $pdo->query('SELECT * FROM contact_messages ORDER BY FIELD(status,"new","answered","closed"), created_at DESC LIMIT 200')->fetchAll();
+        } else {
+            $q = $pdo->prepare('SELECT * FROM contact_messages WHERE status=? ORDER BY created_at DESC LIMIT 200');
+            $q->execute([$statusFilter]);
+            $rows = $q->fetchAll();
+        }
+    } catch (Throwable $e) { $rows = []; }
+    $statusLabels = ['new'=>'جدید','answered'=>'پاسخ داده شد','closed'=>'بسته شد'];
+    ?>
+    <div class="page-title" style="margin-top:0">
+      <h1 style="font-size:20px">📨 پیام‌های تماس با ما</h1>
+      <p>پیام‌هایی که از صفحه «تماس با ما» ثبت شده‌اند.</p>
+    </div>
+    <?php if (empty($s['contact_form_enabled'])): ?>
+      <div class="notice" style="margin-bottom:14px">⚠️ فرم پیام «تماس با ما» در حال حاضر <b>غیرفعال</b> است؛ کاربران پیام جدیدی ثبت نمی‌کنند. برای فعال‌سازی به <a class="check" href="<?=url('admin',['tab'=>'settings'])?>">تنظیمات سایت</a> بروید.</div>
+    <?php endif; ?>
+    <div class="flex between items-center mb">
+      <div class="tip-meta">
+        <a class="pill <?=$statusFilter===''?'green':''?>" href="<?=url('admin',['tab'=>'contact'])?>">همه</a>
+        <?php foreach ($statusLabels as $k => $v): ?>
+          <a class="pill <?=$statusFilter===$k?'green':''?>" href="<?=url('admin',['tab'=>'contact','status'=>$k])?>"><?=h($v)?></a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php if (!$rows): ?>
+      <div class="card empty">پیامی ثبت نشده است.</div>
+    <?php else: foreach ($rows as $m): ?>
+      <div class="card" style="padding:16px;margin-bottom:12px">
+        <div class="flex between items-center" style="gap:10px;flex-wrap:wrap">
+          <div class="grow">
+            <strong><?=h($m['subject'])?></strong>
+            <small class="muted"> · <?=h($m['name'])?><?=!empty($m['email'])?' · <span dir="ltr">'.h($m['email']).'</span>':''?><?=!empty($m['phone'])?' · <span dir="ltr">'.h($m['phone']).'</span>':''?><?=!empty($m['user_id'])?' · <a class="check" href="'.url('profile/'.$m['user_id']).'">پروفایل کاربر</a>':''?></small>
+            <div class="muted" style="font-size:11px"><?=ago($m['created_at'])?></div>
+          </div>
+          <span class="pill <?=$m['status']==='new'?'amber':($m['status']==='answered'?'green':'rose')?>"><?=h($statusLabels[$m['status']] ?? $m['status'])?></span>
+        </div>
+        <p class="rich mt" style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px"><?=nl2br(h($m['body']))?></p>
+        <form method="post" class="tip-meta mt">
+          <input type="hidden" name="csrf" value="<?=csrf()?>">
+          <input type="hidden" name="action" value="contact_status">
+          <input type="hidden" name="contact_id" value="<?=$m['id']?>">
+          <?php if ($m['status'] !== 'answered'): ?><button class="btn btn-primary btn-sm" name="op" value="answered">✔ پاسخ داده شد</button><?php endif; ?>
+          <?php if ($m['status'] !== 'closed'): ?><button class="btn btn-secondary btn-sm" name="op" value="closed">بستن</button><?php else: ?><button class="btn btn-secondary btn-sm" name="op" value="reopen">باز کردن مجدد</button><?php endif; ?>
+          <button class="btn btn-danger btn-sm" name="op" value="delete" onclick="return confirm('این پیام حذف شود؟')">حذف</button>
+        </form>
+      </div>
+    <?php endforeach; endif;
+}
+
 /* ---------------- SETTINGS ---------------- */
 elseif ($tab === 'settings') {
     ?>
@@ -456,8 +398,24 @@ elseif ($tab === 'settings') {
         <div class="form-group"><label class="field-label">زیرتیتر صفحه اصلی</label><textarea class="field" name="hero_subtitle" rows="2"><?=h($s['hero_subtitle'] ?? '')?></textarea></div>
         <div class="grid grid-3">
           <div class="form-group"><label class="field-label">قوانین استفاده</label><textarea class="field" name="terms_text" rows="5"><?=h($s['terms_text'] ?? '')?></textarea></div>
+          <div class="form-group"><label class="field-label">حریم خصوصی</label><textarea class="field" name="privacy_text" rows="5"><?=h($s['privacy_text'] ?? '')?></textarea></div>
           <div class="form-group"><label class="field-label">درباره ما</label><textarea class="field" name="about_text" rows="5"><?=h($s['about_text'] ?? '')?></textarea></div>
-          <div class="form-group"><label class="field-label">تماس با ما</label><textarea class="field" name="contact_text" rows="5"><?=h($s['contact_text'] ?? '')?></textarea></div>
+        </div>
+        <div class="form-group"><label class="field-label">متن اضافی تماس با ما (بالای اطلاعات تماس)</label><textarea class="field" name="contact_text" rows="3"><?=h($s['contact_text'] ?? '')?></textarea></div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label class="field-label" style="margin:0">فرم پیام «تماس با ما»</label>
+          <select class="field" name="contact_form_enabled" style="width:auto">
+            <option value="0" <?=empty($s['contact_form_enabled'])?'selected':''?>>غیرفعال (پیش‌فرض)</option>
+            <option value="1" <?=!empty($s['contact_form_enabled'])?'selected':''?>>فعال</option>
+          </select>
+          <small class="muted" style="font-size:11px">وقتی غیرفعال است، فرم ثبت پیام نمایش داده نمی‌شود و کاربران به تیکت پشتیبانی هدایت می‌شوند؛ پیام‌های قبلی و تب «پیام‌های تماس» محفوظ می‌مانند.</small>
+        </div>
+        <div class="grid grid-3">
+          <div class="form-group"><label class="field-label">ایمیل پشتیبانی</label><input class="field" dir="ltr" name="contact_email" value="<?=h($s['contact_email'] ?? '')?>" placeholder="support@example.com"></div>
+          <div class="form-group"><label class="field-label">تلفن پشتیبانی</label><input class="field" dir="ltr" name="contact_phone" value="<?=h($s['contact_phone'] ?? '')?>" placeholder="021-00000000"></div>
+          <div class="form-group"><label class="field-label">تلگرام</label><input class="field" dir="ltr" name="contact_telegram" value="<?=h($s['contact_telegram'] ?? '')?>" placeholder="@bordkhan"></div>
+          <div class="form-group"><label class="field-label">اینستاگرام</label><input class="field" dir="ltr" name="contact_instagram" value="<?=h($s['contact_instagram'] ?? '')?>" placeholder="@bordkhan"></div>
+          <div class="form-group"><label class="field-label">آدرس</label><input class="field" name="contact_address" value="<?=h($s['contact_address'] ?? '')?>"></div>
         </div>
       </div>
 
@@ -507,65 +465,9 @@ elseif ($tab === 'settings') {
     <?php
 }
 
-/* ---------------- COLLECT ---------------- */
+/* ---------------- COLLECT (ربات پیشرفته v5.0 — پنل حرفه‌ای) ---------------- */
 elseif ($tab === 'collect') {
-    $cs = $s;
-    $srcs = json_decode_array($cs['auto_collect_sources'] ?? '');
-    $queries = $cs['auto_collect_queries'] ?? '';
-    $cats = category_tree();
-    $cronUrl = url('cron-collect', ['key' => $cs['auto_collect_cron_key'] ?? 'KEY']);
-    ?>
-    <div class="grid grid-2">
-      <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:6px">🤖 جمع‌آوری خودکار قلق از اینترنت</h3>
-        <p class="muted" style="font-size:12px">این ابزار به‌صورت خودکار در شبکه‌های اجتماعی (ردیت) و نتایج وب جستجو می‌کند، مطالب تعمیراتی را پیدا کرده، به <b>فارسی روان</b> تبدیل کرده و به‌عنوان محتوای جدید سایت منتشر می‌کند — بدون ارجاع به منبع خارجی. محتوای تکراری رد می‌شود.</p>
-        <form method="post" class="mt">
-          <input type="hidden" name="csrf" value="<?=csrf()?>">
-          <input type="hidden" name="action" value="admin_collect">
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="enabled" value="1" <?=!empty($cs['auto_collect_enabled']) ? 'checked' : ''?>> <b>فعال‌سازی جمع‌آوری خودکار</b></label>
-          </div>
-          <div class="grid grid-2">
-            <div class="form-group"><label class="field-label">تعداد قلق در هر اجرا</label><input class="field" type="number" name="count" min="1" max="100" value="<?=(int)($cs['auto_collect_count'] ?? 10)?>"></div>
-            <div class="form-group"><label class="field-label">نوع دسترسی</label>
-              <select class="field" name="access">
-                <option value="free" <?=($cs['auto_collect_access'] ?? 'free') === 'free' ? 'selected' : ''?>>رایگان</option>
-                <option value="like" <?=($cs['auto_collect_access'] ?? '') === 'like' ? 'selected' : ''?>>با لایک</option>
-                <option value="paid" <?=($cs['auto_collect_access'] ?? '') === 'paid' ? 'selected' : ''?>>پرداختی</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group"><label class="field-label">دسته‌بندی مقصد</label>
-            <select class="field" name="category">
-              <option value="">خودکار (اولین دسته)</option>
-              <?php foreach ($cats as $c): ?><optgroup label="<?=h($c['name'])?>"><?php foreach ($c['children'] as $ch): ?><option value="<?=$ch['id']?>" <?=(int)($cs['auto_collect_category'] ?? 0) === $ch['id'] ? 'selected' : ''?>><?=h($ch['name'])?></option><?php endforeach; ?></optgroup><?php endforeach; ?>
-            </select>
-          </div>
-          <div class="form-group"><label class="field-label">کلمات جستجو (هر خط یک عبارت — فارسی و انگلیسی)</label><textarea class="field" name="queries" rows="6" placeholder="تعمیر مادربرد&#10;رفع مشکل روشن نشدن لپ‌تاپ&#10;motherboard repair"><?=h($queries)?></textarea><p class="muted" style="font-size:10px">سیستم با این کلمات در ردیت و موتورهای جستجو دنبال مطالب تعمیراتی می‌گردد. خالی بگذارید تا کلمات پیش‌فرض استفاده شود.</p></div>
-          <div class="form-group"><label class="field-label">منابع RSS اضافی (اختیاری — هر خط یک آدرس)</label><textarea class="field" name="sources" rows="5" dir="ltr" placeholder="https://example.com/feed"><?=h(implode("\n", $srcs))?></textarea></div>
-          <div class="form-group"><label class="field-label">کلید اجرای خودکار (Cron)</label><input class="field" dir="ltr" name="cron_key" value="<?=h($cs['auto_collect_cron_key'] ?? '')?>" placeholder="خالی = ساخت خودکار"></div>
-          <div class="flex gap">
-            <button class="btn btn-primary" name="run_now" value="1">⚡ اجرای فوری جمع‌آوری</button>
-            <button class="btn btn-secondary" name="save" value="1">💾 فقط ذخیره تنظیمات</button>
-          </div>
-        </form>
-      </div>
-      <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:10px">🕐 راهنمای زمان‌بندی (Cron)</h3>
-        <p class="muted" style="font-size:12px">برای اجرای خودکار، در cPanel وارد بخش «Cron Jobs» شوید و دستور زیر را با بازه دلخواه (مثلاً هر ۶ ساعت) تنظیم کنید:</p>
-        <div class="field" dir="ltr" style="font-family:monospace;font-size:11px;word-break:break-all">wget -q -O /dev/null "<?=h(SITE_URL . $cronUrl)?>"</div>
-        <p class="muted" style="font-size:12px;margin-top:10px">یا این آدرس را مستقیماً در مرورگر باز کنید:</p>
-        <div class="field" dir="ltr" style="font-family:monospace;font-size:11px;word-break:break-all"><?=h(SITE_URL . $cronUrl)?></div>
-        <div class="notice" style="font-size:11px;line-height:2;margin-top:12px">
-          <b>نکات مهم:</b><br>
-          • مطالب به‌صورت خودکار از ردیت و نتایج وب جستجو پیدا می‌شوند.<br>
-          • همه مطالب به فارسی روان تبدیل شده و به‌عنوان محتوای جدید سایت (بدون ارجاع به منبع خارجی) منتشر می‌شوند.<br>
-          • محتوای تکراری به‌طور خودکار رد می‌شود.<br>
-          • فقط از منابع عمومی استفاده کنید و قوانین کپی‌رایت را رعایت کنید.
-        </div>
-      </div>
-    </div>
-    <?php
+    require __DIR__ . '/admin_collect_v5.php';
 }
 ?>
     </section>

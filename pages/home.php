@@ -1,15 +1,24 @@
 <?php
-/* Bordkhan home page — separate template for clarity */
-$s = settings();
-$cats = category_tree();
-$total = (int)db()->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn();
-$usersCnt = (int)db()->query('SELECT COUNT(*) FROM users')->fetchColumn();
-$latest = db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY t.published_at DESC LIMIT 8")->fetchAll();
-$popular = db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY t.views DESC LIMIT 4")->fetchAll();
-$featured = db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' AND t.featured=1 LIMIT 4")->fetchAll();
-$leaders = db()->query('SELECT * FROM users ORDER BY points DESC LIMIT 5')->fetchAll();
-$repairs = db()->query("SELECT r.*,u.name user_name FROM repair_requests r JOIN users u ON u.id=r.user_id WHERE r.status='open' ORDER BY r.created_at DESC LIMIT 3")->fetchAll();
-$me = current_user();
+/* Bordkhan home page — separate template for clarity - نسخه مقاوم در برابر خطای 500 بعد از نصب */
+try {
+    $s = settings();
+} catch(Throwable $e) {
+    $s = ['site_title'=>SITE_NAME,'hero_title'=>'بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی','hero_subtitle'=>'راه‌حل‌های واقعی و تست‌شده از تعمیرکاران حرفه‌ای — سریع پیدا کن، مطمئن تعمیر کن، درآمد بساز.','invitee_credit'=>10000,'daily_free_tip_id'=>null];
+}
+try {
+    $cats = category_tree();
+} catch(Throwable $e) {
+    $cats = [];
+}
+$total = 0; $usersCnt = 0; $latest = []; $popular = []; $featured = []; $leaders = []; $repairs = [];
+try { $total = (int)db()->query("SELECT COUNT(*) FROM tips WHERE status='published'")->fetchColumn(); } catch(Throwable $e) {}
+try { $usersCnt = (int)db()->query('SELECT COUNT(*) FROM users')->fetchColumn(); } catch(Throwable $e) {}
+try { $latest = db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY COALESCE(t.published_at,t.created_at) DESC LIMIT 8")->fetchAll(); } catch(Throwable $e) {}
+try { $popular = db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' ORDER BY t.views DESC LIMIT 4")->fetchAll(); } catch(Throwable $e) {}
+try { $featured = db()->query("SELECT t.*,u.name author_name,u.verified FROM tips t JOIN users u ON u.id=t.author_id WHERE t.status='published' AND t.featured=1 LIMIT 4")->fetchAll(); } catch(Throwable $e) {}
+try { $leaders = db()->query('SELECT * FROM users ORDER BY points DESC LIMIT 5')->fetchAll(); } catch(Throwable $e) {}
+try { $repairs = db()->query("SELECT r.*,u.name user_name FROM repair_requests r JOIN users u ON u.id=r.user_id WHERE r.status='open' ORDER BY r.created_at DESC LIMIT 3")->fetchAll(); } catch(Throwable $e) {}
+try { $me = current_user(); } catch(Throwable $e) { $me = null; }
 
 header_html();
 ?>
