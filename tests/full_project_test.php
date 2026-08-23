@@ -105,6 +105,33 @@ foreach($checks as $ck){
     add_test('امنیت/UX — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
 }
 
+// 11. v5.7 — امنیت پیشرفته + پاک‌سازی ربات + اعتماد
+$cleanupPhp = is_file(__DIR__.'/../php-extended/cleanup_bot.php') ? file_get_contents(__DIR__.'/../php-extended/cleanup_bot.php') : '';
+$secLogPhp = is_file(__DIR__.'/../php-extended/security_log.php') ? file_get_contents(__DIR__.'/../php-extended/security_log.php') : '';
+$checks7 = [
+    ['نسخهٔ 5.7', $index, "BORDKHAN_VERSION', '5.7'"],
+    ['قفل حساب ۵ ورود ناموفق', $index, 'account_locked'],
+    ['ایمیل هشدار قفل', $index, 'هشدار امنیتی — قفل موقت حساب'],
+    ['لاگ امنیتی (sec_log)', $index, 'function sec_log'],
+    ['نشست‌های فعال', $index, 'function bk_session_register'],
+    ['اعتبارسنجی نشست در current_user', $index, 'bk_session_adopt_or_valid'],
+    ['اکشن خروج همهٔ دستگاه‌ها', $index, "=== 'logout_all'"],
+    ['اکشن بستن نشست', $index, "=== 'session_kill'"],
+    ['CSP کامل', $index, "Content-Security-Policy' . "],
+    ['کرون پاک‌سازی', $index, "=== 'cron-cleanup'"],
+    ['صفحهٔ وضعیت پرداخت', $index, "=== 'payment-status'"],
+    ['نماد اعتماد در فوتر', $index, 'trust_badge_image'],
+    ['ابزار پاک‌سازی ربات', $cleanupPhp, 'پاک‌سازی بقایای ربات'],
+    ['تغییر نام ربات به تیم بردخان', $cleanupPhp, 'تیم بردخان'],
+    ['صفحهٔ لاگ امنیتی', $secLogPhp, 'لاگ امنیتی'],
+    ['جدول user_sessions', $schemaBuild, 'user_sessions'],
+    ['جدول security_log', $schemaBuild, 'security_log'],
+    ['ستون failed_logins', $schemaBuild, 'failed_logins'],
+];
+foreach($checks7 as $ck){
+    add_test('v5.7 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
+}
+
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
 foreach($report as $r){

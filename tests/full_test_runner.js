@@ -46,13 +46,13 @@ required.forEach(f => {
 const index = read('index.php');
 
 // Routes
-const routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','verify-email','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
+const routes = ['home','tips','tip','boards','board','my-boards','seller-apply','upload','wallet','my-tips','repairs','repair','profile','leaderboard','premium','referral','about','contact','terms','privacy','admin','bookmarks','favorites','notifications','settings','reels','reels_demo','tour','login','register','verify','forgot','logout','serve','verify-email','payment-status','cron-cleanup','admin-cleanup','admin-security','ajax-comments','ajax-notifications','ajax-categories','diag-version'];
 routes.forEach(r => {
   test(`Route ${r}`, () => index.includes(`'${r}'`) || index.includes(`"${r}"`) ? true : 'یافت نشد');
 });
 
 // Actions
-const actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','unlock','comment','rate','follow','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','email_code_send','email_code_verify','email_code_resend','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','repair_answer','repair_best','report','comment_vote'];
+const actions = ['login','register','verify','logout','forgot_request','forgot_reset','my_tip_delete','unlock','comment','rate','follow','favorite','bookmark','search_live','admin_tip','admin_user','admin_withdraw','subscribe','email_code_send','email_code_verify','email_code_resend','logout_all','session_kill','profile_update','suggest_category','admin_category','admin_settings','admin_report','contact_status','seller_apply','board_create','board_buy','board_ship','board_confirm','board_cancel','admin_board','admin_seller','upload_tip','withdraw','repair_create','repair_answer','repair_best','report','comment_vote'];
 actions.forEach(a => {
   test(`Action ${a}`, () => index.includes(`'${a}'`) ? true : `ناموجود`);
 });

@@ -15,6 +15,10 @@ function bk_schema_columns(): array {
         ['users', 'city', 'VARCHAR(100) NULL'], ['users', 'support_group', 'VARCHAR(80) NULL'],
         ['users', 'is_deleted', 'TINYINT(1) NOT NULL DEFAULT 0'],
         ['users', 'email_verified', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['users', 'failed_logins', 'INT NOT NULL DEFAULT 0'],
+        ['users', 'locked_until', 'DATETIME NULL'],
+        ['settings', 'trust_badge_image', 'VARCHAR(500) NULL'],
+        ['settings', 'trust_badge_link', 'VARCHAR(500) NULL'],
         ['board_orders', 'full_name', 'VARCHAR(160) NULL'], ['board_orders', 'phone', 'VARCHAR(30) NULL'],
         ['board_orders', 'address', 'TEXT NULL'], ['board_orders', 'city', 'VARCHAR(100) NULL'],
         ['board_orders', 'postal_code', 'VARCHAR(20) NULL'], ['board_orders', 'carrier', 'VARCHAR(40) NULL'],
@@ -43,6 +47,25 @@ function bk_schema_columns(): array {
 /** جدول‌های ماژول‌ها: [نام جدول => DDL] */
 function bk_schema_tables(): array {
     return [
+        'user_sessions' => "CREATE TABLE user_sessions (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            sid_hash CHAR(64) NOT NULL UNIQUE,
+            ip VARCHAR(45) NULL,
+            agent VARCHAR(255) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user_sessions_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'security_log' => "CREATE TABLE security_log (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NULL,
+            action VARCHAR(40) NOT NULL,
+            detail VARCHAR(300) NULL,
+            ip VARCHAR(45) NULL,
+            agent VARCHAR(255) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_seclog_user (user_id), INDEX idx_seclog_created (created_at), INDEX idx_seclog_action (action)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         'email_codes' => "CREATE TABLE email_codes (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(190) NOT NULL,

@@ -40,6 +40,8 @@ $flash = pull_flash();
         <a href="<?=url('admin-tips')?>">🔧 مدیریت قلق‌ها</a>
         <a href="<?=url('admin-users')?>">👥 مدیریت کاربران</a>
         <a href="<?=url('admin-finance')?>">💳 مالی و درگاه</a>
+        <a href="<?=url('admin-security')?>">🛡 لاگ امنیتی</a>
+        <a href="<?=url('admin-cleanup')?>">🧹 پاک‌سازی ربات</a>
         <a href="<?=url('admin-actionbar')?>">📌 نوار شناور</a>
         <a href="<?=url('tickets')?>">✉ تیکت‌ها</a>
       </nav>
@@ -457,6 +459,8 @@ elseif ($tab === 'settings') {
         <div class="form-group"><label class="field-label">کلمات کلیدی (با کاما جدا کنید)</label><input class="field" name="meta_keywords" value="<?=h($s['meta_keywords'] ?? '')?>"></div>
         <div class="form-group"><label class="field-label">تصویر OpenGraph (آدرس کامل)</label><input class="field" dir="ltr" name="og_image" value="<?=h($s['og_image'] ?? '')?>"></div>
         <div class="form-group"><label class="field-label">کد Google Analytics (مثلاً G-XXXXXXX)</label><input class="field" dir="ltr" name="google_analytics" value="<?=h($s['google_analytics'] ?? '')?>"></div>
+        <div class="form-group"><label class="field-label">تصویر نماد اعتماد (آدرس کامل عکس)</label><input class="field" dir="ltr" name="trust_badge_image" value="<?=h($s['trust_badge_image'] ?? '')?>" placeholder="https://trustseal.enamad.ir/..."></div>
+        <div class="form-group"><label class="field-label">لینک صفحهٔ نماد اعتماد</label><input class="field" dir="ltr" name="trust_badge_link" value="<?=h($s['trust_badge_link'] ?? '')?>" placeholder="https://trustseal.enamad.ir/Verify?Code=..."></div>
       </div>
 
       <button class="btn btn-primary btn-full" style="padding:13px">💾 ذخیره همه تنظیمات</button>

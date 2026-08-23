@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS users (
   likes_used_date DATE NULL,
   phone_verified TINYINT(1) NOT NULL DEFAULT 0,
   email_verified TINYINT(1) NOT NULL DEFAULT 0,
+  failed_logins INT NOT NULL DEFAULT 0,
+  locked_until DATETIME NULL,
   verified TINYINT(1) NOT NULL DEFAULT 0,
   is_banned TINYINT(1) NOT NULL DEFAULT 0,
   is_deleted TINYINT(1) NOT NULL DEFAULT 0,
@@ -318,6 +320,29 @@ CREATE TABLE IF NOT EXISTS board_orders (
   INDEX idx_orders_status (status),
   INDEX idx_orders_buyer (buyer_id),
   INDEX idx_orders_seller (seller_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- v5.7: نشست‌های فعال
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  sid_hash CHAR(64) NOT NULL UNIQUE,
+  ip VARCHAR(45) NULL,
+  agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_sessions_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- v5.7: لاگ امنیتی
+CREATE TABLE IF NOT EXISTS security_log (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NULL,
+  action VARCHAR(40) NOT NULL,
+  detail VARCHAR(300) NULL,
+  ip VARCHAR(45) NULL,
+  agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_seclog_user (user_id), INDEX idx_seclog_created (created_at), INDEX idx_seclog_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- v5.5: کدهای تأیید ایمیل (ثبت‌نام و دروازهٔ خرید/آپلود)
