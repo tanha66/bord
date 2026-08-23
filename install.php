@@ -152,6 +152,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('settings', 'google_analytics', 'google_analytics VARCHAR(100) NULL');
                     $ensureColumn('settings', 'auto_collect_queries', 'auto_collect_queries TEXT NULL');
                     $ensureColumn('settings', 'board_commission_percent', 'board_commission_percent INT NOT NULL DEFAULT 10');
+                    // ربات هوشمند - تنظیمات بیشتر + هندی و چینی
+                    $ensureColumn('settings', 'auto_collect_indian_enabled', 'auto_collect_indian_enabled TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_chinese_enabled', 'auto_collect_chinese_enabled TINYINT(1) NOT NULL DEFAULT 0');
+                    $ensureColumn('settings', 'auto_collect_min_length', 'auto_collect_min_length INT NOT NULL DEFAULT 100');
+                    $ensureColumn('settings', 'auto_collect_max_images', 'auto_collect_max_images INT NOT NULL DEFAULT 3');
+                    $ensureColumn('settings', 'auto_collect_translate_enabled', 'auto_collect_translate_enabled TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_extract_full', 'auto_collect_extract_full TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_save_images', 'auto_collect_save_images TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'auto_collect_filter_repair', 'auto_collect_filter_repair TINYINT(1) NOT NULL DEFAULT 1');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');

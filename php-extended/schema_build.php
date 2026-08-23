@@ -35,6 +35,15 @@ function bk_schema_columns(): array {
         ['settings', 'contact_email', 'VARCHAR(190) NULL'], ['settings', 'contact_phone', 'VARCHAR(40) NULL'],
         ['settings', 'contact_telegram', 'VARCHAR(190) NULL'], ['settings', 'contact_instagram', 'VARCHAR(190) NULL'],
         ['settings', 'contact_address', 'VARCHAR(300) NULL'],
+        // ربات جمع‌آوری هوشمند - تنظیمات بیشتر + هندی و چینی
+        ['settings', 'auto_collect_indian_enabled', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['settings', 'auto_collect_chinese_enabled', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['settings', 'auto_collect_min_length', 'INT NOT NULL DEFAULT 100'],
+        ['settings', 'auto_collect_max_images', 'INT NOT NULL DEFAULT 3'],
+        ['settings', 'auto_collect_translate_enabled', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['settings', 'auto_collect_extract_full', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['settings', 'auto_collect_save_images', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['settings', 'auto_collect_filter_repair', 'TINYINT(1) NOT NULL DEFAULT 1'],
         ['bk_gateway_payments', 'order_id', 'VARCHAR(190) NULL'],
     ];
 }

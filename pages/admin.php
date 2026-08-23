@@ -640,46 +640,73 @@ elseif ($tab === 'collect') {
     ?>
     <div class="grid grid-2">
       <div class="card" style="padding:18px">
-        <h3 style="margin-bottom:6px">🤖 جمع‌آوری خودکار قلق از اینترنت</h3>
-        <p class="muted" style="font-size:12px">این ابزار به‌صورت خودکار در شبکه‌های اجتماعی (ردیت) و نتایج وب جستجو می‌کند، مطالب تعمیراتی را پیدا کرده، به <b>فارسی روان</b> تبدیل کرده و به‌عنوان محتوای جدید سایت منتشر می‌کند — بدون ارجاع به منبع خارجی. محتوای تکراری رد می‌شود.</p>
+        <h3 style="margin-bottom:6px">🤖 ربات جمع‌آوری هوشمند v4.2 - با سایت‌های هندی و چینی</h3>
+        <p class="muted" style="font-size:12px">این ربات هوشمند از <b>۱۴+ سایت معتبر جهانی (غربی، هندی، چینی)</b> محتوا جمع‌آوری می‌کند، با <code>extract_article_text</code> متن کامل را استخراج، تصاویر را دانلود و در <code>/uploads/auto-*.jpg</code> ذخیره، به فارسی ترجمه و دسته‌بندی خودکار می‌کند.</p>
         <form method="post" class="mt">
           <input type="hidden" name="csrf" value="<?=csrf()?>">
           <input type="hidden" name="action" value="admin_collect">
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="enabled" value="1" <?=!empty($cs['auto_collect_enabled']) ? 'checked' : ''?>> <b>فعال‌سازی جمع‌آوری خودکار</b></label>
-          </div>
-          <div class="grid grid-2">
-            <div class="form-group"><label class="field-label">تعداد قلق در هر اجرا</label><input class="field" type="number" name="count" min="1" max="100" value="<?=(int)($cs['auto_collect_count'] ?? 10)?>"></div>
-            <div class="form-group"><label class="field-label">نوع دسترسی</label>
-              <select class="field" name="access">
-                <option value="free" <?=($cs['auto_collect_access'] ?? 'free') === 'free' ? 'selected' : ''?>>رایگان</option>
-                <option value="like" <?=($cs['auto_collect_access'] ?? '') === 'like' ? 'selected' : ''?>>با لایک</option>
-                <option value="paid" <?=($cs['auto_collect_access'] ?? '') === 'paid' ? 'selected' : ''?>>پرداختی</option>
+          
+          <div class="card" style="padding:12px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);margin-bottom:14px">
+            <h4 style="margin:0 0 8px;font-size:13px">⚙️ تنظیمات اصلی</h4>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="enabled" value="1" <?=!empty($cs['auto_collect_enabled']) ? 'checked' : ''?>> <b>فعال‌سازی جمع‌آوری خودکار (Cron)</b></label>
+            </div>
+            <div class="grid grid-2">
+              <div class="form-group"><label class="field-label">تعداد قلق در هر اجرا (1-100)</label><input class="field" type="number" name="count" min="1" max="100" value="<?=(int)($cs['auto_collect_count'] ?? 10)?>"></div>
+              <div class="form-group"><label class="field-label">نوع دسترسی</label>
+                <select class="field" name="access">
+                  <option value="free" <?=($cs['auto_collect_access'] ?? 'free') === 'free' ? 'selected' : ''?>>رایگان</option>
+                  <option value="like" <?=($cs['auto_collect_access'] ?? '') === 'like' ? 'selected' : ''?>>با لایک</option>
+                  <option value="paid" <?=($cs['auto_collect_access'] ?? '') === 'paid' ? 'selected' : ''?>>پرداختی</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group"><label class="field-label">دسته‌بندی مقصد (خالی = هوشمند)</label>
+              <select class="field" name="category">
+                <option value="">🤖 خودکار بر اساس دستگاه/برند (هوشمند)</option>
+                <?php foreach ($cats as $c): ?><optgroup label="<?=h($c['name'])?>"><?php foreach ($c['children'] as $ch): ?><option value="<?=$ch['id']?>" <?=(int)($cs['auto_collect_category'] ?? 0) === $ch['id'] ? 'selected' : ''?>><?=h($ch['name'])?></option><?php endforeach; ?></optgroup><?php endforeach; ?>
               </select>
             </div>
           </div>
-          <div class="form-group"><label class="field-label">دسته‌بندی مقصد</label>
-            <select class="field" name="category">
-              <option value="">خودکار (اولین دسته)</option>
-              <?php foreach ($cats as $c): ?><optgroup label="<?=h($c['name'])?>"><?php foreach ($c['children'] as $ch): ?><option value="<?=$ch['id']?>" <?=(int)($cs['auto_collect_category'] ?? 0) === $ch['id'] ? 'selected' : ''?>><?=h($ch['name'])?></option><?php endforeach; ?></optgroup><?php endforeach; ?>
-            </select>
-          </div>
-          <div class="form-group"><label class="field-label">کلمات جستجو (هر خط یک عبارت — فارسی و انگلیسی) - هوشمند</label><textarea class="field" name="queries" rows="8" placeholder="تعمیر مادربرد&#10;رفع مشکل روشن نشدن لپ‌تاپ&#10;motherboard repair"><?=h($displayQueries)?></textarea><p class="muted" style="font-size:10px">🤖 ربات هوشمند با این کلمات در ردیت و وب جستجو می‌کند. اگر خالی باشد، از لیست پیش‌فرض معتبر (۱۶ عبارت فارسی/انگلیسی) استفاده می‌شود. فقط مطالب مرتبط با تعمیرات (repair/fix/board/power/display...) جمع‌آوری می‌شود.</p></div>
-          <div class="form-group"><label class="field-label">منابع RSS معتبر (هر خط یک آدرس) - بهینه‌شده</label><textarea class="field" name="sources" rows="10" dir="ltr" placeholder="https://example.com/feed"><?=h($displaySources)?></textarea>
-            <div class="notice" style="font-size:11px;line-height:2;margin-top:8px">
-              ✅ <b>سایت‌های معتبر پیش‌فرض (۱۰ مورد):</b><br>
-              • Reddit AskElectronics, ElectronicsRepair, TVRepair, ComputerRepair (معتبرترین انجمن تعمیرکاران)<br>
-              • iFixit News (مرجع تعمیرات)<br>
-              • Hackaday, Adafruit Blog, EEVblog, AllAboutCircuits, Electronics-Lab (تخصصی الکترونیک)<br>
-              • Electronics StackExchange (پرسش و پاسخ مهندسی)<br>
-              📸 تصاویر به‌صورت خودکار دانلود و در <code>/uploads/</code> با نام <code>auto-*.jpg</code> ذخیره می‌شود (نه لینک خارجی).<br>
-              📝 محتوا با <code>extract_article_text</code> هوشمند استخراج و با دیکشنری فارسی ترجمه می‌شود.<br>
-              🏷 دسته‌بندی خودکار بر اساس دستگاه/برند/خرابی با <code>category_for_device</code>.
+
+          <div class="card" style="padding:12px;background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.2);margin-bottom:14px">
+            <h4 style="margin:0 0 8px;font-size:13px">🌍 تنظیمات منطقه‌ای - هندی و چینی</h4>
+            <div class="grid grid-2">
+              <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="indian_enabled" value="1" <?=!empty($cs['auto_collect_indian_enabled'] ?? 1) ? 'checked' : ''?>> 🇮🇳 <b>سایت‌های هندی معتبر</b></label><small class="muted" style="font-size:10px;display:block;margin-top:4px">Electronics For You, Circuit Digest (هند), Electronics Hub, Engineers Garage - بزرگترین مراجع هندی</small></div>
+              <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="chinese_enabled" value="1" <?=!empty($cs['auto_collect_chinese_enabled']) ? 'checked' : ''?>> 🇨🇳 <b>سایت‌های چینی معتبر</b></label><small class="muted" style="font-size:10px;display:block;margin-top:4px">Elecfans, 21IC, EET China, EEPW - نیاز به ترجمه، به صورت پیش‌فرض غیرفعال (ممکن است فیلتر باشد)</small></div>
             </div>
           </div>
-          <div class="form-group"><label class="field-label">کلید اجرای خودکار (Cron)</label><input class="field" dir="ltr" name="cron_key" value="<?=h($cs['auto_collect_cron_key'] ?? '')?>" placeholder="خالی = ساخت خودکار"></div>
-          <div class="flex gap">
-            <button class="btn btn-primary" name="run_now" value="1">⚡ اجرای فوری جمع‌آوری</button>
+
+          <div class="card" style="padding:12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);margin-bottom:14px">
+            <h4 style="margin:0 0 8px;font-size:13px">🧠 تنظیمات هوشمند استخراج</h4>
+            <div class="grid grid-2">
+              <div class="form-group"><label class="field-label">حداقل طول محتوا (حرف)</label><input class="field" type="number" name="min_length" min="20" max="1000" value="<?=(int)($cs['auto_collect_min_length'] ?? 100)?>"><small class="muted" style="font-size:10px">مطالب کوتاه‌تر از این نادیده گرفته می‌شود</small></div>
+              <div class="form-group"><label class="field-label">حداکثر تصاویر برای هر قلق (1-5)</label><input class="field" type="number" name="max_images" min="1" max="5" value="<?=(int)($cs['auto_collect_max_images'] ?? 3)?>"><small class="muted" style="font-size:10px">تصاویر به /uploads/auto-*.jpg دانلود می‌شود</small></div>
+            </div>
+            <div class="grid grid-2" style="margin-top:10px">
+              <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="translate_enabled" value="1" <?=!empty($cs['auto_collect_translate_enabled'] ?? 1) ? 'checked' : ''?>> <b>ترجمه هوشمند EN→FA</b></label><small class="muted" style="font-size:10px">دیکشنری 90+ کلمه تخصصی</small></div>
+              <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="extract_full" value="1" <?=!empty($cs['auto_collect_extract_full'] ?? 1) ? 'checked' : ''?>> <b>استخراج متن کامل مقاله</b></label><small class="muted" style="font-size:10px">خواندن کل صفحه نه فقط RSS</small></div>
+              <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="save_images" value="1" <?=!empty($cs['auto_collect_save_images'] ?? 1) ? 'checked' : ''?>> <b>دانلود تصاویر به هاست</b></label><small class="muted" style="font-size:10px">ذخیره در uploads/ (پیشنهاد: فعال)</small></div>
+              <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="filter_repair" value="1" <?=!empty($cs['auto_collect_filter_repair'] ?? 1) ? 'checked' : ''?>> <b>فیلتر فقط تعمیرات</b></label><small class="muted" style="font-size:10px">فقط مطالب با repair/fix/تعمیر</small></div>
+            </div>
+          </div>
+
+          <div class="form-group"><label class="field-label">🔍 کلمات جستجو هوشمند (هر خط یک عبارت) - 22 عبارت پیش‌فرض</label><textarea class="field" name="queries" rows="10" placeholder="تعمیر مادربرد&#10;رفع مشکل روشن نشدن لپ‌تاپ&#10;motherboard repair"><?=h($displayQueries)?></textarea><p class="muted" style="font-size:10px">🤖 ربات با این کلمات در Reddit و DuckDuckGo جستجو می‌کند. شامل فارسی، انگلیسی، هندی (india) و چینی (china). اگر خالی باشد، از لیست پیش‌فرض 22 تایی استفاده می‌شود.</p></div>
+          
+          <div class="form-group"><label class="field-label">🌐 منابع RSS معتبر (هر خط یک آدرس) - 14+ سایت</label><textarea class="field" name="sources" rows="12" dir="ltr" placeholder="https://example.com/feed"><?=h($displaySources)?></textarea>
+            <div class="notice" style="font-size:11px;line-height:2;margin-top:8px">
+              ✅ <b>سایت‌های معتبر (غربی 8 + هندی 6 + چینی 4):</b><br>
+              <b>🌍 غربی:</b> Reddit AskElectronics (2M), ElectronicsRepair, TVRepair, ComputerRepair, iFixit (مرجع جهان), Hackaday, Adafruit, EEVblog, AllAboutCircuits, Electronics StackExchange<br>
+              <b>🇮🇳 هندی:</b> Electronics For You (بزرگترین مجله هند), Circuit Digest (هند), Electronics Hub, Engineers Garage, Electrical Technology<br>
+              <b>🇨🇳 چینی:</b> Elecfans, 21IC, EET China, EEPW, Electronics Weekly, EETimes<br>
+              📸 <b>ذخیره درست:</b> تصاویر با <code>download_image()</code> به <code>/uploads/auto-*.jpg</code> (JPG 84% + 1600px) ذخیره می‌شود، نه لینک خارجی.<br>
+              📝 <b>استخراج هوشمند:</b> <code>extract_article_text()</code> متن کامل مقاله را از div.content/article می‌خواند، <code>extract_images_from_html()</code> 5 عکس با تبدیل نسبی→مطلق.<br>
+              🏷 <b>دسته‌بندی:</b> خودکار بر اساس دستگاه/برند/خرابی + جلوگیری از تکرار با title+source_url.
+            </div>
+          </div>
+          <div class="form-group"><label class="field-label">🔑 کلید اجرای خودکار (Cron)</label><input class="field" dir="ltr" name="cron_key" value="<?=h($cs['auto_collect_cron_key'] ?? '')?>" placeholder="خالی = ساخت خودکار 8 کاراکتری"></div>
+          <div class="flex gap" style="flex-wrap:wrap">
+            <button class="btn btn-primary" name="run_now" value="1">⚡ اجرای فوری هوشمند (با تنظیمات بالا)</button>
             <button class="btn btn-secondary" name="save" value="1">💾 فقط ذخیره تنظیمات</button>
           </div>
         </form>
@@ -690,12 +717,23 @@ elseif ($tab === 'collect') {
         <div class="field" dir="ltr" style="font-family:monospace;font-size:11px;word-break:break-all">wget -q -O /dev/null "<?=h(SITE_URL . $cronUrl)?>"</div>
         <p class="muted" style="font-size:12px;margin-top:10px">یا این آدرس را مستقیماً در مرورگر باز کنید:</p>
         <div class="field" dir="ltr" style="font-family:monospace;font-size:11px;word-break:break-all"><?=h(SITE_URL . $cronUrl)?></div>
-        <div class="notice" style="font-size:11px;line-height:2;margin-top:12px">
-          <b>نکات مهم:</b><br>
-          • مطالب به‌صورت خودکار از ردیت و نتایج وب جستجو پیدا می‌شوند.<br>
-          • همه مطالب به فارسی روان تبدیل شده و به‌عنوان محتوای جدید سایت (بدون ارجاع به منبع خارجی) منتشر می‌شوند.<br>
-          • محتوای تکراری به‌طور خودکار رد می‌شود.<br>
-          • فقط از منابع عمومی استفاده کنید و قوانین کپی‌رایت را رعایت کنید.
+        <div class="notice" style="font-size:11px;line-height:2.2;margin-top:12px">
+          <b>🤖 نکات ربات هوشمند v4.2:</b><br>
+          • <b>منابع:</b> غربی (Reddit 4 + iFixit + Hackaday...) + هندی (Electronics For You, Circuit Digest...) + چینی (Elecfans, 21IC...) - قابل فعال/غیرفعال<br>
+          • <b>استخراج:</b> اگر extract_full فعال باشد، متن کامل مقاله از div.content/article استخراج می‌شود (نه فقط RSS)<br>
+          • <b>تصاویر:</b> اگر save_images فعال باشد، تصاویر دانلود و به /uploads/auto-*.jpg (JPG 84% + 1600px max) تبدیل می‌شود<br>
+          • <b>ترجمه:</b> دیکشنری 90+ کلمه تخصصی EN→FA (motherboard→مادربرد, led tv→تلویزیون ال‌ای‌دی...)<br>
+          • <b>فیلتر:</b> فقط مطالب با repair/fix/تعمیر/مادربرد/پاور... جمع‌آوری می‌شود اگر filter_repair فعال باشد<br>
+          • <b>تکرار:</b> بررسی هوشمند title + source_url + حداقل طول محتوا<br>
+          • <b>دسته‌بندی:</b> خودکار بر اساس دستگاه/برند/خرابی (مادربرد→مادربرد, لپ‌تاپ→لپ‌تاپ, تلویزیون→مانیتور و تلویزیون...)<br>
+          • فقط از منابع عمومی استفاده کنید و کپی‌رایت را رعایت کنید.
+        </div>
+        <div class="card" style="padding:14px;margin-top:14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2)">
+          <h4 style="margin:0 0 8px;font-size:12px">🇮🇳🇨🇳 سایت‌های هندی و چینی</h4>
+          <p style="font-size:11px;line-height:2;margin:0;color:var(--text-soft)">
+            <b>هندی:</b> هند بزرگترین بازار تعمیرات موبایل و برد را دارد. سایت‌های Electronics For You (از 1969) و Circuit Digest پروژه‌های عملی زیادی دارند. معمولاً به انگلیسی هستند و ترجمه آسان است.<br>
+            <b>چینی:</b> چین کارخانه جهان است. Elecfans و 21IC دیتاشیت و شماتیک زیادی دارند. ممکن است نیاز به VPN یا ترجمه داشته باشد و برخی RSSها فیلتر باشند. به صورت پیش‌فرض غیرفعال است تا در صورت نیاز فعال کنید.
+          </p>
         </div>
       </div>
     </div>
