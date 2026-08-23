@@ -16,6 +16,14 @@ define('UPLOAD_URL', SITE_URL . '/uploads');
 
 date_default_timezone_set('Asia/Tehran');
 if (session_status() !== PHP_SESSION_ACTIVE) {
+    /* v5.6: کوکی نشست امن — HttpOnly + SameSite + Secure در HTTPS */
+    @session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+    ]);
     session_name('bordkhan_session');
     session_start();
 }

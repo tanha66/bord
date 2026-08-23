@@ -45,7 +45,7 @@ $flash = pull_flash();
       </nav>
       <div class="notice" style="font-size:11px;line-height:2;margin-top:12px">
         از همین پنل می‌توانید محتوا را تأیید/رد کنید، نقش کاربران را تغییر دهید، تسویه‌ها را بررسی کنید و تنظیمات مالی و سئو را تغییر دهید.<br>
-        <b>نسخهٔ کد: <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></b> — اگر کمتر از 4.0 بود، فایل‌های جدید روی سرور آپلود نشده‌اند (<a class="check" href="<?=url('diag-version')?>" target="_blank">بررسی</a>).
+        <b>نسخهٔ کد: <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></b> — اگر کمتر از 4.0 بود، فایل‌های جدید روی سرور آپلود نشده‌اند (<a class="check" href="<?=url('diag-version')?>" target="_blank" rel="noopener">بررسی</a>).
       </div>
     </aside>
 
@@ -170,7 +170,7 @@ elseif ($tab === 'tips') {
               <?php if ($x['status'] !== 'published'): ?><button class="btn btn-primary btn-sm" name="mod_action" value="publish" title="تأیید و انتشار">تأیید</button><?php endif; ?>
               <button class="btn btn-secondary btn-sm" name="mod_action" value="feature">⭐</button>
               <?php if ($x['status'] !== 'removed'): ?><button class="btn btn-danger btn-sm" name="mod_action" value="remove">حذف</button><?php endif; ?>
-              <a class="btn btn-secondary btn-sm" href="<?=url('tip/'.$x['id'])?>" target="_blank">👁</a>
+              <a class="btn btn-secondary btn-sm" href="<?=url('tip/'.$x['id'])?>" target="_blank" rel="noopener">👁</a>
               <button class="btn btn-danger btn-sm" name="mod_action" value="delete_forever" onclick="return confirm('حذف نهایی و بدون برگشت؟')" title="حذف برای همیشه">🗑</button>
             </form>
           </td>

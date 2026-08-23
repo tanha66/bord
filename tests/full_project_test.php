@@ -79,6 +79,32 @@ add_test('تابع fa() تبدیل اعداد', function_exists('fa') || strpos(
 add_test('تابع h() برای XSS', strpos($index, 'function h(')!==false, 'موجود');
 add_test('تابع url()', strpos($index, 'function url(')!==false, 'موجود');
 
+// 10. امنیت و احراز هویت — v5.5/v5.6
+$cfg = file_get_contents(__DIR__.'/../config.php');
+$adminPhp = file_get_contents(__DIR__.'/../pages/admin.php');
+$swJs = file_get_contents(__DIR__.'/../sw.js');
+$checks = [
+    ['نسخهٔ 5.6', $index, "BORDKHAN_VERSION', '5.6'"],
+    ['v5.5: ارسال ایمیل', $index, 'function bk_send_mail'],
+    ['v5.5: کد ایمیل', $index, 'function bk_send_email_code'],
+    ['v5.5: دروازهٔ تأیید ایمیل', $index, 'function bk_require_email_verified'],
+    ['v5.5: صفحهٔ verify-email', $index, "=== 'verify-email'"],
+    ['v5.5: فرم‌های AJAX', $index, 'bk-ajax'],
+    ["v5.6: بازیابی رمز با ایمیل", $index, "bk_check_email_code(\$p['email'],\$code,'reset')"],
+    ['v5.6: پیام یکسان ضد کشف ایمیل', $index, 'اگر این ایمیل در بردخان ثبت شده باشد'],
+    ['v5.6: هدرهای امنیتی', $index, 'X-Content-Type-Options'],
+    ['v5.6: کوکی HttpOnly', $cfg, "'httponly' => true"],
+    ['v5.6: کوکی SameSite', $cfg, "'samesite' => 'Lax'"],
+    ['v5.6: throttle ثبت‌نام', $index, "throttle('register:'"],
+    ['v5.6: لاگ‌اوت کامل', $index, 'Clear-Site-Data'],
+    ['v5.6: SW فقط assets', $swJs, 'bordkhan-pwa-v5'],
+    ['v5.6: قدرت رمز', $index, 'bkPassStrength'],
+    ['v5.6: noopener در admin', $adminPhp, 'rel="noopener"'],
+];
+foreach($checks as $ck){
+    add_test('امنیت/UX — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
+}
+
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
 foreach($report as $r){
