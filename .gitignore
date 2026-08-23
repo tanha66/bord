@@ -6,6 +6,3 @@
 node_modules/
 package-lock.json
 package.json
-
-# بستهٔ توزیع (در گیت نگه‌داری نمی‌شود)
-*.zip
