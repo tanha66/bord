@@ -698,6 +698,7 @@ body{padding-bottom:82px !important}
 .notif-bell{background:transparent;border:0;font-size:18px;cursor:pointer;position:relative;padding:4px;border-radius:10px}
 .notif-bell:hover{background:rgba(255,255,255,.08)}
 .notif-badge{position:absolute;top:-4px;left:-6px;background:#f43f5e;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:grid;place-items:center;padding:0 4px}
+.notif-badge[hidden],.notif-drop[hidden]{display:none}
 .notif-drop{position:absolute;top:calc(100% + 8px);left:0;width:290px;background:var(--bg-soft,#121a24);border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.5);z-index:90;overflow:hidden}
 .notif-head{padding:11px 14px;font-size:12px;font-weight:800;border-bottom:1px solid var(--line)}
 .notif-list{max-height:300px;overflow:auto}
@@ -705,6 +706,9 @@ body{padding-bottom:82px !important}
 .notif-item:hover{background:rgba(255,255,255,.05)}
 .notif-item strong{display:block;font-size:12px}
 .notif-item small{display:block;color:var(--text-dim);font-size:11px;margin-top:3px;line-height:1.7}
+.notif-item.unread{background:rgba(16,185,129,.10)}
+.notif-item.unread strong{color:#34d399}
+.notif-item .nic{display:inline-block;margin-inline-end:6px;font-size:13px}
 .notif-empty{padding:18px;text-align:center;color:var(--text-dim);font-size:12px}
 .notif-all{display:block;text-align:center;padding:10px;font-size:12px;color:var(--accent);text-decoration:none}
 
