@@ -772,10 +772,6 @@ details.bk-optional[open] summary{margin-bottom:12px}
 .vid-tools button{background:rgba(10,16,24,.82);border:1px solid rgba(255,255,255,.22);color:#fff;width:34px;height:34px;border-radius:10px;font-size:14px;cursor:pointer;display:grid;place-items:center;padding:0}
 .vid-tools button:hover{background:#10b981;color:#04110b}
 .media-protect video{width:100%;height:100%;object-fit:contain;background:#000;transform-origin:center center;transition:transform .18s ease}
-.vid-fallback{position:absolute;top:10px;inset-inline-end:10px;z-index:7}
-.vid-fallback a{display:inline-block;background:rgba(10,16,24,.82);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:10px;padding:5px 12px;font-size:11px;text-decoration:none}
-.vid-fallback a:hover{background:#10b981;color:#04110b}
-.vid-err{position:absolute;left:10px;right:10px;bottom:10px;z-index:8;display:none;background:rgba(127,29,29,.92);color:#fff;font-size:12px;line-height:1.9;padding:8px 12px;border-radius:10px;border:1px solid rgba(248,113,113,.5)}
 
 
 /* ===== پلیر حرفه‌ای ویدیو (bk-player) ===== */
