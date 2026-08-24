@@ -156,6 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 2) {
                     $ensureColumn('users', 'locked_until', 'locked_until DATETIME NULL');
                     $ensureColumn('settings', 'trust_badge_image', 'trust_badge_image VARCHAR(500) NULL');
                     $ensureColumn('settings', 'trust_badge_link', 'trust_badge_link VARCHAR(500) NULL');
+                    $ensureColumn('settings', 'watermark_enabled', 'watermark_enabled TINYINT(1) NOT NULL DEFAULT 1');
+                    $ensureColumn('settings', 'watermark_text', 'watermark_text VARCHAR(190) NULL');
                     $ensureColumn('users', 'seller_status', "seller_status VARCHAR(20) NOT NULL DEFAULT 'none'");
                     $ensureColumn('users', 'referred_rewarded', "referred_rewarded TINYINT(1) NOT NULL DEFAULT 0");
                     $ensureColumn('users', 'seller_note', 'seller_note TEXT NULL');

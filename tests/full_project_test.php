@@ -83,6 +83,9 @@ add_test('تابع url()', strpos($index, 'function url(')!==false, 'موجود'
 $cfg = file_get_contents(__DIR__.'/../config.php');
 $adminPhp = file_get_contents(__DIR__.'/../pages/admin.php');
 $swJs = file_get_contents(__DIR__.'/../sw.js');
+$cssFile = file_get_contents(__DIR__.'/../assets/style.css');
+$adminPhp = file_get_contents(__DIR__.'/../pages/admin.php');
+$servePhp = file_get_contents(__DIR__.'/../serve.php');
 $checks = [
     ['نسخهٔ 5.6', $index, "BORDKHAN_VERSION', '5.6'"],
     ['v5.5: ارسال ایمیل', $index, 'function bk_send_mail'],
@@ -155,6 +158,29 @@ $checks8 = [
 ];
 foreach($checks8 as $ck){
     add_test('v5.8 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
+}
+
+// 13. v5.9 — رفع ثبت قلق + واترمارک قابل تنظیم + ضد دانلود
+$checks9 = [
+    ['نسخهٔ 5.9', $index, "BORDKHAN_VERSION', '5.9'"],
+    ['معافیت مدیران از دروازهٔ ایمیل', $index, 'v5.9: مدیر/ناظر از دروازهٔ تأیید ایمیل معاف است'],
+    ['فرم تعیین ایمیل در verify-email', $index, "value='email_set'"],
+    ['اکشن تعیین ایمیل', $index, "=== 'email_set'"],
+    ['پیام سقف post_max_size در CSRF', $index, 'post_max_size'],
+    ['تنظیم واترمارک روشن/خاموش', $index, 'watermark_enabled'],
+    ['متن واترمارک دلخواه', $index, 'function watermark_text'],
+    ['پوشش متحرک ضد اسکرین‌شات', $index, 'function bk_watermark_overlay'],
+    ['پوشش روی گالری', $index, 'bk_watermark_overlay($u)'],
+    ['پوشش روی ویدیو', $index, 'bk_watermark_overlay(null)'],
+    ['serve: واترمارک از تنظیمات', $servePhp, 'watermark_enabled'],
+    ['serve: متن سفارشی واترمارک', $servePhp, '$badge'],
+    ['CSS پوشش متحرک', $cssFile, 'wm-grid'],
+    ['CSS ضد درگ', $cssFile, '-webkit-user-drag:none'],
+    ['گارد ضد دانلود JS', $index, '__bkMediaGuard'],
+    ['فیلد واترمارک در پنل', $adminPhp, 'واترمارک روی تصاویر'],
+];
+foreach($checks9 as $ck){
+    add_test('v5.9 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
 }
 
 // خروجی

@@ -459,6 +459,8 @@ elseif ($tab === 'settings') {
         <div class="form-group"><label class="field-label">کلمات کلیدی (با کاما جدا کنید)</label><input class="field" name="meta_keywords" value="<?=h($s['meta_keywords'] ?? '')?>"></div>
         <div class="form-group"><label class="field-label">تصویر OpenGraph (آدرس کامل)</label><input class="field" dir="ltr" name="og_image" value="<?=h($s['og_image'] ?? '')?>"></div>
         <div class="form-group"><label class="field-label">کد Google Analytics (مثلاً G-XXXXXXX)</label><input class="field" dir="ltr" name="google_analytics" value="<?=h($s['google_analytics'] ?? '')?>"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="watermark_enabled" value="1" <?=($s['watermark_enabled'] ?? 1) ? 'checked' : ''?>> <b>🖼 واترمارک روی تصاویر و ویدیوها</b></label><small class="muted" style="font-size:9px">کاشی‌کاری نامرئی روی عکس (در اسکرین‌شات هم می‌ماند) + پوشش متحرک روی عکس/ویدیو</small></div>
+        <div class="form-group"><label class="field-label">متن واترمارک (خالی = پیش‌فرض)</label><input class="field" name="watermark_text" value="<?=h($s['watermark_text'] ?? '')?>" placeholder="مثلاً: نام سایت شما"></div>
         <div class="form-group"><label class="field-label">تصویر نماد اعتماد (آدرس کامل عکس)</label><input class="field" dir="ltr" name="trust_badge_image" value="<?=h($s['trust_badge_image'] ?? '')?>" placeholder="https://trustseal.enamad.ir/..."></div>
         <div class="form-group"><label class="field-label">لینک صفحهٔ نماد اعتماد</label><input class="field" dir="ltr" name="trust_badge_link" value="<?=h($s['trust_badge_link'] ?? '')?>" placeholder="https://trustseal.enamad.ir/Verify?Code=..."></div>
       </div>

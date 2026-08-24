@@ -106,6 +106,21 @@ if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
   readfile($full); exit;
 }
 
+/* v5.9: واترمارک از تنظیمات مدیر — خاموش/روشن + متن دلخواه */
+$wmOn = true; $wmText = '';
+try {
+  $st = $pdo->query('SELECT watermark_enabled, watermark_text FROM settings WHERE id=1 LIMIT 1');
+  if ($st) { $sr = $st->fetch(); if ($sr) { $wmOn = (int)$sr['watermark_enabled'] === 1; $wmText = trim((string)$sr['watermark_text']); } }
+} catch (Throwable $e) {}
+if ($wmText === '') $wmText = 'بردخان — کپی غیرمجاز ممنوع';
+if (!$wmOn) {
+  header('Content-Type: image/jpeg');
+  header('Cache-Control: private, no-store');
+  header('X-Robots-Tag: noindex');
+  header('Content-Length: ' . filesize($full));
+  readfile($full); exit;
+}
+
 // Image: apply visual watermark with user id for screenshots.
 /* v5.8: فرمت‌های غیر JPEG-compatible (gif/svg/avif/heic/tiff) مستقیم و با نوع درست سرو می‌شوند */
 $rawMimes = ['image/gif','image/avif','image/heic','image/heif','image/svg+xml','image/tiff','image/x-ms-bmp'];
@@ -140,6 +155,7 @@ if (function_exists('imagecreatefromjpeg')) {
     $urlLabel = parse_url(SITE_URL, PHP_URL_HOST) ?: 'bordkhan';
     $font = 3;
     $txt = '© '.$urlLabel.' — '.$userLabel;
+  $badge = $wmText; /* v5.9: متن واترمارک از پنل */
     // Tiled watermark across the image (single pass, no per-stamp rotation)
     $stepY = 120; $stepX = 260;
     for ($y = 40; $y < $h; $y += $stepY) {
@@ -148,7 +164,7 @@ if (function_exists('imagecreatefromjpeg')) {
       }
     }
     // Corner badge
-    imagestring($src, 2, max(10,$w-220), max(10,$h-22), 'بردخان — کپی غیرمجاز ممنوع', imagecolorallocatealpha($src, 255, 80, 80, 20));
+    imagestring($src, 2, max(10,$w-260), max(10,$h-22), $badge, imagecolorallocatealpha($src, 255, 80, 80, 20));
     imagejpeg($src, null, 82);
     imagedestroy($src); exit;
   }

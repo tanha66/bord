@@ -19,6 +19,8 @@ function bk_schema_columns(): array {
         ['users', 'locked_until', 'DATETIME NULL'],
         ['settings', 'trust_badge_image', 'VARCHAR(500) NULL'],
         ['settings', 'trust_badge_link', 'VARCHAR(500) NULL'],
+        ['settings', 'watermark_enabled', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['settings', 'watermark_text', 'VARCHAR(190) NULL'],
         ['board_orders', 'full_name', 'VARCHAR(160) NULL'], ['board_orders', 'phone', 'VARCHAR(30) NULL'],
         ['board_orders', 'address', 'TEXT NULL'], ['board_orders', 'city', 'VARCHAR(100) NULL'],
         ['board_orders', 'postal_code', 'VARCHAR(20) NULL'], ['board_orders', 'carrier', 'VARCHAR(40) NULL'],

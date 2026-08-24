@@ -744,3 +744,10 @@ details.bk-optional[open] summary{margin-bottom:12px}
 .ticket-message.mine{background:rgba(16,185,129,.07);border-color:rgba(16,185,129,.35)}
 .leader-row .grow strong{display:block;font-size:13px}
 .leader-row .grow small{display:block;color:var(--text-dim);font-size:11px;margin-top:2px}
+
+/* ===== v5.9: واترمارک متحرک ضد اسکرین‌شات + ضد درگ ===== */
+.wm-grid{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden;border-radius:inherit}
+.wm-grid i{position:absolute;transform:rotate(-24deg);color:rgba(255,255,255,.30);font-size:11px;font-weight:900;font-style:normal;white-space:nowrap;letter-spacing:2px;text-shadow:0 1px 4px rgba(0,0,0,.65);animation:wmDrift 8s ease-in-out infinite alternate}
+@keyframes wmDrift{from{opacity:.14}to{opacity:.44}}
+.no-save,.media-protect img,.media-protect video{-webkit-user-drag:none;user-select:none;-webkit-touch-callout:none;-webkit-user-select:none}
+.media-protect{position:relative}

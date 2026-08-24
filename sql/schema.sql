@@ -383,6 +383,8 @@ CREATE TABLE IF NOT EXISTS settings (
   privacy_text TEXT NULL,
   contact_form_enabled TINYINT(1) NOT NULL DEFAULT 0,
   contact_email VARCHAR(190) NULL,
+  watermark_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  watermark_text VARCHAR(190) NULL,
   contact_phone VARCHAR(40) NULL,
   contact_telegram VARCHAR(190) NULL,
   contact_instagram VARCHAR(190) NULL,
