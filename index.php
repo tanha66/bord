@@ -425,7 +425,7 @@ function bk_upload_error_reason(array $f): string {
     return 'فرمت تصویری معتبر تشخیص داده نشد';
 }
 function save_video(array $file): ?string { if(($file['error']??1)!==UPLOAD_ERR_OK)return null; if(($file['size']??0)>50*1024*1024)return null; $ext=strtolower(pathinfo((string)($file['name']??''),PATHINFO_EXTENSION)); $mime=file_mime($file['tmp_name']); if($mime!=='video/mp4' && $ext!=='mp4')return null; if(!is_dir(UPLOAD_DIR))@mkdir(UPLOAD_DIR,0755,true); if(!is_dir(UPLOAD_DIR))return null; $name=date('YmdHis').'-'.bin2hex(random_bytes(5)).'.mp4'; $target=UPLOAD_DIR.'/'.$name; if(!@move_uploaded_file($file['tmp_name'],$target))return null; return '/uploads/'.$name; }
-function video_embed(string $url, array $tip, ?array $u): string { $url=trim($url); if($url==='')return ''; if(str_starts_with($url,'/uploads/')||str_starts_with($url,'uploads/')){ $src=media_url($url,'vid',(int)$tip['id'],$u?(int)$u['id']:0); return '<div class="mt media-protect full-lock video-lock"><video class="no-save" controls controlslist="nodownload noremoteplayback nofullscreen" disablePictureInPicture playsinline preload="metadata" oncontextmenu="return false"><source src="'.h($src).'" type="video/mp4"></video><div class="vid-tools"><button type="button" data-va="fs" title="تمام صفحه (واترمارک حفظ می‌شود)">⛶</button><button type="button" data-va="zo" title="بزرگ‌نمایی">＋</button><button type="button" data-va="zi" title="کوچک‌نمایی">－</button><button type="button" data-va="rz" title="اندازه اصلی">↺</button></div>'.bk_watermark_overlay(null).'<span class="wm">'.h(watermark_text()).'</span><div class="vid-fallback"><a href="'.h($src).'" target="_blank" rel="noopener">اگر ویدیو پخش نشد، اینجا را بزنید تا در برگهٔ جدید باز شود ▶</a></div></div>'; } if(preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([\w-]{6,})~',$url,$m)){ return '<div class="mt video-lock"><iframe class="no-save" style="width:100%;aspect-ratio:16/9;border:0;border-radius:14px" src="https://www.youtube.com/embed/'.h($m[1]).'" allowfullscreen loading="lazy"></iframe></div>'; } if(preg_match('~aparat\.com/v/([\w-]+)~',$url,$m)){ return '<div class="mt video-lock"><iframe class="no-save" style="width:100%;aspect-ratio:16/9;border:0;border-radius:14px" src="https://www.aparat.com/video/video/embed/videohash/'.h($m[1]).'/vt/frame" allowfullscreen loading="lazy"></iframe></div>'; } return '<div class="mt"><a class="btn btn-secondary" href="'.h($url).'" target="_blank" rel="noopener">▶ مشاهده ویدیوی آموزشی</a></div>'; }
+function video_embed(string $url, array $tip, ?array $u): string { $url=trim($url); if($url==='')return ''; $host=parse_url(SITE_URL,PHP_URL_HOST); if($host&&preg_match('#^https?://'.preg_quote($host,'#').'(/uploads/.+)$#i',$url,$m)){$url=$m[1];} if(str_starts_with($url,'/uploads/')||str_starts_with($url,'uploads/')){ $src=media_url($url,'vid',(int)$tip['id'],$u?(int)$u['id']:0); return '<div class="mt media-protect full-lock video-lock"><video class="no-save" style="width:100%;height:100%;object-fit:contain;background:#000;display:block" controls controlslist="nodownload noremoteplayback nofullscreen" disablePictureInPicture playsinline preload="metadata" oncontextmenu="return false"><source src="'.h($src).'" type="video/mp4"></video><div class="vid-tools"><button type="button" data-va="fs" title="تمام صفحه (واترمارک حفظ می‌شود)">⛶</button><button type="button" data-va="zo" title="بزرگ‌نمایی">＋</button><button type="button" data-va="zi" title="کوچک‌نمایی">－</button><button type="button" data-va="rz" title="اندازه اصلی">↺</button></div>'.bk_watermark_overlay(null).'<span class="wm">'.h(watermark_text()).'</span><div class="vid-fallback"><a href="'.h($src).'" target="_blank" rel="noopener">اگر ویدیو پخش نشد، اینجا را بزنید تا در برگهٔ جدید باز شود ▶</a></div></div>'; } if(preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([\w-]{6,})~',$url,$m)){ return '<div class="mt video-lock"><iframe class="no-save" style="width:100%;aspect-ratio:16/9;border:0;border-radius:14px" src="https://www.youtube.com/embed/'.h($m[1]).'" allowfullscreen loading="lazy"></iframe></div>'; } if(preg_match('~aparat\.com/v/([\w-]+)~',$url,$m)){ return '<div class="mt video-lock"><iframe class="no-save" style="width:100%;aspect-ratio:16/9;border:0;border-radius:14px" src="https://www.aparat.com/video/video/embed/videohash/'.h($m[1]).'/vt/frame" allowfullscreen loading="lazy"></iframe></div>'; } return '<div class="mt"><a class="btn btn-secondary" href="'.h($url).'" target="_blank" rel="noopener">▶ مشاهده ویدیوی آموزشی</a></div>'; }
 function fetch_url(string $url, int $timeout = 8): ?string {
     $url = trim($url);
     if ($url === '' || !preg_match('#^https?://#i', $url)) return null;
@@ -1078,6 +1078,35 @@ if($page==='admin-actionbar'&&is_file(__DIR__.'/php-extended/bk_actionbar.php'))
 if($page==='admin-cleanup'&&is_file(__DIR__.'/php-extended/cleanup_bot.php')){require __DIR__.'/php-extended/cleanup_bot.php';exit;}
 if($page==='admin-security'&&is_file(__DIR__.'/php-extended/security_log.php')){require __DIR__.'/php-extended/security_log.php';exit;}
 if(in_array($page,['admin-boards','admin-users','admin-tips'],true)&&is_file(__DIR__.'/php-extended/bk_admin_extra.php')){$GLOBALS['bkx_page']=$page;require __DIR__.'/php-extended/bk_admin_extra.php';exit;}
+
+/* v5.11: عیب‌یابی ویدیو — /diag-video?tip_id=X  (مدیر/ناظر/نویسندهٔ قلق یا ?key=INSTALL_KEY) */
+if($page==='diag-video'){
+    $tipId=(int)($_GET['tip_id']??0);$u=current_user();
+    $tip=$tipId?db()->query('SELECT * FROM tips WHERE id='.$tipId.' LIMIT 1')->fetch():null;
+    $ok=!empty($_GET['key'])&&hash_equals(INSTALL_KEY,(string)$_GET['key']);
+    if(!$ok && (!$tip || !$u || (!staff($u)&&(int)$u['id']!==(int)$tip['author_id']))){http_response_code(403);exit('no access');}
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "== Bordkhan video diag (tip #".$tipId.") ==\n";
+    if(!$tip){echo "tip not found\n";exit;}
+    echo "title: ".$tip['title']."\n";
+    echo "status: ".$tip['status']."\n";
+    echo "access_type: ".$tip['access_type']."\n";
+    $vurl=trim((string)($tip['video_url']??''));
+    echo "video_url(raw): ".($vurl===''?'(empty)':$vurl)."\n";
+    if($vurl===''){echo "RESULT: no video for this tip\n";exit;}
+    $local=str_starts_with($vurl,'/uploads/')||str_starts_with($vurl,'uploads/');
+    if(!$local){echo "RESULT: not a local upload (link/iframe): ".$vurl."\n";exit;}
+    $f=ltrim($vurl,'/');$full=UPLOAD_DIR.'/'.basename($f);
+    echo "file path: ".$full."\n";
+    echo "file exists: ".(is_file($full)?'YES':'NO — فایل روی هاست نیست!')."\n";
+    if(is_file($full)){echo "file size: ".filesize($full)." bytes\n";echo "mime: ".file_mime($full)."\n";}
+    $uid=$u?(int)$u['id']:0;$uidStr=$uid>0?(string)$uid:'guest';
+    $n=hash_hmac('sha256',$uidStr.'|'.$f.'|vid|'.$tipId,INSTALL_KEY);
+    $direct=url('serve',['t'=>'vid','id'=>$tipId,'f'=>$f,'n'=>$n]);
+    echo "serve URL (open in browser to test):\n".SITE_URL.$direct."\n";
+    echo "RESULT: done — ویدیو را در آدرس بالا باز کنید؛ اگر 403=مشکل دسترسی، 404=فایل نیست، 500=خطای سرور\n";
+    exit;
+}
 
 if($page==='serve'||$page==='serve.php'){require __DIR__.'/serve.php';exit;}
 if($page==='home'){require __DIR__.'/pages/home.php';exit;}

@@ -32,6 +32,14 @@ if ($t['status'] !== 'published' && (!isset($_SESSION['user_id']) || (int)$_SESS
 $expected = hash_hmac('sha256', ($_SESSION['user_id']??'guest')."|".$file.'|'.$type.'|'.$id, INSTALL_KEY);
 if (!hash_equals($expected, $nonce)) { http_response_code(403); exit('forbidden'); }
 
+/* v5.11: استریم خام رسانه — فشرده‌سازی zlib و بافر خروجی را خاموش کن تا بایت‌های
+   ویدیو (مخصوصاً پاسخ‌های 206 Range) سالم بمانند. روی برخی هاست‌های اشتراکی
+   gzip استریم ویدیو را خراب می‌کند و فقط ویدیو (نه عکس) از کار می‌افتد. */
+@ini_set('zlib.output_compression', 'Off');
+@ini_set('zlib.output_compression_level', '0');
+@ini_set('output_handler', '');
+while (ob_get_level() > 0) { @ob_end_clean(); }
+
 // helper fallback برای fa (در config.php تعریف نشده، ولی در index.php هست)
 if (!function_exists('fa')) {
     function fa($value): string { $digits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; return strtr((string)$value, array_combine(range(0,9), $digits)); }
@@ -88,6 +96,8 @@ $mime = file_mime($full);
    با nosniff مانع پخش روی مرورگر نشود */
 if ($type === 'vid') { $mime = 'video/mp4'; }
 if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
+  @set_time_limit(0);
+  @ignore_user_abort(true);
   $size = filesize($full);
   header('Content-Type: '.$mime);
   header('Content-Disposition: inline; filename="bordkhan_'.basename($file).'"');
