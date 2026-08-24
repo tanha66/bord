@@ -206,7 +206,7 @@ foreach($checks10 as $ck){
 $swJs2 = file_get_contents(__DIR__.'/../sw.js');
 $checks11 = [
     ['نسخهٔ 5.11', $index, "BORDKHAN_VERSION', '5.11'"],
-    ['بطلان کش CSS', $index, '?v=12'],
+    ['بطلان کش CSS', $index, '?v=13'],
     ['کش SW جدید v8', $swJs2, 'bordkhan-pwa-v8'],
     ['فرم عکس مراحل', $index, 'name="step_images[]"'],
     ['پیش‌نمایش عکس مراحل', $index, "getElementById('stepImages')"],
