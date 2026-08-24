@@ -58,7 +58,7 @@ if ($page === 'boards' && $sub === 'new') {
         <div class="fgroup"><label class="flabel">قیمت (تومان) *</label><input class="field" type="number" name="price" min="1000" step="1000" required></div>
       </div>
       <div class="fgroup"><label class="flabel">توضیح کامل *</label><textarea class="field" name="description" rows="5" required placeholder="وضعیت فنی، قطعات روی برد، تاریخ تعمیر و…"></textarea></div>
-      <div class="fgroup"><label class="flabel">عکس‌های برد (حداقل ۱، تا ۸ — عکس‌های بزرگ خودکار کوچک می‌شوند)</label><input class="field" id="boardImages" type="file" name="images[]" accept="image/jpeg,image/png,image/webp" multiple required><div id="boardPreview" class="file-preview"></div></div>
+      <div class="fgroup"><label class="flabel">عکس‌های برد (حداقل ۱، تا ۸) — همهٔ فرمت‌های تصویری (JPG، PNG، WebP، GIF، BMP، HEIC و…) تا ۱۲MB</label><input class="field" id="boardImages" type="file" name="images[]" accept="image/*" multiple required><div id="boardPreview" class="file-preview"></div></div>
       <details class="bk-optional"><summary>⚙️ گزینه‌های اختیاری (برند، وضعیت، موجودی، ویدیو)</summary>
       <div class="grid g2">
         <div class="fgroup"><label class="flabel">وضعیت کالا</label><select class="field" name="condition_status"><option value="new">نو</option><option value="like_new">در حد نو</option><option value="used" selected>کارکرده</option><option value="repair">تعمیرشده</option></select></div>

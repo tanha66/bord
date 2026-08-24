@@ -132,6 +132,31 @@ foreach($checks7 as $ck){
     add_test('v5.7 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
 }
 
+// 12. v5.8 — آپلود همهٔ فرمت‌های تصویری + رفع پیش‌نمایش
+$servePhp = file_get_contents(__DIR__.'/../serve.php');
+$boardsPhp = file_get_contents(__DIR__.'/../pages/boards.php');
+$htaccess = file_get_contents(__DIR__.'/../.htaccess');
+$checks8 = [
+    ['نسخهٔ 5.8', $index, "BORDKHAN_VERSION', '5.8'"],
+    ['پذیرش GIF', $index, "'gif'"],
+    ['پذیرش HEIC (عکس آیفون)', $index, "'heic'"],
+    ['پذیرش AVIF/BMP/TIFF', $index, "'avif'"],
+    ['پذیرش SVG با پاک‌سازی اسکریپت', $index, "stripos($raw,'<svg')"],
+    ['سقف ۱۲ مگابایت', $index, '12*1024*1024'],
+    ['تبدیل Imagick برای HEIC/AVIF', $index, 'new Imagick('],
+    ['پیام علت شکست آپلود', $index, 'function bk_upload_error_reason'],
+    ['CSP اجازهٔ blob: (پیش‌نمایش)', $index, "data: blob: https:"],
+    ['accept همهٔ تصاویر (قلق)', $index, 'accept="image/*" multiple required><div id="tipPreview"'],
+    ['accept همهٔ تصاویر (برد)', $boardsPhp, 'accept="image/*" multiple required><div id="boardPreview"'],
+    ['serve: نوع درست برای GIF', $servePhp, "'image/gif'"],
+    ['serve: CSP برای SVG', $servePhp, "default-src 'none'"],
+    ['serve: نوع واقعی thumb', $servePhp, "file_mime(\$full)"],
+    ['htaccess سقف آپلود', $htaccess, 'upload_max_filesize 12M'],
+];
+foreach($checks8 as $ck){
+    add_test('v5.8 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
+}
+
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
 foreach($report as $r){

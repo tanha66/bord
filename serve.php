@@ -61,9 +61,12 @@ if ($u) {
 
 // For thumbnails we always serve a small blurred preview (2 images already shown to non-payers).
 if ($type === 'thumb') {
-  header('Content-Type: image/jpeg');
+  $tm = strtolower((string)file_mime($full));
+  if ($tm === '') { $tm = 'image/jpeg'; } /* حدس امن */
+  header('Content-Type: ' . $tm);
   header('Cache-Control: private, max-age=600');
   header('X-Robots-Tag: noindex');
+  if ($tm === 'image/svg+xml') header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'");
   readfile($full); exit;
 }
 
@@ -104,6 +107,23 @@ if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
 }
 
 // Image: apply visual watermark with user id for screenshots.
+/* v5.8: فرمت‌های غیر JPEG-compatible (gif/svg/avif/heic/tiff) مستقیم و با نوع درست سرو می‌شوند */
+$rawMimes = ['image/gif','image/avif','image/heic','image/heif','image/svg+xml','image/tiff','image/x-ms-bmp'];
+if ($mime === '' || in_array(strtolower((string)$mime), $rawMimes, true)) {
+  $sm = strtolower((string)$mime);
+  if ($sm === '') {
+    $extMime = ['gif'=>'image/gif','avif'=>'image/avif','heic'=>'image/heic','heif'=>'image/heif','svg'=>'image/svg+xml','tif'=>'image/tiff','tiff'=>'image/tiff','bmp'=>'image/bmp'];
+    $sm = $extMime[strtolower(pathinfo($full, PATHINFO_EXTENSION))] ?? 'application/octet-stream';
+  }
+  header('Content-Type: ' . $sm);
+  header('Content-Disposition: inline; filename="bordkhan_' . basename($file) . '"');
+  header('Cache-Control: private, no-store');
+  header('X-Content-Type-Options: nosniff');
+  header('X-Robots-Tag: noindex');
+  if ($sm === 'image/svg+xml') header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'");
+  header('Content-Length: ' . filesize($full));
+  readfile($full); exit;
+}
 header('Content-Type: image/jpeg');
 header('Cache-Control: private, no-store, must-revalidate');
 header('X-Robots-Tag: noindex');

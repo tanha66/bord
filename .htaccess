@@ -37,3 +37,23 @@ ErrorDocument 404 /index.php
 # ---- AFTER INSTALLATION IS COMPLETE, uncomment to harden: ----
 # RewriteRule ^install\.php$ - [F,L]
 # RewriteRule ^php-extended/ - [F,L]
+
+# ============================================================
+#  v5.8: سقف آپلود فایل (روی هاست‌های Apache+mod_php اعمال می‌شود؛
+#  در php-fpm از بخش MultiPHP INI سی‌پنل تنظیم کنید)
+# ============================================================
+<IfModule mod_php.c>
+php_value upload_max_filesize 12M
+php_value post_max_size 60M
+php_value max_execution_time 120
+</IfModule>
+<IfModule mod_php7.c>
+php_value upload_max_filesize 12M
+php_value post_max_size 60M
+php_value max_execution_time 120
+</IfModule>
+<IfModule mod_php8.c>
+php_value upload_max_filesize 12M
+php_value post_max_size 60M
+php_value max_execution_time 120
+</IfModule>
