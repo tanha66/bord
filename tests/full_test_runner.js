@@ -86,6 +86,31 @@ test('manifest valid', () => {
 test('sw.js CACHE', () => read('sw.js').includes('CACHE') ? true : 'نیست');
 test('sw.js فقط assets کش می‌شود (HTML نه)', () => (read('sw.js').includes("pathname.startsWith('/assets/')") && (read('sw.js').split('c.put').length - 1) === 1) ? true : 'HTML هنوز کش می‌شود');
 
+// JS regression — header inline script must parse AND register the lightbox even for guests
+// (the zoom/lightbox + video tools used to live inside the notifications IIFE which bailed
+//  out with `if(!bell)return;` when #notifBell was absent, i.e. for logged-out visitors)
+test('سینتکس JS هدر (زوم عکس/ویدیو) معتبر', () => {
+  const m = index.indexOf('/* فیلتر زنده');
+  const e = index.indexOf('</script></head>');
+  if (m < 0 || e < 0 || e <= m) return 'بلوک اسکریپت پیدا نشد';
+  const code = index.slice(m, e);
+  try { new Function(code); return true; } catch (err) { return 'خطای سینتکس JS: ' + err.message; }
+});
+test('نبود توالی خراب `})();()}` در index.php', () => !index.includes('})();()}') ? true : 'باگ سینتکس JS حاضر است');
+test('لایت‌باکس برای مهمان (بدون notifBell) هم فعال است', () => {
+  const m = index.indexOf('/* فیلتر زنده');
+  const e = index.indexOf('</script></head>');
+  if (m < 0 || e < 0 || e <= m) return 'بلوک اسکریپت پیدا نشد';
+  const code = index.slice(m, e);
+  function el(){ return { style:{}, children:[], classList:{add(){},remove(){},contains(){return false}}, setAttribute(){}, getAttribute(){return null}, addEventListener(){}, removeEventListener(){}, querySelector(){return null}, querySelectorAll(){return []}, appendChild(){}, closest(){return null}, remove(){}, innerHTML:'', textContent:'', value:'', disabled:false, requestFullscreen(){}, setPointerCapture(){}, dataset:{} }; }
+  const document = { createElement:()=>el(), querySelector:()=>null, querySelectorAll:()=>[], getElementById:()=>null, addEventListener:()=>{}, removeEventListener:()=>{}, body:{appendChild(){},classList:{add(){},remove(){}},children:[]}, fullscreenElement:null, exitFullscreen(){} };
+  const window = { addEventListener(){} };
+  try {
+    new Function('window','document','navigator','localStorage', code)(window, document, { userAgent:'node' }, { getItem:()=>null, setItem(){}, removeItem(){} });
+    return typeof window.bkLightboxOpen === 'function' ? true : 'bkLightboxOpen تعریف نشد (برای مهمان)';
+  } catch (err) { return 'خطای اجرای JS: ' + err.message; }
+});
+
 // CSS
 const css = read('assets/style.css');
 test('CSS vars', () => css.includes('--bg') && css.includes('--accent') ? true : 'نیست');

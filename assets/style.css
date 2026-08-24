@@ -771,4 +771,4 @@ details.bk-optional[open] summary{margin-bottom:12px}
 .vid-tools{position:absolute;top:10px;inset-inline-start:10px;z-index:6;display:flex;gap:6px}
 .vid-tools button{background:rgba(10,16,24,.82);border:1px solid rgba(255,255,255,.22);color:#fff;width:34px;height:34px;border-radius:10px;font-size:14px;cursor:pointer;display:grid;place-items:center;padding:0}
 .vid-tools button:hover{background:#10b981;color:#04110b}
-.media-protect video{transform-origin:center center;transition:transform .18s ease}
+.media-protect video{width:100%;height:100%;object-fit:contain;background:#000;transform-origin:center center;transition:transform .18s ease}

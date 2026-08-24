@@ -79,6 +79,9 @@ $pdo->prepare("INSERT INTO media_access(user_id,media_type,path,nonce,ip) VALUES
     ->execute([$userId, $type, $path, $nonce, $_SERVER['REMOTE_ADDR'] ?? '']);
 
 $mime = file_mime($full);
+/* v5.11: اگر تشخیص MIME روی هاست ممکن نبود (بدون finfo/mime_content_type)،
+   برای ویدیو نوع MP4 را صریح ست کن — با nosniff، Content-Type خالی مانع پخش می‌شود */
+if ($type === 'vid' && ($mime === '' || !str_starts_with($mime, 'video/'))) { $mime = 'video/mp4'; }
 if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
   $size = filesize($full);
   header('Content-Type: '.$mime);
@@ -92,8 +95,8 @@ if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
       $start = $m[1] === '' ? 0 : (int)$m[1];
       $end = $m[2] === '' ? $size - 1 : (int)$m[2];
       $end = min($end, $size - 1);
-      if ($start > $end || $start >= $size) { header('HTTP/1.1 416 Range Not Satisfiable'); exit; }
-      header('HTTP/1.1 206 Partial Content');
+      if ($start > $end || $start >= $size) { header('HTTP/1.1 416 Range Not Satisfiable', true, 416); exit; }
+      header('HTTP/1.1 206 Partial Content', true, 206);
       header('Content-Range: bytes '.$start.'-'.$end.'/'.$size);
       header('Content-Length: '.($end - $start + 1));
       $fp = fopen($full, 'rb'); fseek($fp, $start);

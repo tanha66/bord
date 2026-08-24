@@ -498,7 +498,7 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
   }catch(e){}
 })();
 </script>
-<link rel="stylesheet" href="<?=url('assets/style.css')?>?v=11"><?php if(!empty($s['google_analytics'])):?><script async src="https://www.googletagmanager.com/gtag/js?id=<?=h($s['google_analytics'])?>"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','<?=h($s['google_analytics'])?>');</script><?php endif;?><script>
+<link rel="stylesheet" href="<?=url('assets/style.css')?>?v=12"><?php if(!empty($s['google_analytics'])):?><script async src="https://www.googletagmanager.com/gtag/js?id=<?=h($s['google_analytics'])?>"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','<?=h($s['google_analytics'])?>');</script><?php endif;?><script>
 (function(){
   function setTheme(t){
     if(t==='light'){document.documentElement.setAttribute('data-theme','light');}
@@ -517,7 +517,7 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
 /* فیلتر زندهٔ دسته‌بندی — یک تعریف سراسری برای همهٔ صفحات */
 if(typeof bkFilterSelect!=='function'){function bkFilterSelect(inp){var sel=inp.parentElement?inp.parentElement.querySelector('select'):null;if(!sel)return;var q=(inp.value||'').trim().toLowerCase();Array.prototype.forEach.call(sel.options,function(o){if(!o.value)return;var t=(o.textContent||'').toLowerCase();var og=o.parentElement&&o.parentElement.label?o.parentElement.label.toLowerCase():'';o.hidden=q===''||t.indexOf(q)!==-1||og.indexOf(q)!==-1;});Array.prototype.forEach.call(sel.querySelectorAll('optgroup'),function(g){var any=false;Array.prototype.forEach.call(g.options,function(o){if(!o.hidden)any=true;});g.hidden=!any;});var si=sel.selectedIndex;if(si>=0&&sel.options[si]&&sel.options[si].hidden){sel.value='';}}}
 /* زنگولهٔ اعلان‌ها */
-(function(){var bell=document.getElementById('notifBell');if(!bell)return;var drop=document.getElementById('notifDrop');var badge=document.getElementById('notifBadge');var list=document.getElementById('notifList');
+(function(){var bell=document.getElementById('notifBell');var drop=document.getElementById('notifDrop');var badge=document.getElementById('notifBadge');var list=document.getElementById('notifList');
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
 /* v5.5: فرم‌های AJAX — ارسال بدون رفرش با بازخورد درجا */
 /* v5.10: لایت‌باکس زوم/تمام‌صفحه برای تصاویر قلق */
@@ -584,7 +584,7 @@ if(!window.__bkLightbox){window.__bkLightbox=true;(function(){
     else if(a==='rz'){cur=1;}
     v.setAttribute('data-zoom',String(cur));v.style.transform='scale('+cur+')';
   });
-})();()}
+})();}
 /* v5.9: ضد دانلود رسانه — کلیک‌راست/درگ/انتخاب روی عکس و ویدیو در کل سایت */
 if(!window.__bkMediaGuard){window.__bkMediaGuard=true;(function(){
   function isMedia(t){return t&&(t.tagName==='IMG'||t.tagName==='VIDEO'||(t.closest&&t.closest('.media-protect')));}
@@ -593,8 +593,8 @@ if(!window.__bkMediaGuard){window.__bkMediaGuard=true;(function(){
   document.addEventListener('selectstart',function(e){if(isMedia(e.target))e.preventDefault();});
   /* Ctrl+S / Ctrl+P روی صفحات قلق */
   document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='p')){if(document.querySelector('.media-protect')){e.preventDefault();}}});
-})();()}
-function bkPassStrength(v){var bar=document.querySelector('#bkPassBar i'),txt=document.querySelector('#bkPassTxt');if(!bar||!txt)return;var s=0;if(v.length>=6)s++;if(v.length>=10)s++;if(/[0-9]/.test(v)&&/[a-zA-Z]/.test(v))s++;if(/[^a-zA-Z0-9]/.test(v))s++;var pct=[8,35,65,85,100][s],col=['#ef4444','#f59e0b','#eab308','#10b981','#10b981'][s],lbl=['خیلی ضعیف','ضعیف','متوسط','خوب','عالی'][s];bar.style.width=pct+'%';bar.style.background=col;txt.textContent=v?'قدرت رمز: '+lbl:'';}
+})();}
+window.bkPassStrength=function(v){var bar=document.querySelector('#bkPassBar i'),txt=document.querySelector('#bkPassTxt');if(!bar||!txt)return;var s=0;if(v.length>=6)s++;if(v.length>=10)s++;if(/[0-9]/.test(v)&&/[a-zA-Z]/.test(v))s++;if(/[^a-zA-Z0-9]/.test(v))s++;var pct=[8,35,65,85,100][s],col=['#ef4444','#f59e0b','#eab308','#10b981','#10b981'][s],lbl=['خیلی ضعیف','ضعیف','متوسط','خوب','عالی'][s];bar.style.width=pct+'%';bar.style.background=col;txt.textContent=v?'قدرت رمز: '+lbl:'';}
 if(!window.__bkAjaxForms){window.__bkAjaxForms=true;(function(){
   function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
   document.addEventListener('submit',function(e){
@@ -624,8 +624,9 @@ if(!window.__bkAjaxForms){window.__bkAjaxForms=true;(function(){
         if(btn){btn.disabled=false;btn.innerHTML=orig;}
       });
   });
-})();()}
+})();}
 function load(){fetch('/ajax-notifications',{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json().catch(function(){return null;});}).then(function(j){if(!j)return;if(j.unread>0){badge.hidden=false;badge.textContent=j.unread>99?'99+':j.unread;}else{badge.hidden=true;}if(j.items&&j.items.length){var h='';j.items.forEach(function(n){h+='<a class="notif-item" href="/notifications"><strong>'+esc(n.title)+'</strong><small>'+esc(n.body)+' · '+esc(n.ago)+'</small></a>';});list.innerHTML=h;}else{list.innerHTML='<div class="notif-empty">اعلان جدیدی ندارید ✓</div>';}}).catch(function(){});}
+if(!bell)return;
 bell.addEventListener('click',function(e){e.stopPropagation();drop.hidden=!drop.hidden;if(!drop.hidden)load();});
 document.addEventListener('click',function(e){if(drop&&!drop.hidden&&!e.target.closest('#notifWrap'))drop.hidden=true;});
 load();setInterval(load,60000);})();

@@ -206,7 +206,7 @@ foreach($checks10 as $ck){
 $swJs2 = file_get_contents(__DIR__.'/../sw.js');
 $checks11 = [
     ['نسخهٔ 5.11', $index, "BORDKHAN_VERSION', '5.11'"],
-    ['بطلان کش CSS', $index, '?v=11'],
+    ['بطلان کش CSS', $index, '?v=12'],
     ['کش SW جدید v7', $swJs2, 'bordkhan-pwa-v7'],
     ['فرم عکس مراحل', $index, 'name="step_images[]"'],
     ['پیش‌نمایش عکس مراحل', $index, "getElementById('stepImages')"],
@@ -221,6 +221,16 @@ $checks11 = [
 foreach($checks11 as $ck){
     add_test('v5.11 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
 }
+
+// 16. v5.11 — رگرسیون سینتکس JS هدر: باگ `})();()}` که کل اسکریپت هدر
+// (لایت‌باکس زوم عکس + دکمه‌های ویدیو + فرم‌های AJAX) را از کار می‌انداخت
+add_test('v5.11 — سینتکس JS هدر (نبود توالی خراب `})();()}`)', strpos($index, '})();()}') === false, strpos($index, '})();()}') === false ? 'سالم' : 'باگ سینتکس JS حاضر است');
+
+// 17. v5.11 — لایت‌باکس/زوم باید مستقل از «زنگولهٔ اعلان‌ها» باشد تا برای مهمان
+// (که #notifBell ندارد) هم فعال بماند؛ guard اعلان‌ها باید بعد از ثبت لایت‌باکس باشد
+$lbPos = strpos($index, 'window.bkLightboxOpen=open');
+$bellGuardPos = strpos($index, 'if(!bell)return;');
+add_test('v5.11 — لایت‌باکس مستقل از زنگوله (برای مهمان فعال)', $lbPos !== false && $bellGuardPos !== false && $lbPos < $bellGuardPos, 'بررسی ترتیب کد');
 
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
