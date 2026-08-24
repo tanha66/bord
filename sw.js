@@ -1,4 +1,4 @@
-const CACHE = 'bordkhan-pwa-v7';
+const CACHE = 'bordkhan-pwa-v8';
 const ASSETS = ['/assets/style.css', '/assets/icon-192.png', '/assets/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -17,6 +17,10 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+
+  // v5.11: رسانه (عکس/ویدیو) را هرگز رهگیری نمی‌کنیم — مستقیم از شبکه تا
+  // پخش/جستجوی ویدیو (Range) روی موبایل بدون مشکل کار کند
+  if (url.pathname.startsWith('/serve') || url.pathname.startsWith('/uploads/')) return;
 
   // v5.11: فایل‌های استاتیک stale-while-revalidate — کش قدیمی دیگر گیر نمی‌کند
   if (url.pathname.startsWith('/assets/')) {

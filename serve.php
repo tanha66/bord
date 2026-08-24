@@ -73,15 +73,20 @@ if ($type === 'thumb') {
 if (!$hasAccess) { http_response_code(403); exit('forbidden'); }
 
 // Record (or reuse) media access token row for forensic watermark.
+// v5.11: اگر جدول media_access روی نصب‌های قدیمی وجود نداشته باشد، این INSERT
+// نباید سرو رسانه (مخصوصاً ویدیو) را با Fatal Error از کار بیندازد.
 $userId = $u ? (int)$u['id'] : 0;
 $path = '/uploads/'.basename($file);
-$pdo->prepare("INSERT INTO media_access(user_id,media_type,path,nonce,ip) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE created_at=created_at")
-    ->execute([$userId, $type, $path, $nonce, $_SERVER['REMOTE_ADDR'] ?? '']);
+try {
+    $pdo->prepare("INSERT INTO media_access(user_id,media_type,path,nonce,ip) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE created_at=created_at")
+        ->execute([$userId, $type, $path, $nonce, $_SERVER['REMOTE_ADDR'] ?? '']);
+} catch (Throwable $e) {}
 
 $mime = file_mime($full);
-/* v5.11: اگر تشخیص MIME روی هاست ممکن نبود (بدون finfo/mime_content_type)،
-   برای ویدیو نوع MP4 را صریح ست کن — با nosniff، Content-Type خالی مانع پخش می‌شود */
-if ($type === 'vid' && ($mime === '' || !str_starts_with($mime, 'video/'))) { $mime = 'video/mp4'; }
+/* v5.11: ویدیوهای آپلودی همیشه MP4 هستند (save_video پسوند .mp4 می‌سازد)، پس نوع
+   را صریح video/mp4 سرو می‌کنیم تا MIME ناشناخته/غلط (octet-stream/quicktime/خالی)
+   با nosniff مانع پخش روی مرورگر نشود */
+if ($type === 'vid') { $mime = 'video/mp4'; }
 if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
   $size = filesize($full);
   header('Content-Type: '.$mime);
@@ -95,7 +100,7 @@ if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
       $start = $m[1] === '' ? 0 : (int)$m[1];
       $end = $m[2] === '' ? $size - 1 : (int)$m[2];
       $end = min($end, $size - 1);
-      if ($start > $end || $start >= $size) { header('HTTP/1.1 416 Range Not Satisfiable', true, 416); exit; }
+      if ($start > $end || $start >= $size) { header('HTTP/1.1 416 Range Not Satisfiable', true, 416); header('Content-Range: bytes */'.$size); exit; }
       header('HTTP/1.1 206 Partial Content', true, 206);
       header('Content-Range: bytes '.$start.'-'.$end.'/'.$size);
       header('Content-Length: '.($end - $start + 1));

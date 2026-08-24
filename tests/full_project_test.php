@@ -207,7 +207,7 @@ $swJs2 = file_get_contents(__DIR__.'/../sw.js');
 $checks11 = [
     ['نسخهٔ 5.11', $index, "BORDKHAN_VERSION', '5.11'"],
     ['بطلان کش CSS', $index, '?v=12'],
-    ['کش SW جدید v7', $swJs2, 'bordkhan-pwa-v7'],
+    ['کش SW جدید v8', $swJs2, 'bordkhan-pwa-v8'],
     ['فرم عکس مراحل', $index, 'name="step_images[]"'],
     ['پیش‌نمایش عکس مراحل', $index, "getElementById('stepImages')"],
     ['ذخیرهٔ عکس مراحل', $index, "FILES['step_images']"],
@@ -231,6 +231,14 @@ add_test('v5.11 — سینتکس JS هدر (نبود توالی خراب `})();(
 $lbPos = strpos($index, 'window.bkLightboxOpen=open');
 $bellGuardPos = strpos($index, 'if(!bell)return;');
 add_test('v5.11 — لایت‌باکس مستقل از زنگوله (برای مهمان فعال)', $lbPos !== false && $bellGuardPos !== false && $lbPos < $bellGuardPos, 'بررسی ترتیب کد');
+
+// 18. v5.11 — پایداری پخش ویدیوی آپلودی (MP4)
+$servePhp2 = file_get_contents(__DIR__.'/../serve.php');
+add_test('v5.11 — INSERT رسانه داخل try/catch (بدون Fatal روی نصب قدیمی)', strpos($servePhp2, 'catch (Throwable $e) {}') !== false && strpos($servePhp2, 'INSERT INTO media_access') !== false, 'بررسی serve.php');
+add_test('v5.11 — ویدیو همیشه video/mp4 سرو می‌شود', strpos($servePhp2, "if (\$type === 'vid') { \$mime = 'video/mp4'; }") !== false, 'بررسی serve.php');
+$swJs3 = file_get_contents(__DIR__.'/../sw.js');
+add_test('v5.11 — SW رسانه (/serve و /uploads) را رهگیری نمی‌کند', strpos($swJs3, "startsWith('/serve')") !== false && strpos($swJs3, "startsWith('/uploads/')") !== false, 'بررسی sw.js');
+add_test('v5.11 — لینک جایگزین پخش ویدیو', strpos($index, 'vid-fallback') !== false, 'بررسی index.php');
 
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
