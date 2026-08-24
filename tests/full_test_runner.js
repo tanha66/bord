@@ -84,7 +84,7 @@ test('manifest valid', () => {
   try { const m = JSON.parse(read('manifest.webmanifest')); return m.name ? true : 'name ندارد'; } catch(e){ return 'JSON نامعتبر'; }
 });
 test('sw.js CACHE', () => read('sw.js').includes('CACHE') ? true : 'نیست');
-test('sw.js فقط assets کش می‌شود (HTML نه)', () => (read('sw.js').includes("pathname.startsWith('/assets/')") && read('sw.js').indexOf('bordkhan-pwa-v5') > -1) ? true : 'HTML هنوز کش می‌شود');
+test('sw.js فقط assets کش می‌شود (HTML نه)', () => (read('sw.js').includes("pathname.startsWith('/assets/')") && (read('sw.js').split('c.put').length - 1) === 1) ? true : 'HTML هنوز کش می‌شود');
 
 // CSS
 const css = read('assets/style.css');

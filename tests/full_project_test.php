@@ -202,6 +202,26 @@ foreach($checks10 as $ck){
     add_test('v5.10 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
 }
 
+// 15. v5.11 — رفع کش موبایل + عکس‌های مراحل تعمیر
+$swJs2 = file_get_contents(__DIR__.'/../sw.js');
+$checks11 = [
+    ['نسخهٔ 5.11', $index, "BORDKHAN_VERSION', '5.11'"],
+    ['بطلان کش CSS', $index, '?v=11'],
+    ['کش SW جدید v7', $swJs2, 'bordkhan-pwa-v7'],
+    ['فرم عکس مراحل', $index, 'name="step_images[]"'],
+    ['پیش‌نمایش عکس مراحل', $index, "getElementById('stepImages')"],
+    ['ذخیرهٔ عکس مراحل', $index, "FILES['step_images']"],
+    ['اتصال عکس به گام', $index, "['img']"],
+    ['نمایش عکس گام در قلق', $index, "['img']"],
+    ['عکس گام با واترمارک', $index, 'bk_watermark_overlay($u)'],
+    ['عکس گام قابل زوم', $index, 'bk-zoomable'],
+    ['لایت‌باکس همهٔ عکس‌ها', $index, "querySelectorAll('.bk-zoomable')"],
+    ['preload ویدیو', $index, 'preload="metadata"'],
+];
+foreach($checks11 as $ck){
+    add_test('v5.11 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
+}
+
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
 foreach($report as $r){
