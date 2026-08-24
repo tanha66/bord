@@ -751,3 +751,24 @@ details.bk-optional[open] summary{margin-bottom:12px}
 @keyframes wmDrift{from{opacity:.14}to{opacity:.44}}
 .no-save,.media-protect img,.media-protect video{-webkit-user-drag:none;user-select:none;-webkit-touch-callout:none;-webkit-user-select:none}
 .media-protect{position:relative}
+
+/* ===== v5.10: لایت‌باکس زوم/تمام‌صفحه + ابزار ویدیو ===== */
+.tip-cover .bk-zoomable{cursor:zoom-in}
+.tip-cover .bk-zoomable img{cursor:zoom-in}
+.bk-lightbox{position:fixed;inset:0;z-index:99999;background:rgba(4,9,14,.97);display:flex;flex-direction:column;animation:lbIn .18s ease}
+@keyframes lbIn{from{opacity:0}to{opacity:1}}
+.bk-lightbox .lb-stage{position:relative;flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
+.bk-lightbox .lb-stage img{max-width:96%;max-height:96%;border-radius:8px;transition:transform .16s ease;will-change:transform;user-select:none;-webkit-user-drag:none}
+.bk-lightbox .lb-grid{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden}
+.bk-lightbox .lb-grid i{position:absolute;transform:rotate(-24deg);color:rgba(255,255,255,.30);font-size:12px;font-weight:900;font-style:normal;white-space:nowrap;letter-spacing:2px;text-shadow:0 1px 4px rgba(0,0,0,.65);animation:wmDrift 8s ease-in-out infinite alternate}
+.bk-lightbox .lb-toolbar{position:absolute;top:14px;inset-inline-end:14px;z-index:20;display:flex;gap:8px}
+.bk-lightbox .lb-toolbar button,.bk-lightbox .lb-prev,.bk-lightbox .lb-next{background:rgba(15,23,32,.9);border:1px solid rgba(255,255,255,.18);color:#fff;width:42px;height:42px;border-radius:12px;font-size:17px;cursor:pointer;display:grid;place-items:center}
+.bk-lightbox .lb-toolbar button:hover,.bk-lightbox .lb-prev:hover,.bk-lightbox .lb-next:hover{background:#10b981;color:#04110b}
+.bk-lightbox .lb-prev{position:absolute;top:50%;inset-inline-start:14px;transform:translateY(-50%);z-index:20}
+.bk-lightbox .lb-next{position:absolute;top:50%;inset-inline-end:14px;transform:translateY(-50%);z-index:20}
+.bk-lightbox .lb-count{position:absolute;bottom:14px;inset-inline-start:14px;z-index:20;color:#cbd5e1;font-size:12px;background:rgba(15,23,32,.75);padding:4px 12px;border-radius:10px}
+/* دکمه‌های ویدیو */
+.vid-tools{position:absolute;top:10px;inset-inline-start:10px;z-index:6;display:flex;gap:6px}
+.vid-tools button{background:rgba(10,16,24,.82);border:1px solid rgba(255,255,255,.22);color:#fff;width:34px;height:34px;border-radius:10px;font-size:14px;cursor:pointer;display:grid;place-items:center;padding:0}
+.vid-tools button:hover{background:#10b981;color:#04110b}
+.media-protect video{transform-origin:center center;transition:transform .18s ease}

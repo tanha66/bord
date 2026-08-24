@@ -183,6 +183,25 @@ foreach($checks9 as $ck){
     add_test('v5.9 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
 }
 
+// 14. v5.10 — زوم و تمام‌صفحهٔ تصاویر/ویدیو
+$checks10 = [
+    ['نسخهٔ 5.10', $index, "BORDKHAN_VERSION', '5.10'"],
+    ['گالری زوم‌شو', $index, 'bk-zoomable'],
+    ['لایت‌باکس زوم/تمام‌صفحه', $index, '__bkLightbox'],
+    ['پین‌چ‌زوم در لایت‌باکس', $index, 'touchmove'],
+    ['دابل‌تپ زوم', $index, 'lastTap'],
+    ['کلیدهای کیبورد لایت‌باکس', $index, "e.key==='ArrowLeft'"],
+    ['واترمارک داخل لایت‌باکس', $index, 'lb-grid'],
+    ['دکمه‌های ویدیو (تمام‌صفحه/زوم)', $index, 'vid-tools'],
+    ['تمام‌صفحهٔ ویدیو با حفظ واترمارک', $index, "wrap.requestFullscreen"],
+    ['بستن تمام‌صفحهٔ بومی ویدیو', $index, 'nofullscreen'],
+    ['CSS لایت‌باکس', $cssFile, 'bk-lightbox'],
+    ['CSS دکمه‌های ویدیو', $cssFile, 'vid-tools'],
+];
+foreach($checks10 as $ck){
+    add_test('v5.10 — '.$ck[0], is_string($ck[1]) && strpos($ck[1], $ck[2])!==false, 'بررسی کد');
+}
+
 // خروجی
 echo "\n=== تست کامل پروژه بردخان ===\n\n";
 foreach($report as $r){
