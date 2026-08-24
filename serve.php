@@ -104,13 +104,19 @@ if ($type === 'vid' || ($mime && str_starts_with($mime, 'video/'))) {
   header('Cache-Control: private, no-store');
   header('X-Content-Type-Options: nosniff');
   header('Accept-Ranges: bytes');
-  // HTTP Range support for seeking
+  // HTTP Range support for seeking (robust: prefix + suffix + clamp)
   if (isset($_SERVER['HTTP_RANGE'])) {
-    if (preg_match('/bytes=(\d*)-(\d*)/', $_SERVER['HTTP_RANGE'], $m)) {
-      $start = $m[1] === '' ? 0 : (int)$m[1];
-      $end = $m[2] === '' ? $size - 1 : (int)$m[2];
-      $end = min($end, $size - 1);
-      if ($start > $end || $start >= $size) { header('HTTP/1.1 416 Range Not Satisfiable', true, 416); header('Content-Range: bytes */'.$size); exit; }
+    if (preg_match('/bytes=(\d*)-(\d*)/', $_SERVER['HTTP_RANGE'], $m) && ($m[1] !== '' || $m[2] !== '')) {
+      if ($m[1] === '') { // suffix range: last N bytes  (bytes=-N)
+        $len = (int)$m[2];
+        $start = $len > 0 ? max(0, $size - $len) : 0;
+        $end = $size - 1;
+      } else {
+        $start = (int)$m[1];
+        $end = ($m[2] === '') ? $size - 1 : (int)$m[2];
+        $end = min($end, $size - 1);
+      }
+      if ($start < 0 || $start >= $size || $start > $end) { header('HTTP/1.1 416 Range Not Satisfiable', true, 416); header('Content-Range: bytes */'.$size); exit; }
       header('HTTP/1.1 206 Partial Content', true, 206);
       header('Content-Range: bytes '.$start.'-'.$end.'/'.$size);
       header('Content-Length: '.($end - $start + 1));
