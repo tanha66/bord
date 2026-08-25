@@ -1,5 +1,5 @@
 // Bordkhan Service Worker v8
-const CACHE = 'bk-v8';
+const CACHE = 'bk-v9';
 const PRECACHE = [
   '/',
   '/assets/style.css',

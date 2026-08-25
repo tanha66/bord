@@ -559,7 +559,7 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
 })();
 (function(){
   try{
-    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=8',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=9',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
   }catch(e){}
 })();
 
@@ -817,6 +817,17 @@ if(btn)btn.addEventListener('click',function(){
   else{alert('برای نصب: از منوی مرورگر (⋮ یا ⋯) گزینه «Install app» یا «اپلیکیشن نصب» را انتخاب کنید');b.style.display='none';localStorage.setItem('pwa_dis','1');}
 });
 })();</script>
+<nav class="app-bottom-nav" id="appBottomNav">
+  <a href="/" class="<?=str_starts_with($active,'')&&$active==='home'?'active':''?>"><span class="ico">🏠</span>خانه</a>
+  <a href="/tips" class="<?=str_starts_with($active,'tips')?'active':''?>"><span class="ico">🔧</span>قلق‌ها</a>
+  <a href="/reels" class="<?=str_starts_with($active,'reels')?'active':''?>"><span class="ico">🎬</span>ریلز</a>
+  <a href="/boards" class="<?=str_starts_with($active,'board')?'active':''?>"><span class="ico">🏪</span>فروشگاه</a>
+  <?php if($u):?>
+  <a href="/notifications" class="<?=$active==='notifications'?'active':''?>"><span class="ico">🔔</span>اعلان</a>
+  <?php else:?>
+  <a href="/login"><span class="ico">👤</span>ورود</a>
+  <?php endif;?>
+</nav>
 <div class="wrap copyright">© <?=fa(date('Y'))?> بردخان — تمامی حقوق محفوظ است. <span style="opacity:.55;font-size:10px">· نسخه <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></span></div></footer><?php if(is_file(__DIR__.'/php-extended/bk_actionbar.php')){require_once __DIR__.'/php-extended/bk_actionbar.php';bk_render_actionbar(function_exists('current_user')?current_user():null);} ?><script>
 (function(){
   var CSRF = '<?=csrf()?>';
