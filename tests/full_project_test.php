@@ -205,7 +205,7 @@ foreach($checks10 as $ck){
 // 15. v5.11 — رفع کش موبایل + عکس‌های مراحل تعمیر
 $swJs2 = file_get_contents(__DIR__.'/../sw.js');
 $checks11 = [
-    ['نسخهٔ 5.11', $index, "BORDKHAN_VERSION', '5.11'"],
+    ['نسخهٔ 5.12', $index, "BORDKHAN_VERSION', '5.12'"],
     ['بطلان کش CSS', $index, '?v=13'],
     ['کش SW جدید v8', $swJs2, 'bordkhan-pwa-v8'],
     ['فرم عکس مراحل', $index, 'name="step_images[]"'],

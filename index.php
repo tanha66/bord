@@ -2,7 +2,7 @@
 require __DIR__ . '/config.php';
 
 /* نسخهٔ کد — برای تشخیص اینکه سرور واقعاً کدام نسخه را اجرا می‌کند */
-if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.11');
+if (!defined('BORDKHAN_VERSION')) define('BORDKHAN_VERSION', '5.12');
 
 /* ---------- helper های مقاوم — حتی اگر config.php سرور قدیمی باشد ---------- */
 if (!function_exists('mb_strlen')) {
@@ -1116,6 +1116,7 @@ if($page==='diag-video'){
     exit;
 }
 
+if($page==='diag-notif'){ $u=current_user(); $ok=!empty($_GET['key'])&&hash_equals(INSTALL_KEY,(string)$_GET['key']); $uid=$u?(int)$u['id']:0; $want=(int)($_GET['user_id']??0); if($ok&&$want>0)$uid=$want; if(!$ok&&!$u){http_response_code(403);exit('no access (login or ?key=INSTALL_KEY)');} header('Content-Type: text/plain; charset=utf-8'); echo "== Bordkhan notifications diag ==\n"; echo "current user: ".($u?($u['name'].' #'.$u['id'].' role='.$u['role']):'guest')."\n"; echo "target user_id: ".$uid."\n"; try{ $tot=(int)db()->query("SELECT COUNT(*) FROM notifications WHERE user_id=".$uid)->fetchColumn(); $unr=(int)db()->query("SELECT COUNT(*) FROM notifications WHERE user_id=".$uid." AND is_read=0")->fetchColumn(); echo "total notifications: ".$tot."\n"; echo "unread: ".$unr."\n"; echo "-- last 10 rows --\n"; foreach(db()->query("SELECT id,type,title,is_read,created_at FROM notifications WHERE user_id=".$uid." ORDER BY id DESC LIMIT 10")->fetchAll() as $n){ echo "#".$n['id']." [".$n['type']."] ".($n['is_read']?'READ ':'UNREAD')." ".$n['created_at']." — ".$n['title']."\n"; } echo "RESULT: bell should show badge=".$unr." and ".min($tot,8)." items in dropdown\n"; }catch(Throwable $e){ echo "DB ERROR: ".$e->getMessage()."\n"; } exit; }
 if($page==='serve'||$page==='serve.php'){require __DIR__.'/serve.php';exit;}
 if($page==='home'){require __DIR__.'/pages/home.php';exit;}
 function _legacy_home(){
