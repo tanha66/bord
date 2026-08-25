@@ -313,7 +313,28 @@ function level_name(int $points): string { if ($points >= 5000) return 'استا
 function access_label(string $type, int $price=0): string { return $type==='paid' ? money($price).' تومان' : ($type==='like' ? 'با لایک' : 'رایگان'); }
 function status_label(string $s): string { return ['draft'=>'پیش‌نویس','pending'=>'در انتظار بررسی','published'=>'منتشرشده','rejected'=>'رد شده','removed'=>'حذف شده'][$s] ?? $s; }
 function role_label(string $s): string { return ['member'=>'کاربر عادی','expert'=>'تعمیرکار تأییدشده','moderator'=>'ناظر','admin'=>'مدیر کل','superadmin'=>'سوپر ادمین'][$s] ?? $s; }
-function notify_user(int $id, string $type, string $title, string $body, string $link=''): void { $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)'); $s->execute([$id,$type,$title,$body,$link]); if(function_exists('bk_send_push')){try{bk_send_push($id,$title,$body,$link);}catch(\Throwable $e){}} } 
+function notify_user(int $id, string $type, string $title, string $body, string $link=''): void {
+    $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)');
+    $s->execute([$id,$type,$title,$body,$link]);
+    // Email notification (works in Iran)
+    try {
+        $q = db()->prepare('SELECT email,name FROM users WHERE id=? AND email<>""');
+        $q->execute([$id]);
+        $user = $q->fetch();
+        if ($user && function_exists('bk_send_mail')) {
+            $siteUrl = defined('SITE_URL') ? SITE_URL : '';
+            $siteName = defined('SITE_NAME') ? SITE_NAME : 'بردخان';
+            $html = '<div style="font-family:Tahoma,Arial;direction:rtl;text-align:right;max-width:500px;margin:auto;background:#fff;border-radius:14px;padding:24px;border:1px solid #e3e8ee">'
+                  . '<div style="font-size:20px;font-weight:900;color:#078659;margin-bottom:12px">🔔 ' . htmlspecialchars($title) . '</div>'
+                  . '<p style="font-size:13px;line-height:2.1;color:#334155;margin:0 0 16px">' . nl2br(htmlspecialchars($body)) . '</p>';
+            if ($link) $html .= '<div style="text-align:center;margin:20px 0"><a href="' . $siteUrl . $link . '" style="display:inline-block;background:#078659;color:#fff;padding:11px 28px;border-radius:12px;text-decoration:none;font-weight:900;font-size:13px">مشاهده در سایت ←</a></div>';
+            $html .= '<hr style="border:0;border-top:1px solid #eef1f4;margin:18px 0"><p style="font-size:11px;color:#94a3b8;margin:0">' . $siteName . '</p></div>';
+            bk_send_mail($user['email'], '🔔 ' . $title . ' — ' . $siteName, $html);
+        }
+    } catch(\Throwable $e) {}
+    // Web Push (works outside Iran only)
+    if(function_exists('bk_send_push')){try{bk_send_push($id,$title,$body,$link);}catch(\Throwable $e){}}
+}
 /* ---------- Web Push ---------- */
 if(is_file(__DIR__.'/php-extended/webpush.php')) require_once __DIR__.'/php-extended/webpush.php';
 function bk_vapid_keys(): array {
