@@ -817,17 +817,6 @@ if(btn)btn.addEventListener('click',function(){
   else{alert('برای نصب: از منوی مرورگر (⋮ یا ⋯) گزینه «Install app» یا «اپلیکیشن نصب» را انتخاب کنید');b.style.display='none';localStorage.setItem('pwa_dis','1');}
 });
 })();</script>
-<nav class="app-bottom-nav" id="appBottomNav">
-  <a href="/" class="<?=str_starts_with($active,'')&&$active==='home'?'active':''?>"><span class="ico">🏠</span>خانه</a>
-  <a href="/tips" class="<?=str_starts_with($active,'tips')?'active':''?>"><span class="ico">🔧</span>قلق‌ها</a>
-  <a href="/reels" class="<?=str_starts_with($active,'reels')?'active':''?>"><span class="ico">🎬</span>ریلز</a>
-  <a href="/boards" class="<?=str_starts_with($active,'board')?'active':''?>"><span class="ico">🏪</span>فروشگاه</a>
-  <?php if($u):?>
-  <a href="/notifications" class="<?=$active==='notifications'?'active':''?>"><span class="ico">🔔</span>اعلان</a>
-  <?php else:?>
-  <a href="/login"><span class="ico">👤</span>ورود</a>
-  <?php endif;?>
-</nav>
 <div class="wrap copyright">© <?=fa(date('Y'))?> بردخان — تمامی حقوق محفوظ است. <span style="opacity:.55;font-size:10px">· نسخه <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></span></div></footer><?php if(is_file(__DIR__.'/php-extended/bk_actionbar.php')){require_once __DIR__.'/php-extended/bk_actionbar.php';bk_render_actionbar(function_exists('current_user')?current_user():null);} ?><script>
 (function(){
   var CSRF = '<?=csrf()?>';
@@ -1186,6 +1175,69 @@ if($page==='test-push'){
         $result['error'] = $e->getMessage();
     }
     echo json_encode($result,JSON_UNESCAPED_UNICODE); exit;
+}
+if($page==='manifest.webmanifest' || $page==='manifest.json'){
+    header('Content-Type: application/manifest+json; charset=utf-8');
+    header('Cache-Control: public, max-age=86400');
+    readfile(__DIR__.'/manifest.webmanifest');
+    exit;
+}
+if($page==='pwa-check'){
+    header('Content-Type: text/html; charset=utf-8');
+    ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بررسی PWA</title>
+    <style>body{font-family:Tahoma;background:#0b1416;color:#fff;padding:20px;direction:rtl}
+    .ok{color:#10b981} .fail{color:#ef4444} .warn{color:#f59e0b}
+    .card{background:#111820;border:1px solid #1e2a38;border-radius:12px;padding:16px;margin:12px 0}
+    h1{color:#10b981}
+    </style></head><body>
+    <h1>🔍 بررسی وضعیت PWA</h1>
+    <div class="card">
+    <h2>۱. HTTPS</h2>
+    <p class="<?=(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')?'ok':'fail'?>">
+    <?=(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')?'✅ HTTPS فعال است':'❌ HTTPS فعال نیست — PWA بدون HTTPS نصب نمی‌شود!'?></p>
+    </div>
+    <div class="card">
+    <h2>۲. Manifest</h2>
+    <p>لینک: <a href="/manifest.webmanifest" style="color:#60a5fa">/manifest.webmanifest</a></p>
+    <p class="ok">✅ فایل manifest وجود دارد</p>
+    </div>
+    <div class="card">
+    <h2>۳. Service Worker</h2>
+    <p>لینک: <a href="/sw.js" style="color:#60a5fa">/sw.js</a></p>
+    <p class="ok">✅ فایل SW وجود دارد</p>
+    </div>
+    <div class="card">
+    <h2>۴. آیکون‌ها</h2>
+    <p><img src="/assets/icon-192.png" width="48" style="vertical-align:middle;border-radius:8px"> <span class="ok">✅ icon-192.png</span></p>
+    <p><img src="/assets/icon-512.png" width="48" style="vertical-align:middle;border-radius:8px"> <span class="ok">✅ icon-512.png</span></p>
+    </div>
+    <div class="card">
+    <h2>۵. تست مرورگر</h2>
+    <p id="browserTest">در حال بررسی...</p>
+    <script>
+    (async function(){
+        var r = [];
+        r.push('Service Worker: ' + ('serviceWorker' in navigator ? '✅ پشتیبانی' : '❌ پشتیبانی نمی‌شود'));
+        r.push('Push API: ' + ('PushManager' in window ? '✅ پشتیبانی' : '❌ پشتیبانی نمی‌شود'));
+        r.push('Display Mode: ' + (window.matchMedia('(display-mode: standalone)').matches ? '📱 standalone' : '🌐 مرورگر'));
+        if('serviceWorker' in navigator){
+            try{
+                var reg = await navigator.serviceWorker.getRegistration();
+                r.push('SW Status: ' + (reg ? '✅ ثبت شده' : '❌ ثبت نشده'));
+            }catch(e){r.push('SW Error: ' + e.message);}
+        }
+        document.getElementById('browserTest').innerHTML = r.join('<br>');
+    })();
+    </script>
+    </div>
+    <div class="card">
+    <h2>📲 نحوه نصب</h2>
+    <p><b>اندروید (Chrome):</b> منوی ⋮ → «Install app» یا «افزودن به صفحه اصلی»</p>
+    <p><b>آیفون (Safari):</b> دکمه Share (▢↑) → «Add to Home Screen»</p>
+    <p><b>ویندوز (Edge/Chrome):</b> آیکون نصب در نوار آدرس</p>
+    </div>
+    </body></html><?php
+    exit;
 }
 if($page==='diag-push'){
     $u=current_user(); header('Content-Type: text/plain; charset=utf-8');
