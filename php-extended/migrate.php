@@ -150,3 +150,22 @@ foreach ($report as $r) {
 $tableHtml .= '</table>';
 
 bk_migrate_page($errors ? 'مهاجرت با خطا مواجه شد' : 'مهاجرت بردخان انجام شد', $body . $tableHtml, $errors ? 500 : 200, !$errors);
+
+// v5.12: Push subscriptions table + VAPID keys in settings
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id INT UNSIGNED NOT NULL,
+        endpoint VARCHAR(500) NOT NULL,
+        p256dh VARCHAR(200) NOT NULL DEFAULT '',
+        auth VARCHAR(200) NOT NULL DEFAULT '',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_push_sub_user (user_id),
+        UNIQUE KEY uq_push_endpoint (endpoint(255))
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch(Throwable $e) {}
+try {
+    $cols = $pdo->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='settings'")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('vapid_public_key', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN vapid_public_key VARCHAR(200) NULL");
+    if (!in_array('vapid_private_key', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN vapid_private_key VARCHAR(200) NULL");
+} catch(Throwable $e) {}
