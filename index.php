@@ -303,6 +303,8 @@ function settings(): array {
         'watermark_enabled'=>1,
         'watermark_text'=>'',
         'actionbar_json'=>'',
+        'vapid_public_key'=>'',
+        'vapid_private_key'=>'',
     ];
     if (!$s) return $s = $defaults;
     // ترکیب با پیش‌فرض برای جلوگیری از undefined index بعد از نصب
@@ -313,7 +315,63 @@ function level_name(int $points): string { if ($points >= 5000) return 'استا
 function access_label(string $type, int $price=0): string { return $type==='paid' ? money($price).' تومان' : ($type==='like' ? 'با لایک' : 'رایگان'); }
 function status_label(string $s): string { return ['draft'=>'پیش‌نویس','pending'=>'در انتظار بررسی','published'=>'منتشرشده','rejected'=>'رد شده','removed'=>'حذف شده'][$s] ?? $s; }
 function role_label(string $s): string { return ['member'=>'کاربر عادی','expert'=>'تعمیرکار تأییدشده','moderator'=>'ناظر','admin'=>'مدیر کل','superadmin'=>'سوپر ادمین'][$s] ?? $s; }
-function notify_user(int $id, string $type, string $title, string $body, string $link=''): void { $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)'); $s->execute([$id,$type,$title,$body,$link]); } function bk_notif_icon(string $t): string { return ['admin'=>'⚙️','system'=>'📢','ticket'=>'🎫','wallet'=>'👛','board'=>'🏪','sale'=>'💰','like'=>'❤️','follow'=>'👥','badge'=>'🏅','repair'=>'🛠'][$t] ?? '🔔'; }
+function notify_user(int $id, string $type, string $title, string $body, string $link=''): void { $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)'); $s->execute([$id,$type,$title,$body,$link]); if(function_exists('bk_send_push')){try{bk_send_push($id,$title,$body,$link);}catch(\Throwable $e){}} } 
+/* ---------- Web Push Notifications (v5.12) ---------- */
+if(is_file(__DIR__.'/php-extended/webpush.php')) require_once __DIR__.'/php-extended/webpush.php';
+function bk_vapid_keys(): array {
+    $s = settings();
+    $pub = trim((string)($s['vapid_public_key'] ?? ''));
+    $prv = trim((string)($s['vapid_private_key'] ?? ''));
+    if ($pub !== '' && $prv !== '') return ['public' => $pub, 'private' => $prv];
+    // Auto-create columns if missing
+    try {
+        $cols = db()->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='settings' AND COLUMN_NAME IN ('vapid_public_key','vapid_private_key')")->fetchAll(\PDO::FETCH_COLUMN);
+        if (!in_array('vapid_public_key', $cols)) @db()->exec("ALTER TABLE settings ADD COLUMN vapid_public_key VARCHAR(200) NULL");
+        if (!in_array('vapid_private_key', $cols)) @db()->exec("ALTER TABLE settings ADD COLUMN vapid_private_key VARCHAR(200) NULL");
+        // Refresh settings cache
+        $s = db()->query('SELECT * FROM settings WHERE id=1 LIMIT 1')->fetch() ?: [];
+    } catch(\Throwable $e) {}
+    // Generate VAPID keys if not exists
+    if (function_exists('openssl_pkey_new') && defined('OPENSSL_ALGO_SHA256')) {
+        try {
+            $key = openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC]);
+            if ($key) {
+                $detail = openssl_pkey_get_details($key);
+                $d = $detail['ec']['d'] ?? '';
+                $x = str_pad($detail['ec']['x'] ?? '', 32, "\0", STR_PAD_LEFT);
+                $y = str_pad($detail['ec']['y'] ?? '', 32, "\0", STR_PAD_LEFT);
+                $pubKey = chr(4) . $x . $y;
+                $pubB64 = rtrim(strtr(base64_encode($pubKey), '+/', '-_'), '=');
+                $prvB64 = rtrim(strtr(base64_encode($d), '+/', '-_'), '=');
+                try { db()->prepare("UPDATE settings SET vapid_public_key=?, vapid_private_key=? WHERE id=1")->execute([$pubB64, $prvB64]); } catch(\Throwable $e) {}
+                return ['public' => $pubB64, 'private' => $prvB64];
+            }
+        } catch(\Throwable $e) {}
+    }
+    return ['public' => '', 'private' => ''];
+}
+function bk_send_push(int $userId, string $title, string $body, string $link = ''): void {
+    if (!function_exists('wp_send_push')) return;
+    try {
+        $q = db()->prepare('SELECT id,endpoint,p256dh,auth FROM push_subscriptions WHERE user_id=?');
+        $q->execute([$userId]);
+        $subs = $q->fetchAll();
+        if (!$subs) return;
+        $keys = bk_vapid_keys();
+        if ($keys['public'] === '' || $keys['private'] === '') return;
+        $payload = json_encode(['title'=>$title,'body'=>mb_substr($body,0,200),'link'=>$link,'id'=>$userId.'-'.time(),'tag'=>'bk-'.$userId,'icon'=>'/assets/icon-192.png'], JSON_UNESCAPED_UNICODE);
+        foreach ($subs as $sub) {
+            $ok = wp_send_push(['endpoint'=>$sub['endpoint'],'p256dh'=>$sub['p256dh'],'auth'=>$sub['auth']], $payload, $keys);
+            if (!$ok) {
+                db()->prepare('DELETE FROM push_subscriptions WHERE id=?')->execute([(int)$sub['id']]);
+            }
+        }
+    } catch(\Throwable $e) {}
+}
+/* bk_web_push_send moved to php-extended/webpush.php */
+
+
+function bk_notif_icon(string $t): string { return ['admin'=>'⚙️','system'=>'📢','ticket'=>'🎫','wallet'=>'👛','board'=>'🏪','sale'=>'💰','like'=>'❤️','follow'=>'👥','badge'=>'🏅','repair'=>'🛠'][$t] ?? '🔔'; }
 function credit(int $userId, int $amount, string $type, string $note, ?int $tipId=null, ?int $requestId=null): void { if($amount<=0)return; $pdo=db(); $pdo->prepare('UPDATE users SET balance=balance+? WHERE id=?')->execute([$amount,$userId]); $q=$pdo->prepare('SELECT balance FROM users WHERE id=?');$q->execute([$userId]);$balance=(int)$q->fetchColumn(); $pdo->prepare('INSERT INTO wallet_transactions(user_id,type,amount,balance_after,tip_id,request_id,note) VALUES(?,?,?,?,?,?,?)')->execute([$userId,$type,$amount,$balance,$tipId,$requestId,$note]); }
 function debit(int $userId, int $amount, string $type, string $note, ?int $tipId=null, ?int $requestId=null): bool { $pdo=db(); $pdo->beginTransaction(); try { $q=$pdo->prepare('SELECT balance FROM users WHERE id=? FOR UPDATE');$q->execute([$userId]);$balance=(int)$q->fetchColumn(); if($balance<$amount){$pdo->rollBack();return false;} $pdo->prepare('UPDATE users SET balance=balance-? WHERE id=?')->execute([$amount,$userId]); $pdo->prepare('INSERT INTO wallet_transactions(user_id,type,amount,balance_after,tip_id,request_id,note) VALUES(?,?,?,?,?,?,?)')->execute([$userId,$type,-$amount,$balance-$amount,$tipId,$requestId,$note]); $pdo->commit(); return true; } catch(Throwable $e){$pdo->rollBack();throw $e;} }
 function award(int $userId,int $points):void{db()->prepare('UPDATE users SET points=points+? WHERE id=?')->execute([$points,$userId]);}
@@ -495,7 +553,61 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
 })();
 (function(){
   try{
-    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=4',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=6',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
+
+// ═══════ Push Notification System ═══════
+(function(){
+  if(!('Notification' in window) || !navigator.serviceWorker) return;
+  var VAPID_KEY = <?=json_encode(function_exists('bk_vapid_keys') ? bk_vapid_keys()['public'] : '')?>;
+  function urlBase64ToUint8Array(b64){
+    var pad = b64.length % 4;
+    if(pad) b64 += '==='.slice(0, 4 - pad);
+    var raw = atob(b64.replace(/-/g,'+').replace(/_/g,'/'));
+    var arr = new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+    return arr;
+  }
+  function sendSubscription(sub){
+    var j = sub.toJSON();
+    fetch('/push-subscribe',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+      body:JSON.stringify({endpoint:j.endpoint,keys:{p256dh:j.keys.p256dh,auth:j.keys.auth}})
+    }).catch(function(){});
+  }
+  function subscribe(){
+    if(!VAPID_KEY) return;
+    navigator.serviceWorker.ready.then(function(reg){
+      reg.pushManager.getSubscription().then(function(existing){
+        if(existing){ sendSubscription(existing); return; }
+        reg.pushManager.subscribe({
+          userVisibilityState:'visible',
+          applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
+        }).then(function(sub){
+          sendSubscription(sub);
+        }).catch(function(e){ console.log('Push subscribe error:', e); });
+      });
+    });
+  }
+  // Auto-subscribe if already granted
+  if(Notification.permission === 'granted'){
+    setTimeout(subscribe, 3000);
+  }
+  // Expose for manual trigger
+  window.bkEnablePush = function(){
+    if(Notification.permission === 'granted'){ subscribe(); return; }
+    Notification.requestPermission().then(function(p){
+      if(p === 'granted'){ subscribe(); bkToast && bkToast('✅ اعلان‌ها فعال شدند'); }
+    });
+  };
+  // Show enable prompt if not decided
+  if(Notification.permission === 'default'){
+    setTimeout(function(){
+      var bar = document.getElementById('pushEnableBar');
+      if(bar) bar.classList.add('show');
+    }, 8000);
+  }
+})();
   }catch(e){}
 })();
 </script>
@@ -653,12 +765,13 @@ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded'
                 <button class="theme-btn" type="button" id="themeToggle" aria-label="تغییر تم">🌙</button>
                 <?php if($u):?>
                     <a class="hide-mobile" href="<?=url('profile/'.$u['id'])?>" style="display:inline-flex;align-items:center;gap:6px">👤 <?=h($u['name'])?></a>
-                    <?php if($u):?><?php $bkUnread=0;$bkNotifs=[];try{$bkUnread=(int)db()->query('SELECT COUNT(*) FROM notifications WHERE user_id='.(int)$u['id'].' AND is_read=0')->fetchColumn();$bkNotifs=db()->query('SELECT id,type,title,body,link,is_read,created_at FROM notifications WHERE user_id='.(int)$u['id'].' ORDER BY id DESC LIMIT 8')->fetchAll();}catch(Throwable $e){}?><div class="notif-wrap" id="notifWrap"><button class="notif-bell" type="button" id="notifBell" aria-label="اعلان‌ها" title="اعلان‌ها">🔔<?php if($bkUnread>0):?><span class="notif-badge" id="notifBadge"><?=fa($bkUnread>99?99:$bkUnread)?></span><?php else:?><span class="notif-badge" id="notifBadge" hidden>0</span><?php endif;?></button><div class="notif-drop" id="notifDrop" hidden><div class="notif-head">🔔 اعلان‌های اخیر</div><div id="notifList" class="notif-list"><?php if($bkNotifs):?><?php foreach($bkNotifs as $bn):?><a class="notif-item<?=($bn['is_read']??1)?'':' unread'?>" href="<?=h($bn['link']?:url('notifications'))?>"><strong><span class="nic"><?=bk_notif_icon((string)$bn['type'])?></span><?=h($bn['title'])?></strong><small><?=h(mb_substr((string)($bn['body']??''),0,90))?> · <?=ago($bn['created_at'])?></small></a><?php endforeach;?><?php else:?><div class="notif-empty">اعلان جدیدی ندارید ✓</div><?php endif;?></div><a class="notif-all" href="<?=url('notifications')?>">مشاهده همه اعلان‌ها ←</a></div></div><?php endif;?>
                 <?php else:?>
                     <a class="btn btn-secondary btn-sm hide-mobile" href="<?=url('login')?>">ورود</a>
                     <a class="btn btn-primary btn-sm hide-mobile" href="<?=url('register')?>">ثبت‌نام</a>
                 <?php endif;?>
             </div>
+            <?php if($u):?><?php $bkUnread=0;$bkNotifs=[];try{$__bkQ1=db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0');$__bkQ1->execute([(int)$u['id']]);$bkUnread=(int)$__bkQ1->fetchColumn();$__bkQ2=db()->prepare('SELECT id,type,title,body,link,is_read,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 8');$__bkQ2->execute([(int)$u['id']]);$bkNotifs=$__bkQ2->fetchAll();}catch(Throwable $e){}?>
+            <div class="notif-wrap" id="notifWrap"><button class="notif-bell" type="button" id="notifBell" aria-label="اعلان‌ها" title="اعلان‌ها">🔔<?php if($bkUnread>0):?><span class="notif-badge" id="notifBadge"><?=fa($bkUnread>99?99:$bkUnread)?></span><?php else:?><span class="notif-badge" id="notifBadge" hidden>0</span><?php endif;?></button><div class="notif-drop" id="notifDrop" hidden><div class="notif-head">🔔 اعلان‌های اخیر</div><div id="notifList" class="notif-list"><?php if($bkNotifs):?><?php foreach($bkNotifs as $bn):?><a class="notif-item<?=($bn['is_read']??1)?'':' unread'?>" href="<?=h($bn['link']?:url('notifications'))?>"><strong><span class="nic"><?=bk_notif_icon((string)$bn['type'])?></span><?=h($bn['title'])?></strong><small><?=h(mb_substr((string)($bn['body']??''),0,90))?> · <?=ago($bn['created_at'])?></small></a><?php endforeach;?><?php else:?><div class="notif-empty">اعلان جدیدی ندارید ✓</div><?php endif;?></div><a class="notif-all" href="<?=url('notifications')?>">مشاهده همه اعلان‌ها ←</a></div></div><?php endif;?>
         </div></header>
 
         <!-- Mobile drawer (off-canvas) -->
@@ -682,21 +795,90 @@ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded'
                     <a href="<?=url('bookmarks')?>">🔖 نشانک‌ها</a>
                     <a href="<?=url('favorites')?>">♥ علاقه‌مندی‌ها</a>
                     <a href="<?=url('notifications')?>">🔔 اعلان‌ها</a>
-                    <a href="<?=url('upload')?>">➕ آپلود قلق</a>
-                <?php if(admin_user($u)):?><a href="<?=url('admin')?>">⚙️ پنل مدیریت</a><?php endif;?>
+                        <?php if(admin_user($u)):?><a href="<?=url('admin')?>">⚙️ پنل مدیریت</a><?php endif;?>
                 <a href="<?=url('logout')?>">🚪 خروج</a>
             <?php else:?>
                 <a href="<?=url('login')?>">🔑 ورود</a>
                 <a href="<?=url('register')?>">✨ ثبت‌نام رایگان</a>
             <?php endif;?>
         </div>
-        <div class="install-banner" id="installBanner"><span id="installText">📱 بردخان را روی صفحه اصلی نصب کنید</span> <button class="btn btn-primary btn-sm" id="installBtn" type="button">نصب</button><button class="btn btn-secondary btn-sm" type="button" onclick="document.getElementById('installBanner').classList.remove('show')">✕</button></div><?php $f=pull_flash(); if($f):?><div class="wrap"><div class="<?=h($f[1])?>"><?=h($f[0])?></div></div><?php endif; ?><?php }
+        <div class="push-enable-bar" id="pushEnableBar" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#0d6b55;color:#fff;padding:12px 20px;border-radius:16px;font-size:13px;z-index:80;box-shadow:0 8px 30px rgba(0,0,0,.4);text-align:center;max-width:92%;cursor:pointer" onclick="bkEnablePush();this.style.display='none'">🔔 <b>اعلان‌های بردخان را فعال کنید</b> — از فروش و تیکت جدید باخبر شوید <span style="opacity:.7;margin-right:8px">✕</span></div>
+<div class="install-banner" id="installBanner"><span id="installText">📱 بردخان را روی صفحه اصلی نصب کنید</span> <button class="btn btn-primary btn-sm" id="installBtn" type="button">نصب</button><button class="btn btn-secondary btn-sm" type="button" onclick="document.getElementById('installBanner').classList.remove('show')">✕</button></div><?php $f=pull_flash(); if($f):?><div class="wrap"><div class="<?=h($f[1])?>"><?=h($f[0])?></div></div><?php endif; ?><?php }
 function footer_html(): void { ?><footer class="footer"><div class="wrap footer-grid"><div><div class="logo" style="color:#fff">⌁ برد<em>خان</em></div><p>بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی؛ راه‌حل‌های واقعی از تعمیرکاران حرفه‌ای.</p></div><div><h3>دسترسی سریع</h3><ul><li><a href="<?=url('tips')?>">همه قلق‌ها</a></li><li><a href="<?=url('reels')?>">ریلز قلق‌ها</a></li><li><a href="<?=url('repairs')?>">درخواست تعمیر</a></li><li><a href="<?=url('leaderboard')?>">رتبه‌بندی</a></li><li><a href="<?=url('premium')?>">اشتراک ویژه</a></li><li><a href="<?=url('tour')?>">آموزش و امکانات</a></li></ul></div><div><h3>پشتیبانی</h3><ul><li><a href="<?=url('tickets')?>">تیکت پشتیبانی</a></li><li><a href="<?=url('contact')?>">تماس با ما</a></li><li><a href="<?=url('about')?>">درباره ما</a></li><li><a href="<?=url('terms')?>">قوانین استفاده</a></li><li><a href="<?=url('privacy')?>">حریم خصوصی</a></li></ul></div></div><?php $bImg=trim((string)($s['trust_badge_image']??'')); $bLink=trim((string)($s['trust_badge_link']??'')); if($bImg!==''): ?>
 <div class="wrap" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap">
   <a href="<?=h($bLink?:'#')?>" <?= $bLink?'target="_blank" rel="noopener nofollow"':'' ?>><img src="<?=h($bImg)?>" alt="نماد اعتماد" loading="lazy" style="height:72px;border-radius:10px;background:#fff;padding:6px"></a>
   <div style="font-size:11px;line-height:2;color:#c9d4de">پرداخت امن از طریق درگاه‌های معتبر ایرانی<br><a class="check" href="<?=url('payment-status')?>">وضعیت پرداخت سایت</a></div>
 </div>
 <?php endif; ?>
+<?php /* PWA Install Banner */ ?>
+<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#065f46,#047857);color:#fff;padding:16px 24px;border-radius:20px;z-index:95;box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:92%;text-align:center;animation:bkSlideUp .5s ease forwards">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center">
+    <span style="font-size:28px">📱</span>
+    <div style="text-align:right;flex:1;min-width:200px">
+      <b style="font-size:14px;display:block">اپلیکیشن بردخان را نصب کنید!</b>
+      <small style="opacity:.85;font-size:11px">دسترسی سریع + اعلان‌های فوری + بدون مرورگر</small>
+    </div>
+    <button id="pwaInstallBtn" class="btn" style="background:#fff;color:#065f46;font-weight:900;font-size:13px;padding:10px 20px;border-radius:14px;border:0;cursor:pointer;white-space:nowrap">📲 نصب اپ</button>
+    <button onclick="document.getElementById('pwaInstallBanner').style.display='none';localStorage.setItem('pwa_dismissed','1')" style="background:transparent;border:0;color:#fff;font-size:18px;cursor:pointer;opacity:.6;padding:4px">✕</button>
+  </div>
+</div>
+<script>
+(function(){
+  var banner = document.getElementById('pwaInstallBanner');
+  if(!banner) return;
+  // Don't show if already installed or dismissed
+  if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return;
+  if(window.navigator.standalone === true) return;
+  if(localStorage.getItem('pwa_dismissed') === '1') return;
+  var deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredPrompt = e;
+    banner.style.display = 'block';
+  });
+  // For iOS Safari (no beforeinstallprompt)
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if(isIOS && !window.navigator.standalone){
+    setTimeout(function(){
+      banner.style.display = 'block';
+      var btn = document.getElementById('pwaInstallBtn');
+      if(btn) btn.textContent = '📲 راهنمای نصب';
+      btn && btn.addEventListener('click', function(){
+        alert('برای نصب:\n۱. دکمه Share (اشتراک‌گذاری) را بزنید\n۲. «Add to Home Screen» را انتخاب کنید');
+      });
+    }, 5000);
+    return;
+  }
+  var btn = document.getElementById('pwaInstallBtn');
+  if(btn){
+    btn.addEventListener('click', function(){
+      if(deferredPrompt){
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function(choice){
+          deferredPrompt = null;
+          banner.style.display = 'none';
+        });
+      } else {
+        // Fallback: show manual instructions
+        alert('برای نصب اپ:\n• در کروم: روی آیکون ⋮ در بالای مرورگر بزنید و «Install app» را انتخاب کنید\n• در اج: روی آیکون ⋯ بزنید و «Apps → Install this site as an app» را بزنید');
+        banner.style.display = 'none';
+        localStorage.setItem('pwa_dismissed', '1');
+      }
+    });
+  }
+  // Auto-show after delay if beforeinstallprompt hasn't fired but supported
+  if('serviceWorker' in navigator && !isIOS){
+    setTimeout(function(){
+      if(banner.style.display === 'none' && !deferredPrompt){
+        // Check if install is possible
+        if(navigator.getInstalledRelatedApps){
+          banner.style.display = 'block';
+        }
+      }
+    }, 10000);
+  }
+})();
+</script>
 <div class="wrap copyright">© <?=fa(date('Y'))?> بردخان — تمامی حقوق محفوظ است. <span style="opacity:.55;font-size:10px">· نسخه <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></span></div></footer><?php if(is_file(__DIR__.'/php-extended/bk_actionbar.php')){require_once __DIR__.'/php-extended/bk_actionbar.php';bk_render_actionbar(function_exists('current_user')?current_user():null);} ?><script>
 (function(){
   var CSRF = '<?=csrf()?>';
@@ -1025,8 +1207,43 @@ if(in_array($page,['robots.txt','robots'],true)){include __DIR__.'/robots.php';e
 $route=bk_route();$parts=$route===''?[]:explode('/',$route);$page=$parts[0]??'home';$id=(int)($parts[1]??0);
 if($page==='diag-version'){ header('Content-Type: text/html; charset=utf-8'); $rows=''; $rows.='<b>نسخهٔ کد اجراشدهٔ سرور:</b> <span style="font-size:22px;color:#0a7a4a">'.(defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'نامشخص').'</span>'.(defined('BORDKHAN_VERSION')&&BORDKHAN_VERSION>='4.0'?' <b>✓ جدید است</b>':' <b style="color:#b3261e">✗ قدیمی است — فایل‌ها آپلود نشده‌اند یا کش سرور!</b>').'<br>'; $rows.='نسخهٔ PHP: <b dir="ltr">'.PHP_VERSION.'</b><br>'; foreach(['index.php','pages/admin.php','pages/boards.php','assets/style.css','sw.js'] as $f){$p=__DIR__.'/'.$f;$rows.='فایل <span dir="ltr">'.$f.'</span>: '.($p&&is_file($p)?'<span dir="ltr">'.date('Y-m-d H:i',@filemtime($p)).'</span>':'<b style="color:#b3261e">ناموجود!</b>').'<br>';} if(function_exists('opcache_get_status')){$st=@opcache_get_status(false);$rows.='OPcache: '.($st?'فعال':'غیرفعال');if($st){$rows.=' · <span dir="ltr">validate_timestamps='.($st['opcache_statistics']['num_cached_scripts']?'off':'on').'</span>';$cached=isset($st['scripts'])&&strpos(implode('',array_keys($st['scripts'])),'index.php')!==false;$rows.=$cached?' · <b style="color:#b3261e">index.php در کش اپ‌کش است — ممکن است کد قدیمی اجرا شود!</b>':' · index.php در کش نیست ✓';}}else{$rows.='OPcache: نصب نیست<br>';} $rows.='<br><b>وضعیت قلق‌ها در دیتابیس:</b><br>'; try{$q=db()->query("SELECT status,COUNT(*) c FROM tips GROUP BY status");foreach($q->fetchAll() as $r){$rows.='• <span dir="ltr">'.$r['status'].'</span>: '.fa((int)$r['c']).'<br>';}$q2=db()->query('SELECT id,title,status FROM tips ORDER BY id DESC LIMIT 5');$rows.='<br><b>۵ قلق آخر:</b><br>';foreach($q2->fetchAll() as $r){$rows.='• #'.fa((int)$r['id']).' '.h(mb_substr($r['title'],0,40)).' — <b style="color:'.($r['status']==='published'?'#0a7a4a':'#b3261e').'">'.$r['status'].'</b><br>';}}catch(Throwable $e){$rows.='خطای دیتابیس: '.h($e->getMessage()).'<br>';} $rows.='<br><b>اگر نسخهٔ بالا قدیمی است:</b><br>۱) همهٔ فایل‌های ZIP جدید را روی سرور بازنویسی کنید (به‌خصوص index.php و pages/).<br>۲) اگر OPcache فعال بود، یک‌بار <span dir="ltr">/php-extended/opcache_clear.php?key=INSTALL_KEY</span> را باز کنید.<br>۳) مرورگر را با <b>Ctrl+Shift+R</b> رفرش کنید و فوتر سایت باید «نسخه ۴.۰» را نشان دهد.'; echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>عیب‌یابی نسخه</title></head><body style="font-family:Tahoma;background:#f4f6f8;padding:24px"><div style="max-width:780px;margin:auto;background:#fff;border-radius:14px;padding:24px;border:1px solid #e3e8ee;font-size:14px;line-height:2.2">'.$rows.'</div></body></html>'; exit; }
 if($page==='ajax-comments'){ $tipId=(int)($_GET['tip_id']??0);$items=[];$can=current_user();if($tipId>0){$q=db()->prepare('SELECT c.id,c.body,c.created_at,u.name user_name FROM comments c JOIN users u ON u.id=c.user_id WHERE c.tip_id=? AND c.is_deleted=0 ORDER BY c.created_at ASC LIMIT 100');$q->execute([$tipId]);foreach($q->fetchAll() as $c){$items[]=['id'=>(int)$c['id'],'name'=>$c['user_name'],'body'=>$c['body'],'ago'=>ago($c['created_at'])];}}$cnt=db()->prepare('SELECT COUNT(*) FROM comments WHERE tip_id=? AND is_deleted=0');$cnt->execute([$tipId]);bk_json_out(['ok'=>true,'count'=>(int)$cnt->fetchColumn(),'can'=>(bool)$can,'items'=>$items]); }
-if($page==='ajax-notifications'){ $u=current_user(); if(!$u){bk_json_out(['unread'=>0,'items'=>[]]);} if(!empty($_GET['mark'])){ db()->prepare('UPDATE notifications SET is_read=1 WHERE user_id=?')->execute([(int)$u['id']]); bk_json_out(['ok'=>true]); } $q=db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0');$q->execute([(int)$u['id']]);$unread=(int)$q->fetchColumn();$q=db()->prepare('SELECT id,type,title,body,link,is_read,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 8');$q->execute([(int)$u['id']]);$items=[];foreach($q->fetchAll() as $n){$items[]=['id'=>(int)$n['id'],'type'=>$n['type'],'title'=>$n['title'],'body'=>mb_substr((string)($n['body']??''),0,90),'link'=>$n['link'],'unread'=>(int)$n['is_read']===0,'ago'=>ago($n['created_at'])];}bk_json_out(['unread'=>$unread,'items'=>$items]); }
-if($page==='ajax-categories'){ $q=trim($_GET['q']??'');$like=$q!==''?'%'.$q.'%':null;if($like){$st=db()->prepare('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id WHERE c.name LIKE ? OR p.name LIKE ? ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');$st->execute([$like,$like]);}else{$st=db()->query('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');}header('Content-Type: application/json; charset=utf-8');echo json_encode(['q'=>$q,'rows'=>$st->fetchAll()],JSON_UNESCAPED_UNICODE);exit; }
+if($page==='diag-push'){
+    $u = current_user();
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "== Push Notification Diagnostic ==\n\n";
+    echo "HTTPS: " . (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'YES ✓' : 'NO ✗ (push requires HTTPS!)') . "\n";
+    echo "Site URL: " . SITE_URL . "\n";
+    echo "User: " . ($u ? $u['name'] . ' #' . $u['id'] : 'guest') . "\n\n";
+    // VAPID keys
+    $keys = bk_vapid_keys();
+    echo "VAPID public key: " . ($keys['public'] ? substr($keys['public'], 0, 20) . '... ✓' : 'EMPTY ✗') . "\n";
+    echo "VAPID private key: " . ($keys['private'] ? 'exists ✓' : 'EMPTY ✗') . "\n\n";
+    // Push subscriptions
+    if($u){
+        try {
+            $q = db()->prepare('SELECT id,endpoint,p256dh,auth,created_at FROM push_subscriptions WHERE user_id=?');
+            $q->execute([(int)$u['id']]);
+            $subs = $q->fetchAll();
+            echo "Your subscriptions: " . count($subs) . "\n";
+            foreach($subs as $s){
+                echo "  #" . $s['id'] . " endpoint: " . substr($s['endpoint'], 0, 60) . "... p256dh: " . (strlen($s['p256dh'])>10?'✓':'✗ empty') . " auth: " . (strlen($s['auth'])>5?'✓':'✗ empty') . " created: " . $s['created_at'] . "\n";
+            }
+        } catch(\Throwable $e) {
+            echo "ERROR: " . $e->getMessage() . "\n";
+            echo "Table push_subscriptions might not exist. Run /php-extended/migrate.php\n";
+        }
+    }
+    echo "\nTotal subscriptions: ";
+    try { echo db()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn(); } catch(\Throwable $e) { echo 'N/A (table missing)'; }
+    echo "\n\nWeb Push functions: ";
+    echo function_exists('wp_send_push') ? 'loaded ✓' : 'NOT loaded ✗';
+    echo "\nopenssl: " . (function_exists('openssl_pkey_new') ? 'available ✓' : 'MISSING ✗');
+    echo "\ncurl: " . (function_exists('curl_init') ? 'available ✓' : 'MISSING ✗');
+    echo "\nhash_hkdf: " . (function_exists('hash_hkdf') ? 'available ✓' : 'MISSING ✗');
+    exit;
+}
+if($page==='push-subscribe'){ $u=current_user(); if(!$u)bk_json_out(['ok'=>false,'error'=>'login'],401); $raw=file_get_contents('php://input'); $data=json_decode($raw,true); if(!$data||empty($data['endpoint']))bk_json_out(['ok'=>false,'error'=>'no data'],422); try{ $existing=db()->prepare('SELECT id FROM push_subscriptions WHERE user_id=? AND endpoint=?'); $existing->execute([(int)$u['id'],$data['endpoint']]); if(!$existing->fetchColumn()){ db()->prepare('INSERT INTO push_subscriptions(user_id,endpoint,p256dh,auth) VALUES(?,?,?,?)')->execute([(int)$u['id'],$data['endpoint'],$data['keys']['p256dh']??'',$data['keys']['auth']??'']); } bk_json_out(['ok'=>true]); }catch(Throwable $e){ bk_json_out(['ok'=>false,'error'=>$e->getMessage()],500); } }
+if($page==='ajax-notifications'){ $u=current_user(); if(!$u){bk_json_out(['unread'=>0,'items'=>[]]);exit;}  if(!empty($_GET['mark'])){ db()->prepare('UPDATE notifications SET is_read=1 WHERE user_id=?')->execute([(int)$u['id']]); bk_json_out(['ok'=>true]); } $q=db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0');$q->execute([(int)$u['id']]);$unread=(int)$q->fetchColumn();$q=db()->prepare('SELECT id,type,title,body,link,is_read,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 8');$q->execute([(int)$u['id']]);$items=[];foreach($q->fetchAll() as $n){$items[]=['id'=>(int)$n['id'],'type'=>$n['type'],'title'=>$n['title'],'body'=>mb_substr((string)($n['body']??''),0,90),'link'=>$n['link'],'unread'=>(int)$n['is_read']===0,'ago'=>ago($n['created_at'])];}bk_json_out(['unread'=>$unread,'items'=>$items]); }if($page==='ajax-categories'){ $q=trim($_GET['q']??'');$like=$q!==''?'%'.$q.'%':null;if($like){$st=db()->prepare('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id WHERE c.name LIKE ? OR p.name LIKE ? ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');$st->execute([$like,$like]);}else{$st=db()->query('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');}header('Content-Type: application/json; charset=utf-8');echo json_encode(['q'=>$q,'rows'=>$st->fetchAll()],JSON_UNESCAPED_UNICODE);exit; }
 /* ---------- v5.7: کرون سبک پاک‌سازی — کدهای منقضی، نشست‌های کهنه، لاگ قدیمی ---------- */
 if($page==='cron-cleanup'){
     $key=(string)($_GET['key']??'');
@@ -1297,7 +1514,7 @@ if($page==='admin'){require __DIR__.'/pages/admin.php';exit;}
 
 if($page==='bookmarks'){$u=require_login();$q=db()->prepare('SELECT t.*,b.note,b.created_at bookmarked_at FROM bookmarks b JOIN tips t ON t.id=b.tip_id WHERE b.user_id=? AND t.status="published" ORDER BY b.created_at DESC');$q->execute([$u['id']]);$items=$q->fetchAll();header_html('نشانک‌های من');?><main class="wrap page"><div class="page-title"><h1>نشانک‌های من</h1><p><?=fa(count($items))?> قلق ذخیره شده</p></div><div class="grid grid-3"><?php foreach($items as $t)tip_card($t); if(!$items):?><div class="card empty">هنوز هیچ قلق را نشانک نکرده‌اید.</div><?php endif;?></div></main><?php footer_html();exit;}
 if($page==='favorites'){$u=require_login();$q=db()->prepare('SELECT t.* FROM favorites f JOIN tips t ON t.id=f.tip_id WHERE f.user_id=? AND t.status="published" ORDER BY f.created_at DESC');$q->execute([$u['id']]);$items=$q->fetchAll();header_html('قلق‌های مورد علاقه');?><main class="wrap page"><div class="page-title"><h1>علاقه‌مندی‌های من</h1><p><?=fa(count($items))?> قلق پسندیده</p></div><div class="grid grid-3"><?php foreach($items as $t)tip_card($t); if(!$items):?><div class="card empty">هنوز قلقی را نپسندیده‌اید.</div><?php endif;?></div></main><?php footer_html();exit;}
-if($page==='notifications'){$u=require_login();$items=db()->prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100');$items->execute([$u['id']]);$items=$items->fetchAll();db()->prepare('UPDATE notifications SET is_read=1 WHERE user_id=?')->execute([$u['id']]);header_html('اعلان‌ها');?><main class="wrap page"><div class="page-title"><h1>اعلان‌ها</h1></div><div class="card"><?php foreach($items as $n):?><a class="leader-row" href="<?=h($n['link']?:'#')?>"><span class="grow"><strong><?=h($n['title'])?></strong><small><?=h($n['body'])?> · <?=ago($n['created_at'])?></small></span></a><?php endforeach;?><?php if(!$items):?><div class="empty">اعلانی ندارید.</div><?php endif;?></div></main><?php footer_html();exit;}
+if($page==='notifications'){$u=require_login();$items=db()->prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100');$items->execute([(int)$u['id']]);$items=$items->fetchAll();db()->prepare('UPDATE notifications SET is_read=1 WHERE user_id=?')->execute([(int)$u['id']]);header_html('اعلان‌ها');?><main class="wrap page"><div class="page-title"><h1>اعلان‌ها</h1></div><div class="card"><?php foreach($items as $n):?><a class="leader-row" href="<?=h($n['link']?:'#')?>"><span class="grow"><strong><?=h($n['title'])?></strong><small><?=h($n['body'])?> · <?=ago($n['created_at'])?></small></span></a><?php endforeach;?><?php if(!$items):?><div class="empty">اعلانی ندارید.</div><?php endif;?></div></main><?php footer_html();exit;}
 
 if($page==='settings'){$u=require_login();header_html('تنظیمات');?><main class="wrap page"><div class="page-title"><h1>تنظیمات حساب</h1></div><div class="card auth-card"><h3>پروفایل</h3><form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="profile_update"><div class="form-group"><label class="field-label">نام</label><input class="field" name="name" value="<?=h($u['name'])?>"></div><div class="form-group"><label class="field-label">بیوگرافی</label><textarea class="field" name="bio" rows="4"><?=h($u['bio'])?></textarea></div><button class="btn btn-primary">ذخیره</button></form></div>
 <div class="card auth-card" style="margin-top:16px"><h3>🖥 نشست‌های فعال (دستگاه‌های واردشده)</h3>
@@ -1586,6 +1803,15 @@ html,body{margin:0;padding:0;background:var(--reel-bg);height:100%;overscroll-be
 .reels-empty .box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:28px 22px;max-width:360px}
 .reels-empty h2{margin:0 0 8px;font-size:18px}
 .reels-empty p{margin:0 0 14px;color:#9fb0c3;font-size:13px;line-height:2}
+.reel-media .reel-slide{position:absolute;inset:0;display:none;align-items:center;justify-content:center}
+.reel-media .reel-slide.active{display:flex}
+.reel-media .reel-slide img{width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none}
+.reel-media .reel-slide img.bk-blur{filter:blur(18px) brightness(.7) scale(1.06)}
+.reel-media .reel-slide video{width:100%;height:100%;object-fit:contain;background:#000}
+.reel-media .reel-slide iframe{width:100%;height:100%;border:0;background:#000}
+.reel-media .reel-slide .vid-poster{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;background:rgba(0,0,0,.3);z-index:2}
+.reel-media .reel-slide .vid-poster .play-ic{width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.9);color:#fff;font-size:28px;display:grid;place-items:center;backdrop-filter:blur(4px)}
+.reel-media .reel-slide .vid-poster span{color:#fff;font-size:12px;font-weight:700}
 @media(min-width:768px){.reel-media img{object-fit:contain;background:#080c0e}.reel-info{inset-inline-end:110px}.reels-feed{max-width:480px;margin:0 auto;border-inline:1px solid rgba(255,255,255,.08)}}
 </style>
 </head><body class="reels-body">
@@ -1625,15 +1851,53 @@ html,body{margin:0;padding:0;background:var(--reel-bg);height:100%;overscroll-be
     // برای data attributes: JSON امن
     $dataThumbs = h(json_encode($thumbUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
     $dataFulls  = h(json_encode($fullUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    // تشخیص نوع ویدیو
+    $rawVideo=trim($t['video_url']??'');
+    $videoType=''; $videoSrc=''; $videoEmbed='';
+    if($rawVideo!==''){
+        if(preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([\w-]{6,})~',$rawVideo,$vm)){
+            $videoType='youtube'; $videoEmbed='https://www.youtube.com/embed/'.$vm[1];
+        }elseif(preg_match('~aparat\.com/v/([\w-]+)~',$rawVideo,$vm)){
+            $videoType='aparat'; $videoEmbed='https://www.aparat.com/video/video/embed/videohash/'.$vm[1].'/vt/frame';
+        }else{
+            $vp=ltrim($rawVideo,'/');
+            if(str_starts_with($vp,'uploads/')||str_starts_with($vp,'/uploads/')){
+                $videoType='local'; $videoSrc=media_url($vp,'vid',$tid,$u?(int)$u['id']:0);
+            }elseif(preg_match('#^https?://#i',$rawVideo)){
+                $videoType='local'; $videoSrc=$rawVideo;
+            }
+        }
+    }
+    $hasVideo = !$locked && $videoType!=='';
+    $videoPoster = $fullUrls[0] ?? ($thumbUrls[0] ?? '');
 ?>
 <div class="reel" id="reel-<?=$tid?>" data-id="<?=$tid?>" data-access="<?=h($t['access_type'])?>" data-price="<?=(int)$t['price']?>" data-locked="<?=$locked?'1':'0'?>" data-liked="<?=$liked?'1':'0'?>" data-index="0">
   <div class="reel-media">
     <?php if($firstDisplay): ?>
-      <img src="<?=h($firstDisplay)?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" data-thumbs="<?=$dataThumbs?>" data-fulls="<?=$dataFulls?>" loading="<?= $tid=== (int)$items[0]['id'] ? 'eager' : 'lazy' ?>">
-      <?php if(count($displayUrls)>1): ?>
-        <div class="reel-dots"><?php foreach($displayUrls as $k=>$v): ?><i class="<?=$k===0?'on':''?>"></i><?php endforeach;?></div>
+      <?php // اسلایدهای تصویری ?>
+      <?php foreach($displayUrls as $k=>$imgUrl): ?>
+        <div class="reel-slide<?=$k===0?' active':''?>" data-slide="<?=$k?>">
+          <img src="<?=h($imgUrl)?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" loading="<?= ($k===0 && $tid===(int)$items[0]['id']) ? 'eager' : 'lazy' ?>">
+        </div>
+      <?php endforeach; ?>
+      <?php // اسلاید ویدیو (فقط برای قلق‌های باز) ?>
+      <?php if($hasVideo): ?>
+        <div class="reel-slide" data-slide="<?=count($displayUrls)?>" data-has-video="1">
+          <?php if($videoType==='youtube'||$videoType==='aparat'): ?>
+            <iframe src="<?=h($videoEmbed)?>" allowfullscreen loading="lazy" allow="autoplay; encrypted-media"></iframe>
+          <?php elseif($videoType==='local'): ?>
+            <video playsinline preload="none" poster="<?=h($videoPoster)?>" data-src="<?=h($videoSrc)?>"></video>
+            <div class="vid-poster" data-play-video>
+              <div class="play-ic">▶</div>
+              <span>پخش ویدیو</span>
+            </div>
+          <?php endif; ?>
+        </div>
       <?php endif; ?>
-      <?php if(!empty($t['video_url'])): ?><div class="video-play">▶</div><?php endif; ?>
+      <?php $totalSlides = count($displayUrls) + ($hasVideo ? 1 : 0); ?>
+      <?php if($totalSlides>1): ?>
+        <div class="reel-dots"><?php for($di=0;$di<$totalSlides;$di++): ?><i class="<?=$di===0?'on':''?>"></i><?php endfor; ?></div>
+      <?php endif; ?>
     <?php else: ?>
       <div class="reel-cover" style="width:100%;height:100%;display:grid;place-items:center;color:#fff;font-size:16px;background:linear-gradient(135deg,#0d6b55,#063e37);padding:20px;text-align:center"><?=h($t['title'])?></div>
     <?php endif; ?>
@@ -1895,19 +2159,35 @@ document.addEventListener('dblclick',function(e){
   if(BKC.guest){bkToast('برای لایک وارد شوید.','/login',true);return;}
   if(reel.dataset.access==='like' && reel.dataset.locked==='1'){bkUnlock(reel);}else{bkLike(reel);}
 });
-// تعویض عکس با کلیک روی تصویر
+// تعویض اسلاید با کلیک روی رسانه (تصویر/ویدیو)
 document.addEventListener('click',function(e){
-  var img=e.target.closest('.reel-media img');
-  if(!img) return;
-  var reel=img.closest('.reel');
+  var slide=e.target.closest('.reel-slide');
+  if(!slide) return;
+  var reel=slide.closest('.reel');
   if(!reel || reel.dataset.locked==='1') return;
-  var list=currentDisplayList(reel);
-  if(list.length<2) return;
+  // اگر روی دکمه پخش ویدیو کلیک شده، ویدیو را پخش کن
+  if(e.target.closest('[data-play-video]')){
+    var vid=slide.querySelector('video');
+    if(vid){
+      if(!vid.src && vid.dataset.src) vid.src=vid.dataset.src;
+      vid.play().catch(function(){});
+      var poster=slide.querySelector('.vid-poster');
+      if(poster) poster.style.display='none';
+    }
+    return;
+  }
+  // اگر روی iframe کلیک شده، کاری نکن
+  if(e.target.tagName==='IFRAME') return;
+  // رفتن به اسلاید بعدی
+  var slides=reel.querySelectorAll('.reel-slide');
+  if(slides.length<2) return;
   var curIdx=parseInt(reel.dataset.index||'0');
-  var next=(curIdx+1)%list.length;
+  var next=(curIdx+1)%slides.length;
   reel.dataset.index=next;
-  img.src=list[next];
+  slides.forEach(function(s,i){s.classList.toggle('active',i===next);});
   updateDots(reel,next);
+  // اگر اسلاید جدید ویدیو دارد، توقف ویدیوهای قبلی
+  reel.querySelectorAll('.reel-slide video').forEach(function(v){if(!v.closest('.active')){v.pause();}});
 });
 // کیبورد: بالا/پایین
 document.addEventListener('keydown',function(e){
