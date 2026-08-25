@@ -315,6 +315,7 @@ function status_label(string $s): string { return ['draft'=>'پیش‌نویس',
 function role_label(string $s): string { return ['member'=>'کاربر عادی','expert'=>'تعمیرکار تأییدشده','moderator'=>'ناظر','admin'=>'مدیر کل','superadmin'=>'سوپر ادمین'][$s] ?? $s; }
 function notify_user(int $id, string $type, string $title, string $body, string $link=''): void { $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)'); $s->execute([$id,$type,$title,$body,$link]); if(function_exists('bk_send_push')){try{bk_send_push($id,$title,$body,$link);}catch(\Throwable $e){}} } 
 /* ---------- Web Push Notifications (v5.12) ---------- */
+if(is_file(__DIR__.'/php-extended/webpush.php')) require_once __DIR__.'/php-extended/webpush.php';
 function bk_vapid_keys(): array {
     $s = settings();
     $pub = trim((string)($s['vapid_public_key'] ?? ''));
@@ -340,49 +341,25 @@ function bk_vapid_keys(): array {
     return ['public' => '', 'private' => ''];
 }
 function bk_send_push(int $userId, string $title, string $body, string $link = ''): void {
+    if (!function_exists('wp_send_push')) return;
     try {
-        $q = db()->prepare('SELECT endpoint,p256dh,auth FROM push_subscriptions WHERE user_id=?');
+        $q = db()->prepare('SELECT id,endpoint,p256dh,auth FROM push_subscriptions WHERE user_id=?');
         $q->execute([$userId]);
         $subs = $q->fetchAll();
         if (!$subs) return;
         $keys = bk_vapid_keys();
         if ($keys['public'] === '' || $keys['private'] === '') return;
-        $payload = json_encode(['title' => $title, 'body' => mb_substr($body, 0, 200), 'link' => $link, 'id' => $userId . '-' . time(), 'tag' => 'bk-' . $userId], JSON_UNESCAPED_UNICODE);
+        $payload = json_encode(['title'=>$title,'body'=>mb_substr($body,0,200),'link'=>$link,'id'=>$userId.'-'.time(),'tag'=>'bk-'.$userId,'icon'=>'/assets/icon-192.png'], JSON_UNESCAPED_UNICODE);
         foreach ($subs as $sub) {
-            try {
-                bk_web_push_send($sub['endpoint'], $sub['p256dh'], $sub['auth'], $payload, $keys);
-            } catch(\Throwable $e) {
-                // Remove dead subscription
-                if (str_contains($e->getMessage(), '410') || str_contains($e->getMessage(), '404')) {
-                    db()->prepare('DELETE FROM push_subscriptions WHERE endpoint=?')->execute([$sub['endpoint']]);
-                }
+            $ok = wp_send_push(['endpoint'=>$sub['endpoint'],'p256dh'=>$sub['p256dh'],'auth'=>$sub['auth']], $payload, $keys);
+            if (!$ok) {
+                db()->prepare('DELETE FROM push_subscriptions WHERE id=?')->execute([(int)$sub['id']]);
             }
         }
     } catch(\Throwable $e) {}
 }
-function bk_web_push_send(string $endpoint, string $p256dh, string $auth, string $payload, array $vapid): void {
-    if (!function_exists('curl_init')) return;
-    // Simplified Web Push - uses the VAPID JWT for authorization
-    $aud = parse_url(SITE_URL, PHP_URL_HOST);
-    $now = time();
-    $jwtHeader = rtrim(strtr(base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'ES256'])), '+/', '-_'), '=');
-    $jwtClaim = rtrim(strtr(base64_encode(json_encode(['aud' => 'https://' . $aud, 'exp' => $now + 86400, 'sub' => 'mailto:push@' . $aud])), '+/', '-_'), '=');
-    // For simplicity, we use a basic auth header - full ECDH encryption requires more complex implementation
-    $ch = curl_init($endpoint);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'TTL: 86400',
-        ],
-        CURLOPT_TIMEOUT => 10,
-    ]);
-    $resp = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($code >= 400) throw new \RuntimeException("Push failed: HTTP $code");
-}
+/* bk_web_push_send moved to php-extended/webpush.php */
+
 
 function bk_notif_icon(string $t): string { return ['admin'=>'⚙️','system'=>'📢','ticket'=>'🎫','wallet'=>'👛','board'=>'🏪','sale'=>'💰','like'=>'❤️','follow'=>'👥','badge'=>'🏅','repair'=>'🛠'][$t] ?? '🔔'; }
 function credit(int $userId, int $amount, string $type, string $note, ?int $tipId=null, ?int $requestId=null): void { if($amount<=0)return; $pdo=db(); $pdo->prepare('UPDATE users SET balance=balance+? WHERE id=?')->execute([$amount,$userId]); $q=$pdo->prepare('SELECT balance FROM users WHERE id=?');$q->execute([$userId]);$balance=(int)$q->fetchColumn(); $pdo->prepare('INSERT INTO wallet_transactions(user_id,type,amount,balance_after,tip_id,request_id,note) VALUES(?,?,?,?,?,?,?)')->execute([$userId,$type,$amount,$balance,$tipId,$requestId,$note]); }
@@ -568,20 +545,59 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
   try{
     if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=6',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
 
-// Push notification subscription
-if('Notification' in window && navigator.serviceWorker){
-  setTimeout(function(){
-    if(Notification.permission==='granted'){
-      navigator.serviceWorker.ready.then(function(reg){
-        reg.pushManager.getSubscription().then(function(sub){
-          if(!sub){
-            reg.pushManager.subscribe({userVisibilityState:'visible',applicationServerKey:''}).catch(function(){});
-          }
-        });
+// ═══════ Push Notification System ═══════
+(function(){
+  if(!('Notification' in window) || !navigator.serviceWorker) return;
+  var VAPID_KEY = <?=json_encode(function_exists('bk_vapid_keys') ? bk_vapid_keys()['public'] : '')?>;
+  function urlBase64ToUint8Array(b64){
+    var pad = b64.length % 4;
+    if(pad) b64 += '==='.slice(0, 4 - pad);
+    var raw = atob(b64.replace(/-/g,'+').replace(/_/g,'/'));
+    var arr = new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+    return arr;
+  }
+  function sendSubscription(sub){
+    var j = sub.toJSON();
+    fetch('/push-subscribe',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+      body:JSON.stringify({endpoint:j.endpoint,keys:{p256dh:j.keys.p256dh,auth:j.keys.auth}})
+    }).catch(function(){});
+  }
+  function subscribe(){
+    if(!VAPID_KEY) return;
+    navigator.serviceWorker.ready.then(function(reg){
+      reg.pushManager.getSubscription().then(function(existing){
+        if(existing){ sendSubscription(existing); return; }
+        reg.pushManager.subscribe({
+          userVisibilityState:'visible',
+          applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
+        }).then(function(sub){
+          sendSubscription(sub);
+        }).catch(function(e){ console.log('Push subscribe error:', e); });
       });
-    }
-  },5000);
-}
+    });
+  }
+  // Auto-subscribe if already granted
+  if(Notification.permission === 'granted'){
+    setTimeout(subscribe, 3000);
+  }
+  // Expose for manual trigger
+  window.bkEnablePush = function(){
+    if(Notification.permission === 'granted'){ subscribe(); return; }
+    Notification.requestPermission().then(function(p){
+      if(p === 'granted'){ subscribe(); bkToast && bkToast('✅ اعلان‌ها فعال شدند'); }
+    });
+  };
+  // Show enable prompt if not decided
+  if(Notification.permission === 'default'){
+    setTimeout(function(){
+      var bar = document.getElementById('pushEnableBar');
+      if(bar) bar.classList.add('show');
+    }, 8000);
+  }
+})();
   }catch(e){}
 })();
 </script>
@@ -776,7 +792,8 @@ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded'
                 <a href="<?=url('register')?>">✨ ثبت‌نام رایگان</a>
             <?php endif;?>
         </div>
-        <div class="install-banner" id="installBanner"><span id="installText">📱 بردخان را روی صفحه اصلی نصب کنید</span> <button class="btn btn-primary btn-sm" id="installBtn" type="button">نصب</button><button class="btn btn-secondary btn-sm" type="button" onclick="document.getElementById('installBanner').classList.remove('show')">✕</button></div><?php $f=pull_flash(); if($f):?><div class="wrap"><div class="<?=h($f[1])?>"><?=h($f[0])?></div></div><?php endif; ?><?php }
+        <div class="push-enable-bar" id="pushEnableBar" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#0d6b55;color:#fff;padding:12px 20px;border-radius:16px;font-size:13px;z-index:80;box-shadow:0 8px 30px rgba(0,0,0,.4);text-align:center;max-width:92%;cursor:pointer" onclick="bkEnablePush();this.style.display='none'">🔔 <b>اعلان‌های بردخان را فعال کنید</b> — از فروش و تیکت جدید باخبر شوید <span style="opacity:.7;margin-right:8px">✕</span></div>
+<div class="install-banner" id="installBanner"><span id="installText">📱 بردخان را روی صفحه اصلی نصب کنید</span> <button class="btn btn-primary btn-sm" id="installBtn" type="button">نصب</button><button class="btn btn-secondary btn-sm" type="button" onclick="document.getElementById('installBanner').classList.remove('show')">✕</button></div><?php $f=pull_flash(); if($f):?><div class="wrap"><div class="<?=h($f[1])?>"><?=h($f[0])?></div></div><?php endif; ?><?php }
 function footer_html(): void { ?><footer class="footer"><div class="wrap footer-grid"><div><div class="logo" style="color:#fff">⌁ برد<em>خان</em></div><p>بازار تخصصی قلق‌های تعمیراتی بردهای الکترونیکی؛ راه‌حل‌های واقعی از تعمیرکاران حرفه‌ای.</p></div><div><h3>دسترسی سریع</h3><ul><li><a href="<?=url('tips')?>">همه قلق‌ها</a></li><li><a href="<?=url('reels')?>">ریلز قلق‌ها</a></li><li><a href="<?=url('repairs')?>">درخواست تعمیر</a></li><li><a href="<?=url('leaderboard')?>">رتبه‌بندی</a></li><li><a href="<?=url('premium')?>">اشتراک ویژه</a></li><li><a href="<?=url('tour')?>">آموزش و امکانات</a></li></ul></div><div><h3>پشتیبانی</h3><ul><li><a href="<?=url('tickets')?>">تیکت پشتیبانی</a></li><li><a href="<?=url('contact')?>">تماس با ما</a></li><li><a href="<?=url('about')?>">درباره ما</a></li><li><a href="<?=url('terms')?>">قوانین استفاده</a></li><li><a href="<?=url('privacy')?>">حریم خصوصی</a></li></ul></div></div><?php $bImg=trim((string)($s['trust_badge_image']??'')); $bLink=trim((string)($s['trust_badge_link']??'')); if($bImg!==''): ?>
 <div class="wrap" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap">
   <a href="<?=h($bLink?:'#')?>" <?= $bLink?'target="_blank" rel="noopener nofollow"':'' ?>><img src="<?=h($bImg)?>" alt="نماد اعتماد" loading="lazy" style="height:72px;border-radius:10px;background:#fff;padding:6px"></a>

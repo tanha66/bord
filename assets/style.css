@@ -812,3 +812,8 @@ details.bk-optional[open] summary{margin-bottom:12px}
 .bk-star.hov{color:#fde68a}
 .bk-stars-label{display:inline-block;margin-inline-start:12px;font-size:13px;color:var(--text-soft);vertical-align:middle}
 
+
+/* Push enable bar */
+.push-enable-bar{animation:bkSlideUp .5s ease forwards}
+.push-enable-bar.show{display:block!important}
+@keyframes bkSlideUp{from{opacity:0;transform:translateX(-50%) translateY(30px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
