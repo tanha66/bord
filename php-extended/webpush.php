@@ -6,8 +6,7 @@
  */
 
 function wp_b64url(string $data, bool $encode = true): string {
-    if ($encode) return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
-    $pad = strlen($data) % 4;
+    if ($encode) return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');    $pad = strlen($data) % 4;
     if ($pad) $data .= str_repeat('=', 4 - $pad);
     return base64_decode(strtr($data, '-_', '+/'));
 }
@@ -189,8 +188,7 @@ function wp_send_push(array $sub, string $payloadJson, array $vapid): bool {
         'Content-Encoding: aesgcm',
         'Encryption: ' . $saltB64,
         'Crypto-Key: dh=' . $dhKeyB64,
-        'Authorization: WebPush ' . $jwt,
-    ];
+        'Authorization: WebPush ' . $jwt,    ];
 
     if (!function_exists('curl_init')) return false;
     $ch = curl_init($endpoint);
@@ -207,5 +205,4 @@ function wp_send_push(array $sub, string $payloadJson, array $vapid): bool {
     $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    return $code >= 200 && $code < 300;
-}
+    return $code >= 200 && $code < 300;}
