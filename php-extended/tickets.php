@@ -18,10 +18,17 @@ $prioLabels    = ['low'=>'کم', 'normal'=>'معمولی', 'high'=>'بالا'];
 $staffRoles    = ['admin','superadmin','moderator','support'];
 $staff         = in_array($u['role'], $staffRoles, true);
 
-function tk_notify_staff($pdo, string $title, string $body, string $link): void {
-    $q = $pdo->query("SELECT id FROM users WHERE role IN ('admin','superadmin','moderator','support')");
-    foreach ($q->fetchAll() as $st) bk_notify((int)$st['id'], $title, $body, $link);
-}
+function tk_notify_staff($pdo, string $title, string $body, string $link, int $excludeUserId = 0): void {
+    /* اعلان تیکت فقط برای کارکنان (غیر از ارسال‌کننده) ارسال می‌شود — هر اعلان فقط برای همان کاربر قابل مشاهده است */
+    $q = $pdo->prepare("SELECT id FROM users WHERE role IN ('admin','superadmin','moderator','support') AND id != ? AND id > 0");
+    $q->execute([(int)$excludeUserId]);
+    $staffIds = $q->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($staffIds as $sid) {
+        $sid = (int)$sid;
+        if ($sid > 0 && $sid !== (int)$excludeUserId) {
+            bk_notify($sid, $title, $body, $link, 'ticket');
+        }
+    }}
 
 /* ---------- ایجاد تیکت ---------- */
 if ($action === 'create') {
@@ -41,9 +48,9 @@ if ($action === 'create') {
         $pdo->prepare('INSERT INTO tickets(user_id,destination,seller_id,order_id,category,priority,title,body) VALUES(?,?,?,?,?,?,?,?)')
             ->execute([$u['id'],$destination,$seller,$order,$category,$priority,$title,$body]);
         $ticketId = (int)$pdo->lastInsertId();
-        tk_notify_staff($pdo, 'تیکت جدید', $title . ' — از ' . $u['name'], url('tickets?ticket=' . $ticketId));
+        tk_notify_staff($pdo, 'تیکت جدید', $title . ' — از ' . $u['name'], url('tickets?ticket=' . $ticketId), (int)$u['id']);
         if ($seller && $seller !== (int)$u['id']) {
-            bk_notify($seller, 'تیکت جدید خریدار', $title . ' — از ' . $u['name'], url('tickets?ticket=' . $ticketId));
+            bk_notify($seller, 'تیکت جدید خریدار', $title . ' — از ' . $u['name'], url('tickets?ticket=' . $ticketId), 'ticket');
         }
         redirect_to('tickets?ticket=' . $ticketId);
     }
@@ -67,12 +74,12 @@ if ($action === 'reply') {
         // پاسخ کاربر → باز شدن مجدد و اطلاع کارشناس‌ها؛ پاسخ کارشناس → وضعیت پاسخ داده شد
         if ($staff) {
             $pdo->prepare("UPDATE tickets SET status='replied' WHERE id=?")->execute([$tid]);
-            if ((int)$t['user_id'] !== (int)$u['id']) bk_notify((int)$t['user_id'], 'پاسخ جدید تیکت', $t['title'], url('tickets?ticket=' . $tid));
-            if ($t['seller_id'] && (int)$t['seller_id'] !== (int)$u['id']) bk_notify((int)$t['seller_id'], 'پاسخ جدید تیکت', $t['title'], url('tickets?ticket=' . $tid));
+            if ((int)$t['user_id'] !== (int)$u['id']) bk_notify((int)$t['user_id'], 'پاسخ جدید تیکت', $t['title'], url('tickets?ticket=' . $tid), 'ticket');
+            if ($t['seller_id'] && (int)$t['seller_id'] !== (int)$u['id']) bk_notify((int)$t['seller_id'], 'پاسخ جدید تیکت', $t['title'], url('tickets?ticket=' . $tid), 'ticket');
         } else {
             $pdo->prepare("UPDATE tickets SET status='open' WHERE id=?")->execute([$tid]);
-            tk_notify_staff($pdo, 'پاسخ جدید کاربر به تیکت', $t['title'] . ' — ' . $u['name'], url('tickets?ticket=' . $tid));
-            if ($t['seller_id'] && (int)$t['seller_id'] !== (int)$u['id']) bk_notify((int)$t['seller_id'], 'پاسخ جدید خریدار', $t['title'], url('tickets?ticket=' . $tid));
+            tk_notify_staff($pdo, 'پاسخ جدید کاربر به تیکت', $t['title'] . ' — ' . $u['name'], url('tickets?ticket=' . $tid), (int)$u['id']);
+            if ($t['seller_id'] && (int)$t['seller_id'] !== (int)$u['id']) bk_notify((int)$t['seller_id'], 'پاسخ جدید خریدار', $t['title'], url('tickets?ticket=' . $tid), 'ticket');
         }
         redirect_to('tickets?ticket=' . $tid);
     }
@@ -88,7 +95,7 @@ if ($action === 'status' && $staff) {
     if ($t) {
         $pdo->prepare('UPDATE tickets SET status=? WHERE id=?')->execute([$status,$tid]);
         if (in_array($status, ['solved','closed'], true) && (int)$t['user_id'] !== (int)$u['id']) {
-            bk_notify((int)$t['user_id'], 'تیکت ' . ($status === 'solved' ? 'حل شد' : 'بسته شد'), $t['title'], url('tickets?ticket=' . $tid));
+            bk_notify((int)$t['user_id'], 'تیکت ' . ($status === 'solved' ? 'حل شد' : 'بسته شد'), $t['title'], url('tickets?ticket=' . $tid), 'ticket');
         }
     }
     redirect_to('tickets?ticket=' . $tid);
