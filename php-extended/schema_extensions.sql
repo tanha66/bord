@@ -104,3 +104,18 @@ CREATE TABLE IF NOT EXISTS bk_gateway_payments (
   UNIQUE KEY uq_gateway_authority (gateway, authority),
   INDEX idx_gateway_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- v5.12: Push notification subscriptions
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  endpoint VARCHAR(500) NOT NULL,
+  p256dh VARCHAR(200) NOT NULL DEFAULT '',
+  auth VARCHAR(200) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_push_sub_user (user_id),
+  UNIQUE KEY uq_push_endpoint (endpoint(255))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add VAPID key columns to settings if not exist
+-- (Handled by PHP code in bk_vapid_keys)
