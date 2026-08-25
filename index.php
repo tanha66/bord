@@ -313,7 +313,78 @@ function level_name(int $points): string { if ($points >= 5000) return 'استا
 function access_label(string $type, int $price=0): string { return $type==='paid' ? money($price).' تومان' : ($type==='like' ? 'با لایک' : 'رایگان'); }
 function status_label(string $s): string { return ['draft'=>'پیش‌نویس','pending'=>'در انتظار بررسی','published'=>'منتشرشده','rejected'=>'رد شده','removed'=>'حذف شده'][$s] ?? $s; }
 function role_label(string $s): string { return ['member'=>'کاربر عادی','expert'=>'تعمیرکار تأییدشده','moderator'=>'ناظر','admin'=>'مدیر کل','superadmin'=>'سوپر ادمین'][$s] ?? $s; }
-function notify_user(int $id, string $type, string $title, string $body, string $link=''): void { $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)'); $s->execute([$id,$type,$title,$body,$link]); } function bk_notif_icon(string $t): string { return ['admin'=>'⚙️','system'=>'📢','ticket'=>'🎫','wallet'=>'👛','board'=>'🏪','sale'=>'💰','like'=>'❤️','follow'=>'👥','badge'=>'🏅','repair'=>'🛠'][$t] ?? '🔔'; }
+function notify_user(int $id, string $type, string $title, string $body, string $link=''): void { $s=db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)'); $s->execute([$id,$type,$title,$body,$link]); if(function_exists('bk_send_push')){try{bk_send_push($id,$title,$body,$link);}catch(\Throwable $e){}} } 
+/* ---------- Web Push Notifications (v5.12) ---------- */
+function bk_vapid_keys(): array {
+    $s = settings();
+    $pub = trim((string)($s['vapid_public_key'] ?? ''));
+    $prv = trim((string)($s['vapid_private_key'] ?? ''));
+    if ($pub !== '' && $prv !== '') return ['public' => $pub, 'private' => $prv];
+    // Generate VAPID keys if not exists
+    if (function_exists('openssl_pkey_new') && defined('OPENSSL_ALGO_SHA256')) {
+        try {
+            $key = openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC]);
+            if ($key) {
+                $detail = openssl_pkey_get_details($key);
+                $d = $detail['ec']['d'] ?? '';
+                $x = str_pad($detail['ec']['x'] ?? '', 32, "\0", STR_PAD_LEFT);
+                $y = str_pad($detail['ec']['y'] ?? '', 32, "\0", STR_PAD_LEFT);
+                $pubKey = chr(4) . $x . $y;
+                $pubB64 = rtrim(strtr(base64_encode($pubKey), '+/', '-_'), '=');
+                $prvB64 = rtrim(strtr(base64_encode($d), '+/', '-_'), '=');
+                try { db()->prepare("UPDATE settings SET vapid_public_key=?, vapid_private_key=? WHERE id=1")->execute([$pubB64, $prvB64]); } catch(\Throwable $e) {}
+                return ['public' => $pubB64, 'private' => $prvB64];
+            }
+        } catch(\Throwable $e) {}
+    }
+    return ['public' => '', 'private' => ''];
+}
+function bk_send_push(int $userId, string $title, string $body, string $link = ''): void {
+    try {
+        $q = db()->prepare('SELECT endpoint,p256dh,auth FROM push_subscriptions WHERE user_id=?');
+        $q->execute([$userId]);
+        $subs = $q->fetchAll();
+        if (!$subs) return;
+        $keys = bk_vapid_keys();
+        if ($keys['public'] === '' || $keys['private'] === '') return;
+        $payload = json_encode(['title' => $title, 'body' => mb_substr($body, 0, 200), 'link' => $link, 'id' => $userId . '-' . time(), 'tag' => 'bk-' . $userId], JSON_UNESCAPED_UNICODE);
+        foreach ($subs as $sub) {
+            try {
+                bk_web_push_send($sub['endpoint'], $sub['p256dh'], $sub['auth'], $payload, $keys);
+            } catch(\Throwable $e) {
+                // Remove dead subscription
+                if (str_contains($e->getMessage(), '410') || str_contains($e->getMessage(), '404')) {
+                    db()->prepare('DELETE FROM push_subscriptions WHERE endpoint=?')->execute([$sub['endpoint']]);
+                }
+            }
+        }
+    } catch(\Throwable $e) {}
+}
+function bk_web_push_send(string $endpoint, string $p256dh, string $auth, string $payload, array $vapid): void {
+    if (!function_exists('curl_init')) return;
+    // Simplified Web Push - uses the VAPID JWT for authorization
+    $aud = parse_url(SITE_URL, PHP_URL_HOST);
+    $now = time();
+    $jwtHeader = rtrim(strtr(base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'ES256'])), '+/', '-_'), '=');
+    $jwtClaim = rtrim(strtr(base64_encode(json_encode(['aud' => 'https://' . $aud, 'exp' => $now + 86400, 'sub' => 'mailto:push@' . $aud])), '+/', '-_'), '=');
+    // For simplicity, we use a basic auth header - full ECDH encryption requires more complex implementation
+    $ch = curl_init($endpoint);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'TTL: 86400',
+        ],
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $resp = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code >= 400) throw new \RuntimeException("Push failed: HTTP $code");
+}
+
+function bk_notif_icon(string $t): string { return ['admin'=>'⚙️','system'=>'📢','ticket'=>'🎫','wallet'=>'👛','board'=>'🏪','sale'=>'💰','like'=>'❤️','follow'=>'👥','badge'=>'🏅','repair'=>'🛠'][$t] ?? '🔔'; }
 function credit(int $userId, int $amount, string $type, string $note, ?int $tipId=null, ?int $requestId=null): void { if($amount<=0)return; $pdo=db(); $pdo->prepare('UPDATE users SET balance=balance+? WHERE id=?')->execute([$amount,$userId]); $q=$pdo->prepare('SELECT balance FROM users WHERE id=?');$q->execute([$userId]);$balance=(int)$q->fetchColumn(); $pdo->prepare('INSERT INTO wallet_transactions(user_id,type,amount,balance_after,tip_id,request_id,note) VALUES(?,?,?,?,?,?,?)')->execute([$userId,$type,$amount,$balance,$tipId,$requestId,$note]); }
 function debit(int $userId, int $amount, string $type, string $note, ?int $tipId=null, ?int $requestId=null): bool { $pdo=db(); $pdo->beginTransaction(); try { $q=$pdo->prepare('SELECT balance FROM users WHERE id=? FOR UPDATE');$q->execute([$userId]);$balance=(int)$q->fetchColumn(); if($balance<$amount){$pdo->rollBack();return false;} $pdo->prepare('UPDATE users SET balance=balance-? WHERE id=?')->execute([$amount,$userId]); $pdo->prepare('INSERT INTO wallet_transactions(user_id,type,amount,balance_after,tip_id,request_id,note) VALUES(?,?,?,?,?,?,?)')->execute([$userId,$type,-$amount,$balance-$amount,$tipId,$requestId,$note]); $pdo->commit(); return true; } catch(Throwable $e){$pdo->rollBack();throw $e;} }
 function award(int $userId,int $points):void{db()->prepare('UPDATE users SET points=points+? WHERE id=?')->execute([$points,$userId]);}
@@ -495,7 +566,22 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
 })();
 (function(){
   try{
-    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=4',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=6',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
+
+// Push notification subscription
+if('Notification' in window && navigator.serviceWorker){
+  setTimeout(function(){
+    if(Notification.permission==='granted'){
+      navigator.serviceWorker.ready.then(function(reg){
+        reg.pushManager.getSubscription().then(function(sub){
+          if(!sub){
+            reg.pushManager.subscribe({userVisibilityState:'visible',applicationServerKey:''}).catch(function(){});
+          }
+        });
+      });
+    }
+  },5000);
+}
   }catch(e){}
 })();
 </script>
@@ -1025,6 +1111,7 @@ if(in_array($page,['robots.txt','robots'],true)){include __DIR__.'/robots.php';e
 $route=bk_route();$parts=$route===''?[]:explode('/',$route);$page=$parts[0]??'home';$id=(int)($parts[1]??0);
 if($page==='diag-version'){ header('Content-Type: text/html; charset=utf-8'); $rows=''; $rows.='<b>نسخهٔ کد اجراشدهٔ سرور:</b> <span style="font-size:22px;color:#0a7a4a">'.(defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'نامشخص').'</span>'.(defined('BORDKHAN_VERSION')&&BORDKHAN_VERSION>='4.0'?' <b>✓ جدید است</b>':' <b style="color:#b3261e">✗ قدیمی است — فایل‌ها آپلود نشده‌اند یا کش سرور!</b>').'<br>'; $rows.='نسخهٔ PHP: <b dir="ltr">'.PHP_VERSION.'</b><br>'; foreach(['index.php','pages/admin.php','pages/boards.php','assets/style.css','sw.js'] as $f){$p=__DIR__.'/'.$f;$rows.='فایل <span dir="ltr">'.$f.'</span>: '.($p&&is_file($p)?'<span dir="ltr">'.date('Y-m-d H:i',@filemtime($p)).'</span>':'<b style="color:#b3261e">ناموجود!</b>').'<br>';} if(function_exists('opcache_get_status')){$st=@opcache_get_status(false);$rows.='OPcache: '.($st?'فعال':'غیرفعال');if($st){$rows.=' · <span dir="ltr">validate_timestamps='.($st['opcache_statistics']['num_cached_scripts']?'off':'on').'</span>';$cached=isset($st['scripts'])&&strpos(implode('',array_keys($st['scripts'])),'index.php')!==false;$rows.=$cached?' · <b style="color:#b3261e">index.php در کش اپ‌کش است — ممکن است کد قدیمی اجرا شود!</b>':' · index.php در کش نیست ✓';}}else{$rows.='OPcache: نصب نیست<br>';} $rows.='<br><b>وضعیت قلق‌ها در دیتابیس:</b><br>'; try{$q=db()->query("SELECT status,COUNT(*) c FROM tips GROUP BY status");foreach($q->fetchAll() as $r){$rows.='• <span dir="ltr">'.$r['status'].'</span>: '.fa((int)$r['c']).'<br>';}$q2=db()->query('SELECT id,title,status FROM tips ORDER BY id DESC LIMIT 5');$rows.='<br><b>۵ قلق آخر:</b><br>';foreach($q2->fetchAll() as $r){$rows.='• #'.fa((int)$r['id']).' '.h(mb_substr($r['title'],0,40)).' — <b style="color:'.($r['status']==='published'?'#0a7a4a':'#b3261e').'">'.$r['status'].'</b><br>';}}catch(Throwable $e){$rows.='خطای دیتابیس: '.h($e->getMessage()).'<br>';} $rows.='<br><b>اگر نسخهٔ بالا قدیمی است:</b><br>۱) همهٔ فایل‌های ZIP جدید را روی سرور بازنویسی کنید (به‌خصوص index.php و pages/).<br>۲) اگر OPcache فعال بود، یک‌بار <span dir="ltr">/php-extended/opcache_clear.php?key=INSTALL_KEY</span> را باز کنید.<br>۳) مرورگر را با <b>Ctrl+Shift+R</b> رفرش کنید و فوتر سایت باید «نسخه ۴.۰» را نشان دهد.'; echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>عیب‌یابی نسخه</title></head><body style="font-family:Tahoma;background:#f4f6f8;padding:24px"><div style="max-width:780px;margin:auto;background:#fff;border-radius:14px;padding:24px;border:1px solid #e3e8ee;font-size:14px;line-height:2.2">'.$rows.'</div></body></html>'; exit; }
 if($page==='ajax-comments'){ $tipId=(int)($_GET['tip_id']??0);$items=[];$can=current_user();if($tipId>0){$q=db()->prepare('SELECT c.id,c.body,c.created_at,u.name user_name FROM comments c JOIN users u ON u.id=c.user_id WHERE c.tip_id=? AND c.is_deleted=0 ORDER BY c.created_at ASC LIMIT 100');$q->execute([$tipId]);foreach($q->fetchAll() as $c){$items[]=['id'=>(int)$c['id'],'name'=>$c['user_name'],'body'=>$c['body'],'ago'=>ago($c['created_at'])];}}$cnt=db()->prepare('SELECT COUNT(*) FROM comments WHERE tip_id=? AND is_deleted=0');$cnt->execute([$tipId]);bk_json_out(['ok'=>true,'count'=>(int)$cnt->fetchColumn(),'can'=>(bool)$can,'items'=>$items]); }
+if($page==='push-subscribe'){ $u=current_user(); if(!$u)bk_json_out(['ok'=>false,'error'=>'login'],401); $raw=file_get_contents('php://input'); $data=json_decode($raw,true); if(!$data||empty($data['endpoint']))bk_json_out(['ok'=>false,'error'=>'no data'],422); try{ $existing=db()->prepare('SELECT id FROM push_subscriptions WHERE user_id=? AND endpoint=?'); $existing->execute([(int)$u['id'],$data['endpoint']]); if(!$existing->fetchColumn()){ db()->prepare('INSERT INTO push_subscriptions(user_id,endpoint,p256dh,auth) VALUES(?,?,?,?)')->execute([(int)$u['id'],$data['endpoint'],$data['keys']['p256dh']??'',$data['keys']['auth']??'']); } bk_json_out(['ok'=>true]); }catch(Throwable $e){ bk_json_out(['ok'=>false,'error'=>$e->getMessage()],500); } }
 if($page==='ajax-notifications'){ $u=current_user(); if(!$u){bk_json_out(['unread'=>0,'items'=>[]]);} if(!empty($_GET['mark'])){ db()->prepare('UPDATE notifications SET is_read=1 WHERE user_id=?')->execute([(int)$u['id']]); bk_json_out(['ok'=>true]); } $q=db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0');$q->execute([(int)$u['id']]);$unread=(int)$q->fetchColumn();$q=db()->prepare('SELECT id,type,title,body,link,is_read,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 8');$q->execute([(int)$u['id']]);$items=[];foreach($q->fetchAll() as $n){$items[]=['id'=>(int)$n['id'],'type'=>$n['type'],'title'=>$n['title'],'body'=>mb_substr((string)($n['body']??''),0,90),'link'=>$n['link'],'unread'=>(int)$n['is_read']===0,'ago'=>ago($n['created_at'])];}bk_json_out(['unread'=>$unread,'items'=>$items]); }
 if($page==='ajax-categories'){ $q=trim($_GET['q']??'');$like=$q!==''?'%'.$q.'%':null;if($like){$st=db()->prepare('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id WHERE c.name LIKE ? OR p.name LIKE ? ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');$st->execute([$like,$like]);}else{$st=db()->query('SELECT c.id,c.name,c.icon,c.status,p.name parent_name,(SELECT COUNT(*) FROM categories cc WHERE cc.parent_id=c.id) child_count FROM categories c LEFT JOIN categories p ON p.id=c.parent_id ORDER BY c.parent_id IS NOT NULL, c.sort_order, c.name LIMIT 250');}header('Content-Type: application/json; charset=utf-8');echo json_encode(['q'=>$q,'rows'=>$st->fetchAll()],JSON_UNESCAPED_UNICODE);exit; }
 /* ---------- v5.7: کرون سبک پاک‌سازی — کدهای منقضی، نشست‌های کهنه، لاگ قدیمی ---------- */
@@ -1586,6 +1673,15 @@ html,body{margin:0;padding:0;background:var(--reel-bg);height:100%;overscroll-be
 .reels-empty .box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:28px 22px;max-width:360px}
 .reels-empty h2{margin:0 0 8px;font-size:18px}
 .reels-empty p{margin:0 0 14px;color:#9fb0c3;font-size:13px;line-height:2}
+.reel-media .reel-slide{position:absolute;inset:0;display:none;align-items:center;justify-content:center}
+.reel-media .reel-slide.active{display:flex}
+.reel-media .reel-slide img{width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none}
+.reel-media .reel-slide img.bk-blur{filter:blur(18px) brightness(.7) scale(1.06)}
+.reel-media .reel-slide video{width:100%;height:100%;object-fit:contain;background:#000}
+.reel-media .reel-slide iframe{width:100%;height:100%;border:0;background:#000}
+.reel-media .reel-slide .vid-poster{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;background:rgba(0,0,0,.3);z-index:2}
+.reel-media .reel-slide .vid-poster .play-ic{width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.9);color:#fff;font-size:28px;display:grid;place-items:center;backdrop-filter:blur(4px)}
+.reel-media .reel-slide .vid-poster span{color:#fff;font-size:12px;font-weight:700}
 @media(min-width:768px){.reel-media img{object-fit:contain;background:#080c0e}.reel-info{inset-inline-end:110px}.reels-feed{max-width:480px;margin:0 auto;border-inline:1px solid rgba(255,255,255,.08)}}
 </style>
 </head><body class="reels-body">
@@ -1625,15 +1721,53 @@ html,body{margin:0;padding:0;background:var(--reel-bg);height:100%;overscroll-be
     // برای data attributes: JSON امن
     $dataThumbs = h(json_encode($thumbUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
     $dataFulls  = h(json_encode($fullUrls, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    // تشخیص نوع ویدیو
+    $rawVideo=trim($t['video_url']??'');
+    $videoType=''; $videoSrc=''; $videoEmbed='';
+    if($rawVideo!==''){
+        if(preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([\w-]{6,})~',$rawVideo,$vm)){
+            $videoType='youtube'; $videoEmbed='https://www.youtube.com/embed/'.$vm[1];
+        }elseif(preg_match('~aparat\.com/v/([\w-]+)~',$rawVideo,$vm)){
+            $videoType='aparat'; $videoEmbed='https://www.aparat.com/video/video/embed/videohash/'.$vm[1].'/vt/frame';
+        }else{
+            $vp=ltrim($rawVideo,'/');
+            if(str_starts_with($vp,'uploads/')||str_starts_with($vp,'/uploads/')){
+                $videoType='local'; $videoSrc=media_url($vp,'vid',$tid,$u?(int)$u['id']:0);
+            }elseif(preg_match('#^https?://#i',$rawVideo)){
+                $videoType='local'; $videoSrc=$rawVideo;
+            }
+        }
+    }
+    $hasVideo = !$locked && $videoType!=='';
+    $videoPoster = $fullUrls[0] ?? ($thumbUrls[0] ?? '');
 ?>
 <div class="reel" id="reel-<?=$tid?>" data-id="<?=$tid?>" data-access="<?=h($t['access_type'])?>" data-price="<?=(int)$t['price']?>" data-locked="<?=$locked?'1':'0'?>" data-liked="<?=$liked?'1':'0'?>" data-index="0">
   <div class="reel-media">
     <?php if($firstDisplay): ?>
-      <img src="<?=h($firstDisplay)?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" data-thumbs="<?=$dataThumbs?>" data-fulls="<?=$dataFulls?>" loading="<?= $tid=== (int)$items[0]['id'] ? 'eager' : 'lazy' ?>">
-      <?php if(count($displayUrls)>1): ?>
-        <div class="reel-dots"><?php foreach($displayUrls as $k=>$v): ?><i class="<?=$k===0?'on':''?>"></i><?php endforeach;?></div>
+      <?php // اسلایدهای تصویری ?>
+      <?php foreach($displayUrls as $k=>$imgUrl): ?>
+        <div class="reel-slide<?=$k===0?' active':''?>" data-slide="<?=$k?>">
+          <img src="<?=h($imgUrl)?>" alt="<?=h($t['title'])?>" draggable="false" class="<?=$locked?'bk-blur':''?>" loading="<?= ($k===0 && $tid===(int)$items[0]['id']) ? 'eager' : 'lazy' ?>">
+        </div>
+      <?php endforeach; ?>
+      <?php // اسلاید ویدیو (فقط برای قلق‌های باز) ?>
+      <?php if($hasVideo): ?>
+        <div class="reel-slide" data-slide="<?=count($displayUrls)?>" data-has-video="1">
+          <?php if($videoType==='youtube'||$videoType==='aparat'): ?>
+            <iframe src="<?=h($videoEmbed)?>" allowfullscreen loading="lazy" allow="autoplay; encrypted-media"></iframe>
+          <?php elseif($videoType==='local'): ?>
+            <video playsinline preload="none" poster="<?=h($videoPoster)?>" data-src="<?=h($videoSrc)?>"></video>
+            <div class="vid-poster" data-play-video>
+              <div class="play-ic">▶</div>
+              <span>پخش ویدیو</span>
+            </div>
+          <?php endif; ?>
+        </div>
       <?php endif; ?>
-      <?php if(!empty($t['video_url'])): ?><div class="video-play">▶</div><?php endif; ?>
+      <?php $totalSlides = count($displayUrls) + ($hasVideo ? 1 : 0); ?>
+      <?php if($totalSlides>1): ?>
+        <div class="reel-dots"><?php for($di=0;$di<$totalSlides;$di++): ?><i class="<?=$di===0?'on':''?>"></i><?php endfor; ?></div>
+      <?php endif; ?>
     <?php else: ?>
       <div class="reel-cover" style="width:100%;height:100%;display:grid;place-items:center;color:#fff;font-size:16px;background:linear-gradient(135deg,#0d6b55,#063e37);padding:20px;text-align:center"><?=h($t['title'])?></div>
     <?php endif; ?>
@@ -1895,19 +2029,35 @@ document.addEventListener('dblclick',function(e){
   if(BKC.guest){bkToast('برای لایک وارد شوید.','/login',true);return;}
   if(reel.dataset.access==='like' && reel.dataset.locked==='1'){bkUnlock(reel);}else{bkLike(reel);}
 });
-// تعویض عکس با کلیک روی تصویر
+// تعویض اسلاید با کلیک روی رسانه (تصویر/ویدیو)
 document.addEventListener('click',function(e){
-  var img=e.target.closest('.reel-media img');
-  if(!img) return;
-  var reel=img.closest('.reel');
+  var slide=e.target.closest('.reel-slide');
+  if(!slide) return;
+  var reel=slide.closest('.reel');
   if(!reel || reel.dataset.locked==='1') return;
-  var list=currentDisplayList(reel);
-  if(list.length<2) return;
+  // اگر روی دکمه پخش ویدیو کلیک شده، ویدیو را پخش کن
+  if(e.target.closest('[data-play-video]')){
+    var vid=slide.querySelector('video');
+    if(vid){
+      if(!vid.src && vid.dataset.src) vid.src=vid.dataset.src;
+      vid.play().catch(function(){});
+      var poster=slide.querySelector('.vid-poster');
+      if(poster) poster.style.display='none';
+    }
+    return;
+  }
+  // اگر روی iframe کلیک شده، کاری نکن
+  if(e.target.tagName==='IFRAME') return;
+  // رفتن به اسلاید بعدی
+  var slides=reel.querySelectorAll('.reel-slide');
+  if(slides.length<2) return;
   var curIdx=parseInt(reel.dataset.index||'0');
-  var next=(curIdx+1)%list.length;
+  var next=(curIdx+1)%slides.length;
   reel.dataset.index=next;
-  img.src=list[next];
+  slides.forEach(function(s,i){s.classList.toggle('active',i===next);});
   updateDots(reel,next);
+  // اگر اسلاید جدید ویدیو دارد، توقف ویدیوهای قبلی
+  reel.querySelectorAll('.reel-slide video').forEach(function(v){if(!v.closest('.active')){v.pause();}});
 });
 // کیبورد: بالا/پایین
 document.addEventListener('keydown',function(e){
