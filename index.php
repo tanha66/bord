@@ -540,6 +540,38 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
     if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=7',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
   }catch(e){}
 })();
+
+// ═══ Push Notification ═══
+(function(){
+  if(!('Notification' in window)||!navigator.serviceWorker)return;
+  var VAPID='<?=json_encode(function_exists('bk_vapid_keys')?bk_vapid_keys()['public']:'')?>';
+  function b64ToUint8(b64){var p=b64.length%4;if(p)b64+='==='.slice(0,4-p);var r=atob(b64.replace(/-/g,'+').replace(/_/g,'/'));var a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;}
+  function sendSub(sub){var j=sub.toJSON();fetch('/push-subscribe',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({endpoint:j.endpoint,keys:{p256dh:j.keys.p256dh,auth:j.keys.auth}})}).catch(function(){});}
+  function doSubscribe(){if(!VAPID||VAPID==='""')return;navigator.serviceWorker.ready.then(function(reg){reg.pushManager.getSubscription().then(function(ex){if(ex){sendSub(ex);return;}reg.pushManager.subscribe({userVisibilityState:'visible',applicationServerKey:b64ToUint8(VAPID)}).then(function(sub){sendSub(sub);}).catch(function(e){console.log('Push error:',e);});});});}
+  // If already granted, subscribe immediately
+  if(Notification.permission==='granted'){setTimeout(doSubscribe,2000);return;}
+  // If not decided, show a bar to ask
+  if(Notification.permission==='default'){
+    setTimeout(function(){
+      // Only show once per session
+      if(sessionStorage.getItem('push_asked')==='1')return;
+      sessionStorage.setItem('push_asked','1');
+      var bar=document.createElement('div');
+      bar.id='pushAskBar';
+      bar.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e3a5f;color:#fff;padding:14px 22px;border-radius:18px;z-index:96;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:92%;text-align:center;font-size:13px;cursor:pointer;animation:bkSlideUp .4s ease';
+      bar.innerHTML='🔔 <b>اعلان‌های بردخان را فعال کنید</b> — از تیکت و فروش باخبر شوید';
+      bar.onclick=function(){
+        Notification.requestPermission().then(function(p){
+          bar.remove();
+          if(p==='granted'){doSubscribe();}
+        });
+      };
+      document.body.appendChild(bar);
+      // Auto-remove after 15 seconds
+      setTimeout(function(){if(bar.parentElement)bar.remove();},15000);
+    },6000);
+  }
+})();
 </script>
 <link rel="stylesheet" href="<?=url('assets/style.css')?>?v=13"><?php if(!empty($s['google_analytics'])):?><script async src="https://www.googletagmanager.com/gtag/js?id=<?=h($s['google_analytics'])?>"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','<?=h($s['google_analytics'])?>');</script><?php endif;?><script>
 (function(){
@@ -739,7 +771,30 @@ function footer_html(): void { ?><footer class="footer"><div class="wrap footer-
 </div>
 <?php endif; ?>
 <div id="pwaInstallBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#065f46,#047857);color:#fff;padding:16px 24px;border-radius:20px;z-index:95;box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:92%"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center"><span style="font-size:28px">📱</span><div style="text-align:right;flex:1;min-width:180px"><b style="font-size:14px;display:block">اپلیکیشن بردخان را نصب کنید!</b><small style="opacity:.85;font-size:11px">دسترسی سریع + اعلان‌های فوری</small></div><button id="pwaInstallBtn" style="background:#fff;color:#065f46;font-weight:900;font-size:13px;padding:10px 20px;border-radius:14px;border:0;cursor:pointer">📲 نصب</button><button onclick="this.parentElement.parentElement.parentElement.style.display='none';localStorage.setItem('pwa_dis','1')" style="background:0;border:0;color:#fff;font-size:18px;cursor:pointer;opacity:.6">✕</button></div></div>
-<script>(function(){var b=document.getElementById('pwaInstallBanner');if(!b)return;if(window.matchMedia&&window.matchMedia('(display-mode:standalone)').matches)return;if(navigator.standalone===true)return;if(localStorage.getItem('pwa_dis')==='1')return;var dp=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e;b.style.display='block';});var ios=/iPad|iPhone|iPod/.test(navigator.userAgent);if(ios&&!navigator.standalone){setTimeout(function(){b.style.display='block';var btn=document.getElementById('pwaInstallBtn');if(btn){btn.textContent='📲 راهنمای نصب';btn.onclick=function(){alert('Share را بزنید → Add to Home Screen');};}},5000);return;}var btn=document.getElementById('pwaInstallBtn');if(btn)btn.addEventListener('click',function(){if(dp){dp.prompt();dp.userChoice.then(function(){dp=null;b.style.display='none';});}else{b.style.display='none';localStorage.setItem('pwa_dis','1');}});})();</script>
+<script>(function(){
+var b=document.getElementById('pwaInstallBanner');
+if(!b)return;
+// Don't show if already installed as PWA
+if(window.matchMedia&&window.matchMedia('(display-mode:standalone)').matches)return;
+if(window.navigator.standalone===true)return;
+// Don't show if user dismissed it
+if(localStorage.getItem('pwa_dis')==='1')return;
+var dp=null;
+// Listen for beforeinstallprompt
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e;});
+// ALWAYS show banner after 3 seconds
+setTimeout(function(){b.style.display='block';},3000);
+// iOS Safari: show manual install instructions
+var ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+if(ios){var btn=document.getElementById('pwaInstallBtn');if(btn){btn.textContent='📲 راهنمای نصب';}}
+// Install button click
+var btn=document.getElementById('pwaInstallBtn');
+if(btn)btn.addEventListener('click',function(){
+  if(dp){dp.prompt();dp.userChoice.then(function(c){dp=null;b.style.display='none';});}
+  else if(ios){alert('برای نصب:\n۱. دکمه Share (▢↑) را بزنید\n۲. «Add to Home Screen» را انتخاب کنید');}
+  else{alert('برای نصب: از منوی مرورگر (⋮ یا ⋯) گزینه «Install app» یا «اپلیکیشن نصب» را انتخاب کنید');b.style.display='none';localStorage.setItem('pwa_dis','1');}
+});
+})();</script>
 <div class="wrap copyright">© <?=fa(date('Y'))?> بردخان — تمامی حقوق محفوظ است. <span style="opacity:.55;font-size:10px">· نسخه <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></span></div></footer><?php if(is_file(__DIR__.'/php-extended/bk_actionbar.php')){require_once __DIR__.'/php-extended/bk_actionbar.php';bk_render_actionbar(function_exists('current_user')?current_user():null);} ?><script>
 (function(){
   var CSRF = '<?=csrf()?>';
