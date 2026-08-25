@@ -28,8 +28,7 @@ function tk_notify_staff($pdo, string $title, string $body, string $link, int $e
         if ($sid > 0 && $sid !== (int)$excludeUserId) {
             bk_notify($sid, $title, $body, $link, 'ticket');
         }
-    }
-}
+    }}
 
 /* ---------- ایجاد تیکت ---------- */
 if ($action === 'create') {
