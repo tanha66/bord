@@ -518,7 +518,7 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
 /* فیلتر زندهٔ دسته‌بندی — یک تعریف سراسری برای همهٔ صفحات */
 if(typeof bkFilterSelect!=='function'){function bkFilterSelect(inp){var sel=inp.parentElement?inp.parentElement.querySelector('select'):null;if(!sel)return;var q=(inp.value||'').trim().toLowerCase();Array.prototype.forEach.call(sel.options,function(o){if(!o.value)return;var t=(o.textContent||'').toLowerCase();var og=o.parentElement&&o.parentElement.label?o.parentElement.label.toLowerCase():'';o.hidden=q===''||t.indexOf(q)!==-1||og.indexOf(q)!==-1;});Array.prototype.forEach.call(sel.querySelectorAll('optgroup'),function(g){var any=false;Array.prototype.forEach.call(g.options,function(o){if(!o.hidden)any=true;});g.hidden=!any;});var si=sel.selectedIndex;if(si>=0&&sel.options[si]&&sel.options[si].hidden){sel.value='';}}}
 /* زنگولهٔ اعلان‌ها */
-(function(){var bell=document.getElementById('notifBell');var drop=document.getElementById('notifDrop');var badge=document.getElementById('notifBadge');var list=document.getElementById('notifList');
+(function(){var bell=null,drop=null,badge=null,list=null;
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
 /* v5.5: فرم‌های AJAX — ارسال بدون رفرش با بازخورد درجا */
 /* v5.10: لایت‌باکس زوم/تمام‌صفحه برای تصاویر قلق */
@@ -630,10 +630,8 @@ function nico(t){return {'admin':'⚙️','system':'📢','ticket':'🎫','walle
 function render(j){if(!j||typeof j.unread==='undefined')return;if(j.unread>0){badge.hidden=false;badge.textContent=j.unread>99?'99+':j.unread;}else{badge.hidden=true;}if(j.items&&j.items.length){var h='';j.items.forEach(function(n){h+='<a class="notif-item'+(n.unread?' unread':'')+'" href="'+esc(n.link||'/notifications')+'"><strong><span class="nic">'+nico(n.type)+'</span>'+esc(n.title)+'</strong><small>'+esc(n.body)+' · '+esc(n.ago)+'</small></a>';});list.innerHTML=h;}else{list.innerHTML='<div class="notif-empty">اعلان جدیدی ندارید ✓</div>';}}
 function load(){fetch('/ajax-notifications',{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json().catch(function(){return null;});}).then(render).catch(function(){});}
 function markRead(){fetch('/ajax-notifications?mark=1',{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(function(r){return r.json().catch(function(){return null;});}).then(function(j){if(j&&j.ok){badge.hidden=true;var a=list.querySelectorAll?list.querySelectorAll('.notif-item'):[];for(var i=0;i<a.length;i++){a[i].classList.remove('unread');}}}).catch(function(){});}
-if(!bell)return;
-bell.addEventListener('click',function(e){e.stopPropagation();drop.hidden=!drop.hidden;if(!drop.hidden){markRead();load();}});
-document.addEventListener('click',function(e){if(drop&&!drop.hidden&&!e.target.closest('#notifWrap'))drop.hidden=true;});
-load();setInterval(load,30000);})();
+function initBell(){bell=document.getElementById('notifBell');drop=document.getElementById('notifDrop');badge=document.getElementById('notifBadge');list=document.getElementById('notifList');if(!bell||!drop||!badge||!list)return;bell.addEventListener('click',function(e){e.stopPropagation();drop.hidden=!drop.hidden;if(!drop.hidden){markRead();load();}});document.addEventListener('click',function(e){if(drop&&!drop.hidden&&!e.target.closest('#notifWrap'))drop.hidden=true;});load();setInterval(load,30000);}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initBell);}else{initBell();}})();
 </script></head><body data-theme="dark"><?php if(!empty($s['announcement'])):?><div class="announcement">📣 <?=h($s['announcement'])?></div><?php endif;?><header class="topbar"><div class="container navbar">
             <button class="menu-toggle" type="button" id="menuToggle" aria-label="منو">☰</button>
             <a class="logo" href="<?=url()?>"><span class="logo-mark">⌁</span>برد<em>خان</em></a>
@@ -823,7 +821,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && $action) { check_csrf(); $pdo=db();
     throttle_clear('verify');
     $code='USR'.strtoupper(bin2hex(random_bytes(3)));
     $phone=$p['phone'];
-    $ins=function()use($pdo,$p,$code){$pdo->prepare('INSERT INTO users(phone,email,password_hash,name,referral_code,referred_by,phone_verified,email_verified) VALUES(?,?,?,?,?,?,?,1)')->execute([$p['phone'] ?: 'u-'.bin2hex(random_bytes(5)),$p['email'],$p['hash'],$p['name'],$code,$p['referred_by']]);};
+    $ins=function()use($pdo,$p,$code){$pdo->prepare('INSERT INTO users(phone,email,password_hash,name,referral_code,referred_by,phone_verified,email_verified) VALUES(?,?,?,?,?,?,1,1)')->execute([$p['phone'] ?: 'u-'.bin2hex(random_bytes(5)),$p['email'],$p['hash'],$p['name'],$code,$p['referred_by']]);};
     try{ $ins(); }catch(Throwable $e){ /* ستون email_verified قدیمی نیست؟ بساز و دوباره */ try{ $pdo->exec('ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0'); }catch(Throwable $e2){} try{ $ins(); }catch(Throwable $e3){ $fail('ساخت حساب ناموفق بود: '.$e3->getMessage(),'register'); } }
     $uid=(int)$pdo->lastInsertId();
     if($p['referred_by'])credit($uid,(int)settings()['invitee_credit'],'referral_invitee','اعتبار خوش‌آمدگویی ثبت‌نام');

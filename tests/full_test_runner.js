@@ -111,6 +111,11 @@ test('لایت‌باکس برای مهمان (بدون notifBell) هم فعال
   } catch (err) { return 'خطای اجرای JS: ' + err.message; }
 });
 
+// Registration SQL regression (HY093): placeholders must match params
+test('ثبت‌نام: تعداد جای متغیرهای INSERT users درست است', () => index.includes('VALUES(?,?,?,?,?,?,1,1)') ? true : 'عدم تطابق placeholder/param (HY093)');
+// Bell must bind after DOM is ready (script runs in <head>)
+test('زنگوله بعد از آماده‌شدن DOM بایند می‌شود', () => index.includes('function initBell(){') && index.includes("document.readyState==='loading'") ? true : 'زنگوله در head بایند نمی‌شود');
+
 // CSS
 const css = read('assets/style.css');
 test('CSS vars', () => css.includes('--bg') && css.includes('--accent') ? true : 'نیست');
