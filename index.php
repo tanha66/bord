@@ -538,7 +538,7 @@ function header_html(string $title=''): void { $u=current_user(); $s=settings();
 })();
 (function(){
   try{
-    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=7',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=8',{updateViaCache:'none'}).then(function(reg){if(reg&&reg.update)reg.update();}).catch(function(){})}
   }catch(e){}
 })();
 
