@@ -16,9 +16,9 @@ function bk_user(): ?array { return function_exists('current_user') ? current_us
 function bk_login(): array { return function_exists('require_login') ? require_login() : (bk_user() ?: bk_json(['ok'=>false,'error'=>'ابتدا وارد شوید'],401)); }
 function bk_admin(): array { return function_exists('require_admin') ? require_admin() : bk_json(['ok'=>false,'error'=>'دسترسی مدیر لازم است'],403); }
 function bk_clean(string $v): string { return function_exists('clean_text') ? clean_text($v) : trim(strip_tags($v)); }
-function bk_notify(int $uid, string $title, string $body, string $link = ''): void {
-    if (function_exists('notify_user')) notify_user($uid, 'system', $title, $body, $link);
-    else db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)')->execute([$uid,'system',$title,$body,$link]);
+function bk_notify(int $uid, string $title, string $body, string $link = '', string $type = 'system'): void {
+    if (function_exists('notify_user')) notify_user($uid, $type, $title, $body, $link);
+    else db()->prepare('INSERT INTO notifications(user_id,type,title,body,link) VALUES(?,?,?,?,?)')->execute([$uid,$type,$title,$body,$link]);
 }
 function bk_setting(string $key, mixed $default = null): mixed {
     static $s = null;
@@ -140,7 +140,7 @@ function bk_extended_action(string $action): never {
         $min = (int)bk_setting('gateway_min_charge',100000);
         if ($amount < $min || !$bank || strlen(preg_replace('/\D/','',$card)) < 10 || !$receipt) bk_json(['ok'=>false,'error'=>'مبلغ، بانک، کارت و تصویر فیش الزامی است'],422);
         bk_tx($u['id'], $amount, 'charge', 'درخواست شارژ کارت‌به‌کارت', 'pending', ['method'=>'z2c','receipt_url'=>$receipt,'bank_name'=>$bank,'card_number'=>$card]);
-        $admins = db()->query("SELECT id FROM users WHERE role IN ('admin','superadmin')")->fetchAll(); foreach($admins as $a) bk_notify((int)$a['id'],'فیش شارژ جدید','یک فیش کارت‌به‌کارت برای بررسی ثبت شد.',url('admin-finance'));
+        $admins = db()->query("SELECT id FROM users WHERE role IN ('admin','superadmin')")->fetchAll(); foreach($admins as $a) bk_notify((int)$a['id'],'فیش شارژ جدید','یک فیش کارت‌به‌کارت برای بررسی ثبت شد.',url('admin-finance'),'wallet');
         if (!bk_ajax()) bk_back('wallet-plus');
         bk_json(['ok'=>true,'message'=>'فیش ثبت شد؛ پس از تأیید مدیر موجودی اضافه می‌شود']);
     }
@@ -171,7 +171,7 @@ function bk_extended_action(string $action): never {
             $net=$amount-(int)floor($amount*(int)bk_setting('board_commission_percent',10)/100);
             $pdo->prepare('INSERT INTO board_orders(board_id,buyer_id,seller_id,admin_id,amount,commission_percent,commission_amount,net_amount,status,full_name,phone,address,city,postal_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$bid,$u['id'],$b['seller_id'],$escrow,$amount,(int)bk_setting('board_commission_percent',10),$amount-$net,$net,'paid',$full,$phone,$address,$city,$postal]);
             $pdo->prepare('UPDATE boards SET stock=stock-1,sold_count=sold_count+1 WHERE id=?')->execute([$bid]);$pdo->commit();
-            bk_notify((int)$b['seller_id'],'سفارش جدید برد','آدرس ارسال در سفارش ثبت شده است؛ ثبت شرکت حمل و کد رهگیری اجباری است.',url('my-boards'));
+            bk_notify((int)$b['seller_id'],'سفارش جدید برد','آدرس ارسال در سفارش ثبت شده است؛ ثبت شرکت حمل و کد رهگیری اجباری است.',url('my-boards'),'board');
             if(!bk_ajax()) bk_back('board/'.$bid);
             bk_json(['ok'=>true,'message'=>'خرید ثبت شد؛ وجه در امانت است']);
         } catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();if(!bk_ajax())bk_back('board/'.$bid);bk_json(['ok'=>false,'error'=>'ثبت خرید انجام نشد'],500);}
@@ -181,7 +181,7 @@ function bk_extended_action(string $action): never {
         if (!in_array($carrier,['پست','تیپاکس','باربری','پیک'],true) || mb_strlen($tracking)<6) bk_json(['ok'=>false,'error'=>'شرکت حمل و کد رهگیری اجباری است'],422);
         $q=db()->prepare("SELECT * FROM board_orders WHERE id=? AND seller_id=? AND status='paid'");$q->execute([$oid,$u['id']]);if(!$q->fetch())bk_json(['ok'=>false,'error'=>'سفارش قابل ارسال نیست'],404);
         db()->prepare("UPDATE board_orders SET status='shipped',carrier=?,tracking_code=?,shipped_at=NOW() WHERE id=?")->execute([$carrier,$tracking,$oid]);
-        $q=db()->prepare('SELECT buyer_id FROM board_orders WHERE id=?');$q->execute([$oid]);if($buyer=$q->fetchColumn())bk_notify((int)$buyer,'برد ارسال شد','شرکت حمل: '.$carrier.' — کد رهگیری: '.$tracking,url('boards'));
+        $q=db()->prepare('SELECT buyer_id FROM board_orders WHERE id=?');$q->execute([$oid]);if($buyer=$q->fetchColumn())bk_notify((int)$buyer,'برد ارسال شد','شرکت حمل: '.$carrier.' — کد رهگیری: '.$tracking,url('boards'),'board');
         if(!bk_ajax()) bk_back('my-boards');
         bk_json(['ok'=>true,'message'=>'ارسال با کد رهگیری ثبت شد']);
     }
