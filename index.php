@@ -793,7 +793,6 @@ function footer_html(): void { ?><footer class="footer"><div class="wrap footer-
 </div>
 <?php endif; ?>
 
-
 <div class="wrap copyright">© <?=fa(date('Y'))?> بردخان — تمامی حقوق محفوظ است. <span style="opacity:.55;font-size:10px">· نسخه <?=defined('BORDKHAN_VERSION')?BORDKHAN_VERSION:'قدیمی'?></span></div></footer><?php if(is_file(__DIR__.'/php-extended/bk_actionbar.php')){require_once __DIR__.'/php-extended/bk_actionbar.php';bk_render_actionbar(function_exists('current_user')?current_user():null);} ?><script>
 (function(){
   var CSRF = '<?=csrf()?>';
