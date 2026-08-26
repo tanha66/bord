@@ -1545,18 +1545,224 @@ if($page==='leaderboard'){$rows=db()->query('SELECT * FROM users ORDER BY points
 
 if($page==='premium'){$u=current_user();$s=settings();header_html('اشتراک ویژه');?><main class="wrap page"><div class="page-title text-center"><h1>اشتراک ویژه بردخان</h1><p>دسترسی نامحدود به همه قلق‌های پولی، نشان ویژه و اولویت نمایش.</p></div><div class="grid grid-3"><?php foreach([[1,'یک‌ماهه',$s['premium_1'],'⚡'],[3,'سه‌ماهه',$s['premium_3'],'🔥'],[12,'یک‌ساله',$s['premium_12'],'💎']] as $p):?><div class="card auth-card text-center"><div style="font-size:35px"><?=$p[3]?></div><h2><?=$p[1]?></h2><strong style="font-size:27px;color:#aa6900"><?=money($p[2])?></strong><p class="muted">تومان</p><ul style="text-align:right;font-size:12px;color:#61706a;line-height:2.3"><li>دسترسی نامحدود به قلق‌های پولی</li><li>نشان ویژه در پروفایل</li><li>اولویت در نمایش نتایج</li></ul><?php if($u):?><form method="post"><input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="subscribe"><input type="hidden" name="months" value="<?=$p[0]?>"><button class="btn btn-amber btn-full">خرید اشتراک</button></form><?php else:?><a class="btn btn-primary btn-full" href="<?=url('login')?>">ورود برای خرید</a><?php endif;?></div><?php endforeach;?></div></main><?php footer_html();exit;}
 
-if($page==='referral'){$u=require_login();$refLink=SITE_URL.'/register?ref='.urlencode($u['referral_code']??'');$invited=(int)db()->query('SELECT COUNT(*) FROM users WHERE referred_by='.(int)$u['id'])->fetchColumn();$rewarded=(int)db()->query('SELECT COUNT(*) FROM users WHERE referred_by='.(int)$u['id'].' AND referred_rewarded=1')->fetchColumn();$earned=(int)db()->query("SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE user_id=".(int)$u['id']." AND type='referral'")->fetchColumn();header_html('معرفی دوستان');?><main class="wrap page"><div class="page-title text-center"><h1>🎁 دعوت کن، پاداش بگیر!</h1><p>با هر دوست موفق، حتماً بعد از اولین فعالیت واقعی (آپلود قلق یا خرید) <?=money(settings()['referral_reward'])?> تومان به کیف پول شما واریز می‌شود.</p></div>
-<div class="card auth-card">
-  <div class="fgroup"><label class="field-label">لینک دعوت اختصاصی شما</label><div class="flex gap"><input class="field" id="refLink" dir="ltr" readonly value="<?=h($refLink)?>"><button class="btn btn-primary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('refLink').value);this.innerText='✓ کپی شد';setTimeout(()=>this.innerText='کپی',1500)">کپی</button></div></div>
-  <div class="fgroup"><label class="field-label">کد معرفی شما</label><div style="font-size:22px;letter-spacing:3px;color:var(--accent);font-weight:900;text-align:center;padding:12px;background:var(--bg-soft);border-radius:12px"><?=h($u['referral_code'])?></div></div>
+if($page==='referral'){
+$u=require_login();
+$refLink=SITE_URL.'/register?ref='.urlencode($u['referral_code']??'');
+$refCode=$u['referral_code']??'';
+$invited=(int)db()->query('SELECT COUNT(*) FROM users WHERE referred_by='.(int)$u['id'])->fetchColumn();
+$rewarded=(int)db()->query('SELECT COUNT(*) FROM users WHERE referred_by='.(int)$u['id'].' AND referred_rewarded=1')->fetchColumn();
+$earned=(int)db()->query("SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE user_id=".(int)$u['id']." AND type='referral'")->fetchColumn();
+$reward=settings()['referral_reward']??20000;
+$inviteeCredit=settings()['invitee_credit']??10000;
+header_html('معرفی دوستان');
+?>
+<main class="wrap page">
+<div class="page-title text-center">
+  <h1>🎁 دعوت کن، پاداش بگیر!</h1>
+  <p>با هر دعوت موفق <b><?=money($reward)?> تومان</b> پاداش بگیر. دوستت هم <b><?=money($inviteeCredit)?> تومان</b> هدیه ثبت‌نام می‌گیره!</p>
 </div>
-<div class="grid grid-3" style="margin-top:18px">
+
+<!-- آمار کاربر -->
+<div class="grid grid-3" style="margin-bottom:24px">
   <div class="card stat-card"><strong><?=fa($invited)?></strong><small class="muted">دوست دعوت‌شده</small></div>
   <div class="card stat-card"><strong><?=fa($rewarded)?></strong><small class="muted">فعالیت تکمیل‌شده</small></div>
-  <div class="card stat-card"><strong><?=money($earned)?></strong><small class="muted">تومان دریافتی (مجموع)</small></div>
+  <div class="card stat-card" style="border:2px solid var(--accent,#10b981)"><strong style="color:var(--accent,#10b981)"><?=money($earned)?></strong><small class="muted">تومان دریافتی</small></div>
 </div>
-<div class="card auth-card mt"><h3 style="margin:0 0 10px">قوانين برنامه معرفی</h3><ul class="muted" style="font-size:13px;line-height:2.1;padding-right:18px;margin:0"><li>دوست شما هنگام ثبت‌نام با کد شما، <?=money(settings()['invitee_credit'])?> تومان اعتبار خوش‌آمدگویی می‌گیرد.</li><li>پاداش شما <?=money(settings()['referral_reward'])?> تومان است و فقط پس از «اولین فعالیت موفق» کاربر دعوت‌شده (آپلود قلق منتشرشده یا اولین خرید) واریز می‌شود.</li><li>پاداش فقط یک‌بار برای هر دعوت‌شده پرداخت می‌شود و سلبریته اعتبار دارد.</li><li>دعوت از حساب‌های خود فرد ممنوع است و به مسدودی منجر می‌شود.</li></ul></div>
-</main><?php footer_html();exit;}
+
+<!-- لینک و کد اختصاصی -->
+<div class="card auth-card" style="margin-bottom:24px">
+  <h3 style="margin:0 0 12px">🔗 لینک و کد اختصاصی شما</h3>
+  <div class="fgroup"><label class="field-label">لینک دعوت</label>
+    <div class="flex gap"><input class="field" id="refLink" dir="ltr" readonly value="<?=h($refLink)?>" style="font-size:12px">
+    <button class="btn btn-primary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('refLink').value);this.textContent='✓ کپی شد';setTimeout(()=>this.textContent='کپی لینک',1500)">کپی لینک</button></div>
+  </div>
+  <div class="fgroup"><label class="field-label">کد معرفی</label>
+    <div class="flex gap"><input class="field" id="refCode" dir="ltr" readonly value="<?=h($refCode)?>" style="font-size:18px;letter-spacing:4px;text-align:center;font-weight:900">
+    <button class="btn btn-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('refCode').value);this.textContent='✓';setTimeout(()=>this.textContent='کپی کد',1500)">کپی کد</button></div>
+  </div>
+</div>
+
+<!-- بنرهای تبلیغاتی -->
+<h2 style="font-size:18px;margin-bottom:16px">📣 بنرهای تبلیغاتی شما</h2>
+<p class="muted" style="font-size:12px;margin-bottom:16px">هر بنر را کپی کنید و در شبکه‌های اجتماعی به اشتراک بگذارید. لینک اختصاصی شما در همه بنرها قرار دارد.</p>
+
+<div class="grid grid-2" style="margin-bottom:30px">
+
+  <!-- بنر ۱ -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#065f46,#0d9488);padding:24px;color:#fff;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">🔧</div>
+      <h3 style="color:#fff;margin:0 0 8px;font-size:16px">بردخان — بازار قلق تعمیراتی</h3>
+      <p style="margin:0 0 12px;font-size:13px;opacity:.9">قلق‌های تست‌شده تعمیراتی از تعمیرکاران حرفه‌ای</p>
+      <div style="background:rgba(255,255,255,.15);border-radius:10px;padding:10px;font-size:12px;direction:ltr;word-break:break-all"><?=h($refLink)?></div>
+      <div style="margin-top:12px;font-size:11px;opacity:.8">ثبت‌نام کن و <?=money($inviteeCredit)?> تومان هدیه بگیر!</div>
+    </div>
+    <div style="padding:10px;display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm btn-full" onclick="copyBanner(1)">📋 کپی بنر</button>
+    </div>
+  </div>
+
+  <!-- بنر ۲ -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#1e1b4b,#4338ca);padding:24px;color:#fff;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">💰</div>
+      <h3 style="color:#fff;margin:0 0 8px;font-size:16px">تعمیرکار هستی؟ درآمد کسب کن!</h3>
+      <p style="margin:0 0 12px;font-size:13px;opacity:.9">قلقت رو ثبت کن، بفروش، پاداش بگیر</p>
+      <div style="background:rgba(255,255,255,.15);border-radius:10px;padding:10px;font-size:12px;direction:ltr;word-break:break-all"><?=h($refLink)?></div>
+      <div style="margin-top:12px;font-size:11px;opacity:.8">همین الان شروع کن!</div>
+    </div>
+    <div style="padding:10px;display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm btn-full" onclick="copyBanner(2)">📋 کپی بنر</button>
+    </div>
+  </div>
+
+  <!-- بنر ۳ -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#7c2d12,#ea580c);padding:24px;color:#fff;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">⚡</div>
+      <h3 style="color:#fff;margin:0 0 8px;font-size:16px">دیگه نگرد! قلق تعمیر اینجاست</h3>
+      <p style="margin:0 0 12px;font-size:13px;opacity:.9">هزاران قلق تست‌شده — سریع پیدا کن، مطمئن تعمیر کن</p>
+      <div style="background:rgba(255,255,255,.15);border-radius:10px;padding:10px;font-size:12px;direction:ltr;word-break:break-all"><?=h($refLink)?></div>
+      <div style="margin-top:12px;font-size:11px;opacity:.8">با کد من ثبت‌نام کن و هدیه بگیر!</div>
+    </div>
+    <div style="padding:10px;display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm btn-full" onclick="copyBanner(3)">📋 کپی بنر</button>
+    </div>
+  </div>
+
+  <!-- بنر ۴ -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#831843,#db2777);padding:24px;color:#fff;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">🎁</div>
+      <h3 style="color:#fff;margin:0 0 8px;font-size:16px">دعوتت کردم به بردخان!</h3>
+      <p style="margin:0 0 12px;font-size:13px;opacity:.9">با لینک من ثبت‌نام کن <?=money($inviteeCredit)?> تومن هدیه بگیر</p>
+      <div style="background:rgba(255,255,255,.15);border-radius:10px;padding:10px;font-size:12px;direction:ltr;word-break:break-all"><?=h($refLink)?></div>
+      <div style="margin-top:12px;font-size:11px;opacity:.8">بازار تخصصی قلق‌های تعمیراتی 📱💻🖥</div>
+    </div>
+    <div style="padding:10px;display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm btn-full" onclick="copyBanner(4)">📋 کپی بنر</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- متن‌های آماده -->
+<h2 style="font-size:18px;margin-bottom:16px">✍️ متن‌های آماده برای ارسال</h2>
+<p class="muted" style="font-size:12px;margin-bottom:16px">هر متن را کپی کنید و برای دوستانتان بفرستید.</p>
+
+<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:30px">
+
+  <!-- متن ۱ -->
+  <div class="card" style="padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
+      <div style="flex:1;font-size:13px;line-height:2.2" id="msg1">سلام! 👋
+اگه تعمیرکاری یا با بردهای الکترونیکی سروکار داری، سایت «بردخان» رو بهت معرفی می‌کنم.
+یه بازار قلق‌های تعمیراتی هست که راه‌حل‌های تست‌شده داره.
+با لینک من ثبت‌نام کن <?=money($inviteeCredit)?> تومن هدیه بگیر:
+<?=h($refLink)?></div>
+      <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyMsg('msg1')">📋 کپی</button>
+    </div>
+  </div>
+
+  <!-- متن ۲ -->
+  <div class="card" style="padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
+      <div style="flex:1;font-size:13px;line-height:2.2" id="msg2">🔧 دنبال قلق تعمیر می‌گردی؟
+سایت بردخان پر از راه‌حل‌های تست‌شده‌ست.
+لپ‌تاپ، موبایل، پاور، مادربرد — همه هست.
+از طرف من ثبت‌نام کن هدیه بگیر 🔥
+<?=h($refLink)?></div>
+      <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyMsg('msg2')">📋 کپی</button>
+    </div>
+  </div>
+
+  <!-- متن ۳ -->
+  <div class="card" style="padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
+      <div style="flex:1;font-size:13px;line-height:2.2" id="msg3">💰 اگه تعمیرکاری، بیا بردخان!
+قلقت رو ثبت کن، بفروش، درآمد کسب کن.
+یه جامعه حرفه‌ای تعمیرکارهاست.
+با لینک من بیا <?=money($inviteeCredit)?> تومن هدیه ثبت‌نام بگیر:
+<?=h($refLink)?></div>
+      <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyMsg('msg3')">📋 کپی</button>
+    </div>
+  </div>
+
+  <!-- متن ۴ -->
+  <div class="card" style="padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
+      <div style="flex:1;font-size:13px;line-height:2.2" id="msg4">📱🔧💻
+بردخان = بازار قلق تعمیراتی
+هر خرابی یه راه‌حل داره، پیداش کن!
+از لینک زیر ثبت‌نام کن:
+<?=h($refLink)?></div>
+      <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyMsg('msg4')">📋 کپی</button>
+    </div>
+  </div>
+
+  <!-- متن ۵ (کوتاه) -->
+  <div class="card" style="padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
+      <div style="flex:1;font-size:13px;line-height:2.2" id="msg5">🎁 یه سایت خفن برای تعمیرکارها پیدا کردم — بردخان
+با لینک من ثبت‌نام کن هدیه بگیر: <?=h($refLink)?></div>
+      <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyMsg('msg5')">📋 کپی</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- اشتراک‌گذاری سریع -->
+<div class="card auth-card" style="margin-bottom:24px;text-align:center">
+  <h3 style="margin:0 0 14px">📤 اشتراک‌گذاری سریع</h3>
+  <div class="flex gap" style="justify-content:center;flex-wrap:wrap">
+    <a class="btn btn-sm" style="background:#25D366;color:#fff" href="https://wa.me/?text=<?=urlencode('سلام! سایت بردخان رو ببین — بازار قلق تعمیراتی 🔧'.chr(10).$refLink)?>" target="_blank">واتساپ</a>
+    <a class="btn btn-sm" style="background:#0088cc;color:#fff" href="https://t.me/share/url?url=<?=urlencode($refLink)?>&text=<?=urlencode('بردخان — بازار قلق تعمیراتی 🔧')?>" target="_blank">تلگرام</a>
+    <button class="btn btn-secondary btn-sm" onclick="if(navigator.share){navigator.share({title:'بردخان',text:'بازار قلق تعمیراتی',url:'<?=h($refLink)?>'})}else{navigator.clipboard.writeText('<?=h($refLink)?>');this.textContent='✓ لینک کپی شد'}">اشتراک‌گذاری</button>
+  </div>
+</div>
+
+<!-- قوانین -->
+<div class="card auth-card">
+  <h3 style="margin:0 0 10px">📋 قوانین برنامه معرفی</h3>
+  <ul class="muted" style="font-size:13px;line-height:2.1;padding-right:18px;margin:0">
+    <li>دوست شما هنگام ثبت‌نام <b><?=money($inviteeCredit)?> تومان</b> اعتبار خوش‌آمدگویی می‌گیرد.</li>
+    <li>پاداش شما <b><?=money($reward)?> تومان</b> است — پس از اولین فعالیت موفق دوستتان واریز می‌شود.</li>
+    <li>فعالیت موفق = آپلود قلق منتشرشده یا اولین خرید.</li>
+    <li>دعوت از حساب‌های ساختگی ممنوع و منجر به مسدودی می‌شود.</li>
+  </ul>
+</div>
+
+</main>
+
+<script>
+function copyMsg(id){
+  var el = document.getElementById(id);
+  if(!el) return;
+  navigator.clipboard.writeText(el.textContent.trim()).then(function(){
+    var btn = el.parentElement.querySelector('button');
+    if(btn){var orig=btn.textContent;btn.textContent='✓ کپی شد';btn.style.background='var(--accent,#10b981)';btn.style.color='#fff';setTimeout(function(){btn.textContent=orig;btn.style.background='';btn.style.color='';},1500);}
+  });
+}
+function copyBanner(n){
+  var link = document.getElementById('refLink').value;
+  var msgs = {
+    1: '🔧 بردخان — بازار قلق تعمیراتی\nقلق‌های تست‌شده از تعمیرکاران حرفه‌ای\nلپ‌تاپ، موبایل، پاور، مادربرد و...\n\nبا لینک من ثبت‌نام کن و هدیه بگیر:\n' + link,
+    2: '💰 تعمیرکاری؟ بیا بردخان!\nقلقت رو ثبت کن، بفروش، درآمد کسب کن\nیه جامعه حرفه‌ای تعمیرکارهاست\n\nهمین الان شروع کن:\n' + link,
+    3: '⚡ دیگه نگرد! قلق تعمیر اینجاست\nهزاران قلق تست‌شده — سریع پیدا کن\n\nبا کد من ثبت‌نام کن و هدیه بگیر:\n' + link,
+    4: '🎁 دعوتت کردم به بردخان!\nبازار تخصصی قلق‌های تعمیراتی\nبا لینک من ثبت‌نام کن هدیه بگیر:\n' + link
+  };
+  navigator.clipboard.writeText(msgs[n]||'').then(function(){
+    var btn = event.target;
+    var orig = btn.textContent;
+    btn.textContent = '✓ کپی شد!';
+    setTimeout(function(){ btn.textContent = orig; }, 1500);
+  });
+}
+</script>
+
+<?php footer_html();exit;}
+
+if($page==='about')
 
 if($page==='about'){require __DIR__.'/pages/about.php';exit;}
 if($page==='contact'){require __DIR__.'/pages/contact.php';exit;}
