@@ -26,7 +26,13 @@ if ($page === 'boards' && $sub === '') {
           <h3>فیلترها</h3>
           <form method="get"><input type="hidden" name="r" value="boards">
             <div class="fgroup"><label class="flabel">جستجو</label><input class="field" name="q" value="<?=h($q)?>" placeholder=" عنوان، برند، مدل…"></div>
-            <div class="fgroup"><label class="flabel">دسته‌بندی</label><input class="field" type="text" placeholder="🔍 جستجوی زندهٔ دسته…" oninput="bkFilterSelect(this)" style="margin-bottom:6px"><select class="field" name="cat"><option value="">همه</option><?php foreach($leaves as $l): ?><option value="<?=$l['id']?>" <?=$cat===$l['id']?'selected':''?>><?=h($l['label'])?></option><?php endforeach; ?></select></div>
+            <div class="fgroup"><label class="flabel">دسته‌بندی</label>
+<div class="bk-cat-search">
+  <input class="field" type="text" placeholder="🔍 جستجوی دسته…" autocomplete="off" value="<?=$catName??''?>">
+  <div class="bk-cat-dropdown"></div>
+  <input type="hidden" name="cat" value="<?=$cat??''?>">
+</div>
+</div>
             <div class="fgroup"><label class="flabel">مرتب‌سازی</label><select class="field" name="sort"><option value="newest" <?=$sort==='newest'?'selected':''?>>جدیدترین</option><option value="price_asc" <?=$sort==='price_asc'?'selected':''?>>ارزان‌ترین</option><option value="price_desc" <?=$sort==='price_desc'?'selected':''?>>گران‌ترین</option><option value="views" <?=$sort==='views'?'selected':''?>>پربازدید</option></select></div>
             <button class="btn btn-primary btn-full">اعمال فیلتر</button>
           </form>
@@ -54,7 +60,14 @@ if ($page === 'boards' && $sub === 'new') {
       <input type="hidden" name="csrf" value="<?=csrf()?>"><input type="hidden" name="action" value="board_create">
       <div class="fgroup"><label class="flabel">عنوان برد *</label><input class="field" name="title" required placeholder="مثلاً: برد تغذیه تلویزیون سامسونگ UA55F5500"></div>
       <div class="grid g2">
-        <div class="fgroup"><label class="flabel">دسته‌بندی *</label><input class="field" type="text" placeholder="🔍 جستجوی زندهٔ دسته…" oninput="bkFilterSelect(this)"><select class="field" name="category_id" required><option value="">انتخاب کنید…</option><?php foreach($leaves as $l):?><option value="<?=$l['id']?>"><?=h($l['label'])?></option><?php endforeach;?></select></div>
+        <div class="fgroup"><label class="flabel">دسته‌بندی *</label>
+<div class="bk-cat-search" id="catSearchBoard">
+  <input class="field" type="text" placeholder="🔍 تایپ کنید تا دسته پیدا شود…" autocomplete="off">
+  <div class="bk-cat-dropdown"></div>
+  <input type="hidden" name="category_id" value="" required>
+</div>
+<small class="muted" style="font-size:11px;margin-top:4px;display:block">نام دسته را تایپ کنید و از لیست انتخاب کنید</small>
+</div>
         <div class="fgroup"><label class="flabel">قیمت (تومان) *</label><input class="field" type="number" name="price" min="1000" step="1000" required></div>
       </div>
       <div class="fgroup"><label class="flabel">توضیح کامل *</label><textarea class="field" name="description" rows="5" required placeholder="وضعیت فنی، قطعات روی برد، تاریخ تعمیر و…"></textarea></div>
@@ -81,7 +94,38 @@ bkSetupChecks('boardForm','boardChecks',[
 {name:'price',kind:'price',n:1000,label:'قیمت (حداقل ۱۰۰۰ تومان)'},
 {name:'images',kind:'files',n:1,label:'حداقل ۱ عکس'}
 ]);
-if(typeof bkFilterSelect!=='function'){function bkFilterSelect(inp){var sel=inp.parentElement.querySelector('select');if(!sel)return;var q=(inp.value||'').trim().toLowerCase();Array.prototype.forEach.call(sel.options,function(o){if(!o.value)return;var t=(o.textContent||'').toLowerCase();var og=o.parentElement&&o.parentElement.label?o.parentElement.label.toLowerCase():'';o.hidden=q===''||t.indexOf(q)!==-1||og.indexOf(q)!==-1;});Array.prototype.forEach.call(sel.querySelectorAll('optgroup'),function(g){var any=false;Array.prototype.forEach.call(g.options,function(o){if(!o.hidden)any=true;});g.hidden=!any;});if(!sel.value||sel.options[sel.selectedIndex]&&sel.options[sel.selectedIndex].hidden){sel.value='';}}}
+(function(){
+  var cats = <?=json_encode(array_map(function($l){return['id'=>$l['id'],'name'=>$l['label']];},$leaves),JSON_UNESCAPED_UNICODE)?>;
+  document.querySelectorAll('.bk-cat-search').forEach(function(wrap){
+    var inp = wrap.querySelector('input[type="text"]');
+    var drop = wrap.querySelector('.bk-cat-dropdown');
+    var hidden = wrap.querySelector('input[type="hidden"]');
+    if(!inp||!drop||!hidden) return;
+    function show(q){
+      q = (q||'').trim().toLowerCase();
+      var html = '';
+      cats.forEach(function(c){
+        if(q === '' || c.name.toLowerCase().indexOf(q) !== -1){
+          html += '<div data-id="'+c.id+'" data-name="'+c.name+'"><b>'+c.name+'</b></div>';
+        }
+      });
+      drop.innerHTML = html || '<div style="padding:12px;color:#94a3b8;font-size:12px">دسته‌ای یافت نشد</div>';
+      drop.style.display = 'block';
+    }
+    function hide(){ setTimeout(function(){ drop.style.display = 'none'; }, 200); }
+    inp.addEventListener('input', function(){ show(inp.value); hidden.value=''; });
+    inp.addEventListener('focus', function(){ show(inp.value); });
+    inp.addEventListener('blur', hide);
+    drop.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      var item = e.target.closest('[data-id]');
+      if(!item) return;
+      hidden.value = item.dataset.id;
+      inp.value = item.dataset.name;
+      drop.style.display = 'none';
+    });
+  });
+})();
 (function(){var f=document.getElementById('boardForm');if(!f)return;var msg=document.getElementById('boardFormMsg');var bar=document.getElementById('boardBar');var barWrap=document.getElementById('boardBarWrap');var fi=document.getElementById('boardImages');var pv=document.getElementById('boardPreview');if(fi&&pv){fi.addEventListener('change',function(){pv.innerHTML='';Array.prototype.forEach.call(fi.files,function(file){if(!/^image\//.test(file.type||''))return;var u=URL.createObjectURL(file);var img=document.createElement('img');img.src=u;img.alt='پیش‌نمایش';img.style.cssText='width:86px;height:86px;object-fit:cover;border-radius:10px;border:1px solid var(--line)';pv.appendChild(img);});});}f.addEventListener('submit',function(e){e.preventDefault();var b=f.querySelector('button');var orig=b?b.textContent:'';if(b){b.disabled=true;b.textContent='⏳ در حال ارسال…';}msg.innerHTML='';if(barWrap)barWrap.style.display='block';if(bar){bar.style.width='0%';bar.textContent='0%';}var xhr=new XMLHttpRequest();xhr.open('POST',window.location.href);xhr.setRequestHeader('X-Requested-With','XMLHttpRequest');xhr.setRequestHeader('Accept','application/json');xhr.upload.addEventListener('progress',function(ev){if(ev.lengthComputable&&bar){var p=Math.round(ev.loaded/ev.total*100);bar.style.width=p+'%';bar.textContent=p+'%';}});xhr.onload=function(){if(barWrap)barWrap.style.display='none';var j=null;try{j=JSON.parse(xhr.responseText);}catch(_){}if(j&&j.ok){msg.innerHTML='<div class="notice" style="margin-top:12px">✅ '+(j.message||'انجام شد')+'</div>';if(j.redirect){setTimeout(function(){window.location.href=j.redirect;},1200);}else if(b){b.disabled=false;b.textContent=orig;}}else{msg.innerHTML='<div class="notice error" style="margin-top:12px">⚠️ '+((j&&j.error)||((xhr.responseText||'').slice(0,180))||'پاسخی از سرور دریافت نشد؛ دوباره تلاش کنید.')+'</div>';if(b){b.disabled=false;b.textContent=orig;}}};xhr.onerror=function(){if(barWrap)barWrap.style.display='none';msg.innerHTML='<div class="notice error" style="margin-top:12px">⚠️ خطای ارتباط با سرور؛ دوباره تلاش کنید.</div>';if(b){b.disabled=false;b.textContent=orig;}};xhr.send(new FormData(f));});})();
 </script></main><?php footer_html(); exit;
 }

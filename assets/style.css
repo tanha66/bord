@@ -819,3 +819,11 @@ details.bk-optional[open] summary{margin-bottom:12px}
 @keyframes bkSlideUp{from{opacity:0;transform:translateX(-50%) translateY(30px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
 
+
+/* ═══ Category Search Dropdown ═══ */
+.bk-cat-search{position:relative}
+.bk-cat-dropdown{display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--bg-card,#111820);border:1px solid var(--line,#1e2a38);border-radius:12px;max-height:220px;overflow-y:auto;box-shadow:0 12px 36px rgba(0,0,0,.5);margin-top:4px}
+.bk-cat-dropdown > div{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--line,#1e2a38);transition:.12s}
+.bk-cat-dropdown > div:last-child{border-bottom:0}
+.bk-cat-dropdown > div:hover{background:rgba(16,185,129,.1)}
+.bk-cat-dropdown > div b{font-size:13px;color:var(--text,#fff)}
