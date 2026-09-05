@@ -1,6 +1,6 @@
 <?php
 /**
- * Bordkhan — ابزار یک‌جا سید ۲۰۹ قلق تعمیر گوشی
+ * Bordkhan — ابزار یک‌جا سید ۳۰۹ قلق تعمیر گوشی
  * ================================================
  * همه‌کاره: کپی ۱۴ عکس + اصلاح مسیر عکس‌های ثبت‌شده + درج/به‌روزرسانی قلق‌ها
  *
@@ -8,7 +8,7 @@
  *
  *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY          ← همه‌کاره: کپی عکس + fiximgs + سید
  *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY&fresh=1  ← حذف قلق‌های سید قبلی و نصب از نو
- *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY&list=1   ← فقط پیش‌نمایش ۲۰۹ عنوان
+ *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY&list=1   ← فقط پیش‌نمایش ۳۰۹ عنوان
  *
  * دیتاست: پوشهٔ seed-data باید کنار همین فایل باشد (یا داخل php-extended/seed-data).
  * عکس‌ها: پوشهٔ uploads-seed/tips باید کنار همین فایل باشد (یا داخل php-extended/uploads-seed/tips).
@@ -56,7 +56,7 @@ if ($key === '' || !defined('INSTALL_KEY') || !hash_equals((string)INSTALL_KEY, 
 header('Content-Type: text/html; charset=utf-8');
 echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>سید قلق‌های بردخان</title></head>';
 echo '<body style="font-family:Tahoma;background:#0f1a2b;color:#e8edf4;padding:24px;line-height:2.1">';
-echo '<div style="max-width:860px;margin:auto"><h1 style="color:#5eead4">📱 ابزار سید ۲۰۹ قلق تعمیر گوشی</h1>';
+echo '<div style="max-width:860px;margin:auto"><h1 style="color:#5eead4">📱 ابزار سید ۳۰۹ قلق تعمیر گوشی</h1>';
 
 $FRESH  = isset($_GET['fresh'])  && $_GET['fresh']  == '1';
 $LIST   = isset($_GET['list'])   && $_GET['list']   == '1';
@@ -67,7 +67,7 @@ $ROOT = __DIR__;
 $seedDataCandidates = [$ROOT . '/seed-data', $ROOT . '/php-extended/seed-data'];
 $SEED_DATA = '';
 foreach ($seedDataCandidates as $c) if (is_dir($c)) { $SEED_DATA = $c; break; }
-if ($SEED_DATA === '') bk_fail('پوشهٔ seed-data (شامل part1.json…part10.json و image_map.php) کنار seed-all.php یا داخل php-extended نیست.');
+if ($SEED_DATA === '') bk_fail('پوشهٔ seed-data (شامل part1.json…part14.json و image_map.php) کنار seed-all.php یا داخل php-extended نیست.');
 
 $mediaCandidates = [$ROOT . '/uploads-seed/tips', $ROOT . '/php-extended/uploads-seed/tips'];
 $MEDIA_SRC = '';
@@ -158,7 +158,7 @@ foreach ($it as $f) {
     if (!$f->isFile()) continue;
     $name = basename($f->getPathname());
     if (strpos($name, 'tip-') !== 0) continue;
-    $media_names[$name] = true;   /* همهٔ tip-* شامل ۲۰۹ عکس یکتا ثبت می‌شوند */
+    $media_names[$name] = true;   /* همهٔ tip-* شامل ۳۰۹ عکس یکتا ثبت می‌شوند */
     $target = $UPLOADS . '/' . $name;
     if (is_file($target) && filesize($target) === $f->getSize()) { $skipped++; continue; }
     if (@copy($f->getPathname(), $target)) { $copied++; $bytes += $f->getSize(); @chmod($target, 0644); }

@@ -395,6 +395,9 @@ strong,b{color:var(--text)}
 .tstep p,.step p{margin:3px 0 0;font-size:12px;color:var(--text-soft);white-space:pre-wrap}
 .steps{display:grid;gap:10px}
 .no-save{user-select:none;-webkit-user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none;pointer-events:none}
+/* رفع باگ پخش ویدیو: pointer-events:none نباید روی iframe پخش‌کننده (آپارات/یوتیوب) اعمال شود */
+iframe.no-save{pointer-events:auto;touch-action:auto}
+.video-lock iframe,.vlock iframe{pointer-events:auto}
 .full-lock::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-32deg,transparent 0 28px,rgba(255,255,255,.05) 28px 56px);pointer-events:none;z-index:2}
 .full-lock{position:relative;overflow:hidden}
 .media-shield{position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,28,20,0) 30%,rgba(2,28,20,.85));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:13px;z-index:3;flex-direction:column;gap:8px;text-align:center;padding:14px}
