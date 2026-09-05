@@ -9,6 +9,7 @@
  *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY          ← همه‌کاره: کپی عکس + fiximgs + سید
  *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY&fresh=1  ← حذف قلق‌های سید قبلی و نصب از نو
  *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY&list=1   ← فقط پیش‌نمایش ۳۰۹ عنوان
+ *   https://bordkhan.ir/seed-all.php?key=INSTALL_KEY&skipcopy=1 ← اگر عکس‌ها قبلاً کپی شده (اجرای سریع‌تر)
  *
  * دیتاست: پوشهٔ seed-data باید کنار همین فایل باشد (یا داخل php-extended/seed-data).
  * عکس‌ها: پوشهٔ uploads-seed/tips باید کنار همین فایل باشد (یا داخل php-extended/uploads-seed/tips).
@@ -57,6 +58,11 @@ header('Content-Type: text/html; charset=utf-8');
 echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>سید قلق‌های بردخان</title></head>';
 echo '<body style="font-family:Tahoma;background:#0f1a2b;color:#e8edf4;padding:24px;line-height:2.1">';
 echo '<div style="max-width:860px;margin:auto"><h1 style="color:#5eead4">📱 ابزار سید ۳۰۹ قلق تعمیر گوشی</h1>';
+/* شکستن بافر خروجی هاست‌های اشتراکی تا progress از ثانیهٔ اول دیده شود */
+echo str_pad(' ', 4096) . "\n";
+while (ob_get_level() > 0) { @ob_flush(); }
+@flush();
+bk_out('⏳ این عملیات ممکن است چند دقیقه طول بکشد — صفحه را نبندید. اگر اتصال قطع شد، دوباره همین آدرس را باز کنید؛ از همان‌جا ادامه می‌دهد.');
 
 $FRESH  = isset($_GET['fresh'])  && $_GET['fresh']  == '1';
 $LIST   = isset($_GET['list'])   && $_GET['list']   == '1';
@@ -151,8 +157,19 @@ if ($LIST) {
 }
 
 /* ---------- ۸) کپی عکس‌ها (تخت، فقط tip-*) ---------- */
-bk_out('<h2 style="color:#93c5fd">مرحلهٔ ۱ — کپی ۱۴ عکس به ریشهٔ uploads</h2>');
-$copied = $skipped = $failed = 0; $bytes = 0; $media_names = [];
+$SKIPCOPY = isset($_GET['skipcopy']) && $_GET['skipcopy'] == '1';
+$copied = $skipped = $failed = 0; $bytes = 0; $media_names = []; $seen = 0;
+if ($SKIPCOPY) {
+    bk_out('<h2 style="color:#93c5fd">مرحلهٔ ۱ — کپی عکس‌ها (رد شد با skipcopy=1)</h2>');
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($MEDIA_SRC, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        if (!$f->isFile()) continue;
+        $name = basename($f->getPathname());
+        if (strpos($name, 'tip-') === 0) $media_names[$name] = true;
+    }
+    bk_out('فهرست فایل‌های مجاز خوانده شد: ' . count($media_names) . ' فایل (کپی انجام نشد)');
+} else {
+bk_out('<h2 style="color:#93c5fd">مرحلهٔ ۱ — کپی عکس‌های یکتا به ریشهٔ uploads (۳۲۴ فایل)</h2>');
 $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($MEDIA_SRC, FilesystemIterator::SKIP_DOTS));
 foreach ($it as $f) {
     if (!$f->isFile()) continue;
@@ -160,11 +177,16 @@ foreach ($it as $f) {
     if (strpos($name, 'tip-') !== 0) continue;
     $media_names[$name] = true;   /* همهٔ tip-* شامل ۳۰۹ عکس یکتا ثبت می‌شوند */
     $target = $UPLOADS . '/' . $name;
-    if (is_file($target) && filesize($target) === $f->getSize()) { $skipped++; continue; }
-    if (@copy($f->getPathname(), $target)) { $copied++; $bytes += $f->getSize(); @chmod($target, 0644); }
-    else $failed++;
+    if (is_file($target) && filesize($target) === $f->getSize()) { $skipped++; }
+    else {
+        if (@copy($f->getPathname(), $target)) { $copied++; $bytes += $f->getSize(); @chmod($target, 0644); }
+        else $failed++;
+    }
+    $seen++;
+    if ($seen % 25 === 0) bk_out("… {$seen} فایل بررسی شد (کپی {$copied}، از قبل بود {$skipped})");
 }
 bk_out("نتیجه: کپی {$copied} | از قبل بود {$skipped} | خطا {$failed} (" . round($bytes/1048576, 2) . " MB) — مجموع فایل‌های مجاز: " . count($media_names));
+}
 if ($failed > 0) bk_fail("{$failed} عکس کپی نشد. دسترسی پوشهٔ uploads را روی 755 بگذارید و دوباره همین صفحه را باز کنید.");
 
 /* ---------- ۹) اصلاح سراسری مسیر عکس‌ها ---------- */
@@ -278,7 +300,7 @@ foreach ($tips as $idx => $t) {
         $tipId = (int)$pdo->lastInsertId();
         $insState->execute(['seed-mobile-' . $no, $no, $tipId, $t['_src']]);
         $ok++;
-        if ($ok % 50 === 0) { $pdo->commit(); $pdo->beginTransaction(); bk_out("… {$ok} قلق ثبت شد"); }
+        if ($ok % 20 === 0) { $pdo->commit(); $pdo->beginTransaction(); bk_out("… {$ok} قلق ثبت شد"); }
     } catch (Throwable $e) {
         bk_out('⚠️ رکورد ' . $no . ' (' . htmlspecialchars($title) . '): ' . htmlspecialchars($e->getMessage()));
         $fail++;
