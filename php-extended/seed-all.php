@@ -45,6 +45,10 @@ if (!$cfg_ok || !defined('DB_NAME')) bk_fail('config.php کنار seed-all.php �
 if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
 
 /* ---------- ۲) محافظت کلید ---------- */
+/* نرمال‌سازی لینک‌هایی که & به‌صورت &amp; کپی/کلیک شده (پیام‌ها و ادیتورها) */
+foreach ($_GET as $gk => $gv) {
+    if (str_starts_with((string)$gk, 'amp;')) { $_GET[substr((string)$gk, 4)] = $gv; }
+}
 $key = isset($_GET['key']) ? (string)$_GET['key'] : '';
 if ($key === '' || !defined('INSTALL_KEY') || !hash_equals((string)INSTALL_KEY, $key)) {
     http_response_code(403);
