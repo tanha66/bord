@@ -1,12 +1,14 @@
 <?php
 /**
- * Bordkhan — کپی تصاویر seed به پوشهٔ uploads/tips
+ * Bordkhan — کپی تصاویر seed به پوشهٔ uploads (ریشه)
+ * ⚠️ عمداً فایل‌ها را «تخت» در ریشهٔ uploads کپی می‌کنیم چون serve.php
+ * فقط فایل‌های مستقیم داخل uploads/ را سرو می‌کند (basename).
+ *
  * اجرا از دو راه:
  *   ۱) SSH/CLI:  php copy_seed_media.php
  *   ۲) مرورگر:   https://site.com/copy_seed_media.php?key=INSTALL_KEY
  *
  * محل فایل: هم در ریشهٔ سایت کار می‌کند هم داخل پوشهٔ php-extended.
- * پوشهٔ uploads-seed باید یکی از این دو جا باشد: کنار این فایل، یا داخل php-extended.
  * اجرای مکرر امن است (فقط فایل‌های ناموجود کپی می‌شوند).
  */
 
@@ -51,7 +53,7 @@ if (!$bk_is_cli) {
     header('Content-Type: text/plain; charset=utf-8');
 }
 
-/* ---------- یافتن پوشهٔ منبع و مقصد ---------- */
+/* ---------- یافتن پوشهٔ منبع ---------- */
 $bk_src_candidates = [
     __DIR__ . '/uploads-seed/tips',
     __DIR__ . '/php-extended/uploads-seed/tips',
@@ -64,38 +66,39 @@ if ($SRC === '') {
     bk_csm_fail('پوشهٔ uploads-seed/tips پیدا نشد. آن را کنار این فایل یا داخل php-extended قرار دهید.');
 }
 
+/* ---------- یافتن/ساخت پوشهٔ مقصد = ریشهٔ uploads ---------- */
 $bk_dst_candidates = [
-    __DIR__ . '/../uploads/tips',   /* فایل داخل php-extended است */
-    __DIR__ . '/uploads/tips',      /* فایل در ریشهٔ سایت است */
+    __DIR__ . '/../uploads',   /* فایل داخل php-extended است */
+    __DIR__ . '/uploads',      /* فایل در ریشهٔ سایت است */
 ];
 $DST = '';
 foreach ($bk_dst_candidates as $bk_c) {
     $bk_parent = dirname($bk_c);
-    if (is_dir($bk_parent) && is_writable($bk_parent)) { $DST = $bk_c; break; }
+    if (is_dir($bk_c) && is_writable($bk_c)) { $DST = $bk_c; break; }
+    if (!is_dir($bk_c) && is_dir($bk_parent) && is_writable($bk_parent)) { $DST = $bk_c; break; }
 }
 if ($DST === '') {
-    /* اولین مسیر منطقی را بسازیم */
-    $DST = $bk_dst_candidates[0];
-}
-if (!is_dir($DST) && !@mkdir($DST, 0755, true) && !is_dir($DST)) {
-    bk_csm_fail('ساخت پوشهٔ مقصد ناموفق بود: ' . $DST . ' — مجوز نوشتن را بررسی کنید (معمولاً 755).');
+    bk_csm_fail('پوشهٔ uploads پیدا نشد یا قابل نوشتن نیست. این فایل باید در ریشهٔ سایت یا داخل php-extended باشد.');
 }
 
 bk_csm_out('منبع: ' . $SRC);
-bk_csm_out('مقصد: ' . $DST);
+bk_csm_out('مقصد (ریشهٔ uploads): ' . $DST);
 
 $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($SRC, FilesystemIterator::SKIP_DOTS));
 $copied = 0; $skipped = 0; $failed = 0; $bytes = 0;
 foreach ($it as $file) {
     if (!$file->isFile()) continue;
-    $rel = substr($file->getPathname(), strlen($SRC) + 1);
-    $target = $DST . '/' . $rel;
-    $dir = dirname($target);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) { $failed++; continue; }
+    /* کپی تخت: فقط نام فایل، مستقیم در ریشهٔ uploads */
+    $target = $DST . '/' . basename($file->getPathname());
     if (is_file($target) && filesize($target) === $file->getSize()) { $skipped++; continue; }
     if (@copy($file->getPathname(), $target)) { $copied++; $bytes += $file->getSize(); }
-    else { $failed++; bk_csm_out('کپی نشد: ' . $rel); }
+    else { $failed++; bk_csm_out('کپی نشد: ' . basename($file->getPathname())); }
 }
 bk_csm_out('کپی: ' . $copied . ' فایل (' . round($bytes / 1048576, 2) . ' MB) — موجود: ' . $skipped . ' — خطا: ' . $failed);
-bk_csm_out('✅ تصاویر آماده‌اند. حالا seed_tips.php را اجرا کنید.');
+if ($skipped > 0 && $copied === 0) {
+    bk_csm_out('ℹ️ همهٔ فایل‌ها از قبل در uploads بودند — مشکلی نیست.');
+}
+bk_csm_out('✅ تصاویر آماده‌اند.');
+bk_csm_out('اگر قبلاً قلق‌ها را با نسخهٔ قدیمی ثبت کرده‌اید، برای اصلاح مسیر عکس‌ها این آدرس را باز کنید:');
+bk_csm_out('   seed_tips.php?key=INSTALL_KEY&fresh=1');
 bk_csm_out('⚠️ پس از اتمام، این فایل را از سرور حذف کنید.');

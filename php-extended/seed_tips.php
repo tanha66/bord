@@ -158,9 +158,9 @@ foreach ($files as $f) {
 }
 bk_seed_out('دیتاست بارگذاری شد: ' . count($tips) . " قلق");
 
-/* نگاشت تصاویر به مسیر واقعی /uploads */
+/* نگاشت تصاویر به مسیر واقعی — فایل‌ها باید مستقیم داخل uploads/ باشند (serve.php فقط ریشهٔ uploads را سرو می‌کند) */
 $resolve_img = function (string $key) use ($map): ?string {
-    if (isset($map[$key])) return '/uploads/tips/' . $map[$key]['file'];
+    if (isset($map[$key])) return '/uploads/' . $map[$key]['file'];
     return null;
 };
 

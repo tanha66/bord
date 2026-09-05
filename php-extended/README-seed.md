@@ -39,8 +39,8 @@ public_html/
 بعد به ترتیب این دو آدرس را باز کنید (`INSTALL_KEY` همان کلید داخل `config.php` شماست):
 
 ```text
-https://bordkhan.ir/php-extended/copy_seed_media.php?key=INSTALL_KEY
-https://bordkhan.ir/php-extended/seed_tips.php?key=INSTALL_KEY
+https://bordkhan.ir/copy_seed_media.php?key=INSTALL_KEY
+https://bordkhan.ir/seed_tips.php?key=INSTALL_KEY
 ```
 
 گزینه‌های مرورگری:
@@ -65,6 +65,20 @@ php php-extended/seed_tips.php --fresh    # حذف قبلی‌ها و نصب ا�
 
 فایل `seed-data/seed_mobile_tips.sql` را در phpMyAdmin → دیتابیس سایت → Import اجرا کنید. اجرای دوباره‌اش امن است. بعد از آن، پوشهٔ `uploads-seed/tips` را از File Manager به `uploads/tips` کپی کنید.
 
+## 🖼 نکتهٔ مهم دربارهٔ محل عکس‌ها
+
+موتور نمایش سایت (`serve.php`) فقط فایل‌های **مستقیم داخل `uploads/`** را سرو می‌کند و زیرپوشه را نمی‌فهمد.
+به همین دلیل این بسته عکس‌ها را **تخت و با پیشوند `tip-`** در ریشهٔ `uploads/` کپی می‌کند
+(مثل `uploads/tip-swollen-battery.jpg`). پوشهٔ قدیمی `uploads/tips` اگر ساخته شده می‌توانید حذفش کنید.
+
+اگر قبلاً قلق‌ها را با نسخهٔ قدیمی (مسیر خراب `uploads/tips/...`) ثبت کرده‌اید، پس از آپلود فایل‌های جدید یک‌بار:
+
+```text
+https://bordkhan.ir/seed_tips.php?key=INSTALL_KEY&fresh=1
+```
+
+را اجرا کنید تا قلق‌های قبلی حذف و با مسیر درست عکس‌ها دوباره ثبت شوند.
+
 ## ❓ رفع خطای 500 / خطاهای رایج
 
 | مشکل | علت | راه‌حل |
@@ -74,7 +88,7 @@ php php-extended/seed_tips.php --fresh    # حذف قبلی‌ها و نصب ا�
 | «پوشهٔ seed-data پیدا نشد» | دیتاست کنار فایل نیست | پوشهٔ `seed-data` را کنار فایل یا داخل `php-extended` بگذارید |
 | «کاربر نویسنده پیدا نشد» | هنوز ادمینی در دیتابیس نیست | اول `install.php` را اجرا کنید |
 | خطای اتصال دیتابیس | config ناقص | `DB_NAME/DB_USER/DB_PASS` را در `config.php` چک کنید |
-| تصاویر قلق‌ها 404 می‌دهند | فایل‌های عکس کپی نشده‌اند | `copy_seed_media.php` را اجرا کنید یا `uploads-seed/tips` را دستی به `uploads/tips` کپی کنید |
+| تصاویر قلق‌ها 404 می‌دهند | عکس‌ها در زیرپوشه‌اند یا کپی نشده‌اند | `copy_seed_media.php` را اجرا کنید (می‌رود توی ریشهٔ `uploads/`) و سپس `seed_tips.php?key=KEY&fresh=1` |
 
 ## 📂 نقشهٔ فایل‌ها
 
@@ -86,8 +100,7 @@ seed-data/
   image_map.php               ← نگاشت کلید تصویر → فایل
   seed_mobile_tips.sql        ← نسخهٔ SQL خالص برای phpMyAdmin
 uploads-seed/tips/
-  mobile/ …                ← ۴ عکس واقعی آزاد
-  gen/ …                   ← ۱۰ عکس تولیدی
+  tip-*.jpg                ← ۱۴ عکس (۴ واقعی آزاد + ۱۰ تولیدی) — تخت، آمادهٔ کپی به ریشهٔ uploads
 ```
 
 ## ⚠️ پس از نصب
