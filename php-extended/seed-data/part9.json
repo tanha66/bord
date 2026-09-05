@@ -30,7 +30,7 @@
   "tags": "عمومی,سرما,تاچ",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-171"
   ]
  },
  {
@@ -64,7 +64,7 @@
   "tags": "عمومی,AMOLED,لکه",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-172"
   ]
  },
  {
@@ -99,7 +99,7 @@
   "tags": "عمومی,چسب,مونتاژ,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-173"
   ]
  },
  {
@@ -133,7 +133,7 @@
   "tags": "عمومی,کد سرویس,تست",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-174"
   ]
  },
  {
@@ -167,7 +167,7 @@
   "tags": "عمومی,سنسور,کالیبراسیون",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-175"
   ]
  },
  {
@@ -201,7 +201,7 @@
   "tags": "عمومی,گرما,تابستان",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-176"
   ]
  },
  {
@@ -235,8 +235,7 @@
   "tags": "عمومی,ساحل,آب شور",
   "vid": null,
   "imgs": [
-   "gen-rice",
-   "gen-wet-port"
+   "seed-img-177"
   ]
  },
  {
@@ -270,8 +269,7 @@
   "tags": "عمومی,رطوبت,حمام",
   "vid": null,
   "imgs": [
-   "gen-wet-port",
-   "gen-rice"
+   "seed-img-178"
   ]
  },
  {
@@ -305,7 +303,7 @@
   "tags": "عمومی,اسپیکر,رطوبت",
   "vid": null,
   "imgs": [
-   "gen-speaker"
+   "seed-img-179"
   ]
  },
  {
@@ -339,7 +337,7 @@
   "tags": "عمومی,شارژ خودرو",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-180"
   ]
  },
  {
@@ -373,7 +371,7 @@
   "tags": "عمومی,کالیبراسیون,باتری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-181"
   ]
  },
  {
@@ -407,7 +405,7 @@
   "tags": "عمومی,محافظ,پورت",
   "vid": null,
   "imgs": [
-   "gen-wet-port"
+   "seed-img-182"
   ]
  },
  {
@@ -441,8 +439,7 @@
   "tags": "عمومی,سوختگی,برد",
   "vid": null,
   "imgs": [
-   "pexels-microscope",
-   "gen-esd-workspace"
+   "seed-img-183"
   ]
  },
  {
@@ -476,7 +473,7 @@
   "tags": "عمومی,شارژر,نوسان برق",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-184"
   ]
  },
  {
@@ -510,7 +507,7 @@
   "tags": "عمومی,تصمیم,هزینه",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-185"
   ]
  },
  {
@@ -545,8 +542,7 @@
   "tags": "عمومی,ابزار,تازه‌کار",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace",
-   "gen-screws-mat"
+   "seed-img-186"
   ]
  },
  {
@@ -581,8 +577,7 @@
   "tags": "عمومی,تعمیر برد,میکروسکوپ",
   "vid": "lXZNq",
   "imgs": [
-   "pexels-microscope",
-   "pexels-microscope"
+   "seed-img-187"
   ]
  },
  {
@@ -617,7 +612,7 @@
   "tags": "عمومی,خمش,صاف‌کاری",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-188"
   ]
  },
  {
@@ -651,7 +646,7 @@
   "tags": "عمومی,رام,فلش,امنیت",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-189"
   ]
  },
  {
@@ -685,7 +680,7 @@
   "tags": "عمومی,گارانتی,مصرف‌کننده",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-190"
   ]
  }
 ]

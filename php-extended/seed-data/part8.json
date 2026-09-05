@@ -31,7 +31,7 @@
   "tags": "عمومی,شارژر,کابل,عیب‌یابی",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-151"
   ]
  },
  {
@@ -66,7 +66,7 @@
   "tags": "عمومی,پورت Type-C,تمیزکاری",
   "vid": "aGpqT",
   "imgs": [
-   "gen-wet-port"
+   "seed-img-152"
   ]
  },
  {
@@ -100,7 +100,7 @@
   "tags": "عمومی,ریست کارخانه,FRP,بکاپ",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-153"
   ]
  },
  {
@@ -134,7 +134,7 @@
   "tags": "عمومی,باتری,سلامت",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-154"
   ]
  },
  {
@@ -169,8 +169,7 @@
   "tags": "عمومی,باتری,ایمنی",
   "vid": null,
   "imgs": [
-   "gen-battery-flex",
-   "gen-swollen-battery"
+   "seed-img-155"
   ]
  },
  {
@@ -205,7 +204,7 @@
   "tags": "عمومی,درب پشت,حرارت",
   "vid": null,
   "imgs": [
-   "gen-heatgun"
+   "seed-img-156"
   ]
  },
  {
@@ -240,7 +239,7 @@
   "tags": "عمومی,تعمیرگاه,پیچ,ابزار",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-157"
   ]
  },
  {
@@ -274,7 +273,7 @@
   "tags": "عمومی,الکل,ایزوپروپیل,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-158"
   ]
  },
  {
@@ -309,8 +308,7 @@
   "tags": "عمومی,مولتی‌متر,شارژ,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-charger",
-   "gen-esd-workspace"
+   "seed-img-159"
   ]
  },
  {
@@ -345,7 +343,7 @@
   "tags": "عمومی,هیتر,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-heatgun"
+   "seed-img-160"
   ]
  },
  {
@@ -379,8 +377,7 @@
   "tags": "عمومی,آب‌خوردگی,برنج",
   "vid": null,
   "imgs": [
-   "gen-rice",
-   "gen-wet-port"
+   "seed-img-161"
   ]
  },
  {
@@ -415,7 +412,7 @@
   "tags": "عمومی,آب‌بندی,واشر",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-162"
   ]
  },
  {
@@ -449,7 +446,7 @@
   "tags": "عمومی,تست,تاچ,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-163"
   ]
  },
  {
@@ -483,7 +480,7 @@
   "tags": "عمومی,باتری,شارژ شبانه",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-164"
   ]
  },
  {
@@ -517,8 +514,7 @@
   "tags": "عمومی,باتری,نگهداری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery",
-   "gen-charger"
+   "seed-img-165"
   ]
  },
  {
@@ -552,8 +548,7 @@
   "tags": "عمومی,تعمیرگاه,چک‌لیست",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace",
-   "gen-screws-mat"
+   "seed-img-166"
   ]
  },
  {
@@ -587,7 +582,7 @@
   "tags": "عمومی,قطعات,گرید",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-167"
   ]
  },
  {
@@ -621,7 +616,7 @@
   "tags": "عمومی,بکاپ,امنیت",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-168"
   ]
  },
  {
@@ -656,7 +651,7 @@
   "tags": "عمومی,ESD,تعمیرگاه,ایمنی",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-169"
   ]
  },
  {
@@ -690,7 +685,7 @@
   "tags": "عمومی,پاوربانک,شارژ",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-170"
   ]
  }
 ]

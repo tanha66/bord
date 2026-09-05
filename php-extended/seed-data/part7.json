@@ -30,8 +30,7 @@
   "tags": "هواوی,P30,باتری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery",
-   "gen-heatgun"
+   "seed-img-131"
   ]
  },
  {
@@ -65,7 +64,7 @@
   "tags": "هواوی,P30 Pro,دوربین",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-132"
   ]
  },
  {
@@ -99,7 +98,7 @@
   "tags": "هواوی,P40,SuperCharge",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-133"
   ]
  },
  {
@@ -133,7 +132,7 @@
   "tags": "هواوی,Nova 9,خاموشی",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-134"
   ]
  },
  {
@@ -167,8 +166,7 @@
   "tags": "هواوی,Mate 40,نمایشگر منحنی",
   "vid": null,
   "imgs": [
-   "gen-cracked-display",
-   "gen-heatgun"
+   "seed-img-135"
   ]
  },
  {
@@ -202,7 +200,7 @@
   "tags": "هواوی,P40,AppGallery,گوگل",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-136"
   ]
  },
  {
@@ -236,7 +234,7 @@
   "tags": "آنر,X7,باتری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-137"
   ]
  },
  {
@@ -270,7 +268,7 @@
   "tags": "آنر,Honor 90,داغی",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-138"
   ]
  },
  {
@@ -304,7 +302,7 @@
   "tags": "هواوی,رمز,Find My Phone",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-139"
   ]
  },
  {
@@ -338,8 +336,7 @@
   "tags": "هواوی,P30,آب‌خوردگی",
   "vid": "n689wo4",
   "imgs": [
-   "gen-rice",
-   "gen-wet-port"
+   "seed-img-140"
   ]
  },
  {
@@ -373,7 +370,7 @@
   "tags": "هواوی,P30,نمایشگر,OLED",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-141"
   ]
  },
  {
@@ -407,7 +404,7 @@
   "tags": "هواوی,Nova 9,گوست تاچ",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-142"
   ]
  },
  {
@@ -441,7 +438,7 @@
   "tags": "هواوی,P40,پورت",
   "vid": null,
   "imgs": [
-   "gen-wet-port"
+   "seed-img-143"
   ]
  },
  {
@@ -475,7 +472,7 @@
   "tags": "هواوی,Nova 9,اسپیکر",
   "vid": null,
   "imgs": [
-   "gen-speaker"
+   "seed-img-144"
   ]
  },
  {
@@ -509,7 +506,7 @@
   "tags": "هواوی,P30,میکروفون",
   "vid": null,
   "imgs": [
-   "gen-speaker"
+   "seed-img-145"
   ]
  },
  {
@@ -543,7 +540,7 @@
   "tags": "هواوی,Mate 40,وای‌فای",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-146"
   ]
  },
  {
@@ -577,7 +574,7 @@
   "tags": "آنر,X8,بلوتوث",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-147"
   ]
  },
  {
@@ -611,7 +608,7 @@
   "tags": "هواوی,P40,سیم‌کارت",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-148"
   ]
  },
  {
@@ -645,7 +642,7 @@
   "tags": "هواوی,P30,فلش",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-149"
   ]
  },
  {
@@ -679,7 +676,7 @@
   "tags": "هواوی,EMUI,بهینه‌سازی",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-150"
   ]
  }
 ]

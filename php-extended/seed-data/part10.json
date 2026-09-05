@@ -30,7 +30,7 @@
   "tags": "عمومی,شارژ سریع,VOOC",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-191"
   ]
  },
  {
@@ -64,7 +64,7 @@
   "tags": "عمومی,Pixel,باتری",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-192"
   ]
  },
  {
@@ -98,7 +98,7 @@
   "tags": "عمومی,Xperia,LCD",
   "vid": "GdfyE",
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-193"
   ]
  },
  {
@@ -132,7 +132,7 @@
   "tags": "عمومی,Nokia,کندی",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-194"
   ]
  },
  {
@@ -166,8 +166,7 @@
   "tags": "عمومی,تبلت,باتری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery",
-   "gen-heatgun"
+   "seed-img-195"
   ]
  },
  {
@@ -201,7 +200,7 @@
   "tags": "عمومی,آیپد,شارژ",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-196"
   ]
  },
  {
@@ -235,8 +234,7 @@
   "tags": "عمومی,تست قطعه,تعمیرگاه",
   "vid": "7n4V8",
   "imgs": [
-   "gen-screws-mat",
-   "gen-esd-workspace"
+   "seed-img-197"
   ]
  },
  {
@@ -271,8 +269,7 @@
   "tags": "عمومی,برد,دوربین حرارتی",
   "vid": null,
   "imgs": [
-   "pexels-microscope",
-   "gen-esd-workspace"
+   "seed-img-198"
   ]
  },
  {
@@ -306,7 +303,7 @@
   "tags": "عمومی,آنتن,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-199"
   ]
  },
  {
@@ -341,7 +338,7 @@
   "tags": "عمومی,دکمه,پاور",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-200"
   ]
  },
  {
@@ -375,7 +372,7 @@
   "tags": "عمومی,جک,هدفون",
   "vid": null,
   "imgs": [
-   "gen-speaker"
+   "seed-img-201"
   ]
  },
  {
@@ -409,7 +406,7 @@
   "tags": "عمومی,microSD,حافظه",
   "vid": "7t8xa",
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-202"
   ]
  },
  {
@@ -443,7 +440,7 @@
   "tags": "عمومی,کش,Recovery",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-203"
   ]
  },
  {
@@ -477,7 +474,7 @@
   "tags": "عمومی,Safe Mode,اپ",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-204"
   ]
  },
  {
@@ -511,8 +508,7 @@
   "tags": "عمومی,خرید,دست دوم",
   "vid": null,
   "imgs": [
-   "gen-charger",
-   "gen-cracked-display"
+   "seed-img-205"
   ]
  },
  {
@@ -546,7 +542,7 @@
   "tags": "عمومی,PD,شارژر لپ‌تاپ",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-206"
   ]
  },
  {
@@ -580,7 +576,7 @@
   "tags": "عمومی,محافظ,گلس",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-207"
   ]
  },
  {
@@ -614,8 +610,7 @@
   "tags": "عمومی,مستندسازی,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-screws-mat",
-   "gen-esd-workspace"
+   "seed-img-208"
   ]
  },
  {
@@ -649,8 +644,7 @@
   "tags": "عمومی,روش‌شناسی,تعمیرگاه",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace",
-   "pexels-microscope"
+   "seed-img-209"
   ]
  }
 ]

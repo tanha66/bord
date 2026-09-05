@@ -31,8 +31,7 @@
   "tags": "آیفون,باتری,خاموشی,سرما",
   "vid": "e28Ow",
   "imgs": [
-   "pexels-iphone-battery",
-   "gen-battery-flex"
+   "seed-img-1"
   ]
  },
  {
@@ -67,8 +66,7 @@
   "tags": "آیفون,باتری,درصد",
   "vid": null,
   "imgs": [
-   "gen-swollen-battery",
-   "pexels-iphone-battery"
+   "seed-img-2"
   ]
  },
  {
@@ -103,8 +101,7 @@
   "tags": "آیفون,داغی,باتری,شارژ",
   "vid": "gbpzjc7",
   "imgs": [
-   "gen-charger",
-   "pexels-iphone-battery"
+   "seed-img-3"
   ]
  },
  {
@@ -139,8 +136,7 @@
   "tags": "آیفون,باتری متورم,تورم,خطر",
   "vid": null,
   "imgs": [
-   "gen-swollen-battery",
-   "gen-battery-flex"
+   "seed-img-4"
   ]
  },
  {
@@ -175,7 +171,7 @@
   "tags": "آیفون ۷,باتری,خاموشی",
   "vid": "fj7v2",
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-5"
   ]
  },
  {
@@ -206,7 +202,7 @@
   "tags": "آیفون,ریستارت,دوربین,باتری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-6"
   ]
  },
  {
@@ -240,8 +236,7 @@
   "tags": "آیفون,شارژ کند,پورت",
   "vid": null,
   "imgs": [
-   "gen-wet-port",
-   "gen-charger"
+   "seed-img-7"
   ]
  },
  {
@@ -275,7 +270,7 @@
   "tags": "آیفون,مصرف باتری,آپدیت",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-8"
   ]
  },
  {
@@ -310,8 +305,7 @@
   "tags": "آیفون,نمایشگر,تعویض صفحه",
   "vid": null,
   "imgs": [
-   "gen-cracked-display",
-   "gen-screws-mat"
+   "seed-img-9"
   ]
  },
  {
@@ -345,7 +339,7 @@
   "tags": "آیفون,گوست تاچ,نمایشگر",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-10"
   ]
  },
  {
@@ -379,7 +373,7 @@
   "tags": "آیفون,خطوط صفحه,ضربه",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-11"
   ]
  },
  {
@@ -413,7 +407,7 @@
   "tags": "آیفون,لمس,نمایشگر",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-12"
   ]
  },
  {
@@ -447,8 +441,7 @@
   "tags": "آیفون X,صفحه مشکی,OLED",
   "vid": null,
   "imgs": [
-   "gen-cracked-display",
-   "pexels-iphone-battery-2"
+   "seed-img-13"
   ]
  },
  {
@@ -479,8 +472,7 @@
   "tags": "آیفون,True Tone,نمایشگر",
   "vid": null,
   "imgs": [
-   "gen-screws-mat",
-   "pexels-iphone-battery-2"
+   "seed-img-14"
   ]
  },
  {
@@ -514,7 +506,7 @@
   "tags": "آیفون,صفحه سفید",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-15"
   ]
  },
  {
@@ -548,7 +540,7 @@
   "tags": "آیفون,چشمک,نمایشگر",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-16"
   ]
  },
  {
@@ -583,7 +575,7 @@
   "tags": "آیفون,شارژ,پورت",
   "vid": null,
   "imgs": [
-   "gen-wet-port"
+   "seed-img-17"
   ]
  },
  {
@@ -617,8 +609,7 @@
   "tags": "آیفون,رطوبت,پورت",
   "vid": null,
   "imgs": [
-   "gen-wet-port",
-   "gen-rice"
+   "seed-img-18"
   ]
  },
  {
@@ -652,8 +643,7 @@
   "tags": "آیفون,پورت شارژ,فلکس",
   "vid": null,
   "imgs": [
-   "gen-wet-port",
-   "gen-screws-mat"
+   "seed-img-19"
   ]
  },
  {
@@ -687,7 +677,7 @@
   "tags": "آیفون,شارژ بی‌سیم,MagSafe",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-20"
   ]
  },
  {
@@ -721,7 +711,7 @@
   "tags": "آیفون ۱۵,Type-C,پورت",
   "vid": null,
   "imgs": [
-   "gen-wet-port"
+   "seed-img-21"
   ]
  },
  {
@@ -755,8 +745,7 @@
   "tags": "آیفون,دوربین,لرزش,OIS",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens",
-   "pexels-iphone-battery-2"
+   "seed-img-22"
   ]
  },
  {
@@ -790,7 +779,7 @@
   "tags": "آیفون,دوربین,ترک لنز",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-23"
   ]
  },
  {
@@ -824,7 +813,7 @@
   "tags": "آیفون,دوربین تار",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-24"
   ]
  },
  {
@@ -858,7 +847,7 @@
   "tags": "آیفون,فلش,چراغق",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-25"
   ]
  },
  {
@@ -892,8 +881,7 @@
   "tags": "آیفون,دوربین جلو",
   "vid": null,
   "imgs": [
-   "gen-cracked-display",
-   "gen-cracked-lens"
+   "seed-img-26"
   ]
  },
  {
@@ -928,7 +916,7 @@
   "tags": "آیفون,هنگ لوگو,DFU",
   "vid": "zf9BX",
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-27"
   ]
  },
  {
@@ -962,8 +950,7 @@
   "tags": "آیفون,ریستارت,کرش",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery",
-   "pexels-microscope-2"
+   "seed-img-28"
   ]
  },
  {
@@ -998,7 +985,7 @@
   "tags": "آیفون,رمز فراموشی,recovery",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-29"
   ]
  },
  {
@@ -1032,7 +1019,7 @@
   "tags": "آیفون,Face ID",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-30"
   ]
  },
  {
@@ -1062,7 +1049,7 @@
   "tags": "آیفون,قفل رمز,امنیت",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-31"
   ]
  },
  {
@@ -1096,8 +1083,7 @@
   "tags": "آیفون,آب‌خوردگی,خوردگی",
   "vid": null,
   "imgs": [
-   "gen-rice",
-   "gen-wet-port"
+   "seed-img-32"
   ]
  }
 ]

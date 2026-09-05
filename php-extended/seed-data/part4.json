@@ -30,7 +30,7 @@
   "tags": "سامسونگ,S21 Ultra,خط سبز,AMOLED",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-75"
   ]
  },
  {
@@ -64,7 +64,7 @@
   "tags": "سامسونگ,A50,تاچ,ضربه",
   "vid": "y56l8vf",
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-76"
   ]
  },
  {
@@ -98,7 +98,7 @@
   "tags": "سامسونگ,A12,لمس,نمایشگر",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-77"
   ]
  },
  {
@@ -132,7 +132,7 @@
   "tags": "سامسونگ,S22,سرما,باتری",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery"
+   "seed-img-78"
   ]
  },
  {
@@ -166,7 +166,7 @@
   "tags": "سامسونگ,A53,باتری,مصرف",
   "vid": null,
   "imgs": [
-   "gen-charger"
+   "seed-img-79"
   ]
  },
  {
@@ -200,8 +200,7 @@
   "tags": "سامسونگ,M31,باتری خواب",
   "vid": null,
   "imgs": [
-   "pexels-iphone-battery",
-   "gen-charger"
+   "seed-img-80"
   ]
  },
  {
@@ -235,7 +234,7 @@
   "tags": "سامسونگ,S23,Burn-in,AMOLED",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-81"
   ]
  },
  {
@@ -269,7 +268,7 @@
   "tags": "سامسونگ,A52,چشمک,نمایشگر",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-82"
   ]
  },
  {
@@ -304,7 +303,7 @@
   "tags": "سامسونگ,A32,شیشه پشت",
   "vid": null,
   "imgs": [
-   "gen-heatgun"
+   "seed-img-83"
   ]
  },
  {
@@ -338,7 +337,7 @@
   "tags": "سامسونگ,S21,شیشه پشت",
   "vid": null,
   "imgs": [
-   "gen-heatgun"
+   "seed-img-84"
   ]
  },
  {
@@ -372,7 +371,7 @@
   "tags": "سامسونگ,A51,پورت,Type-C",
   "vid": "aGpqT",
   "imgs": [
-   "gen-wet-port"
+   "seed-img-85"
   ]
  },
  {
@@ -406,8 +405,7 @@
   "tags": "سامسونگ,A32,آب‌خوردگی",
   "vid": "n689wo4",
   "imgs": [
-   "gen-rice",
-   "gen-wet-port"
+   "seed-img-86"
   ]
  },
  {
@@ -442,8 +440,7 @@
   "tags": "سامسونگ,A50,اولتراسونیک,برد",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace",
-   "pexels-microscope"
+   "seed-img-87"
   ]
  },
  {
@@ -477,7 +474,7 @@
   "tags": "سامسونگ,S21,دوربین تار",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-88"
   ]
  },
  {
@@ -511,7 +508,7 @@
   "tags": "سامسونگ,A52,فلش",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-89"
   ]
  },
  {
@@ -545,7 +542,7 @@
   "tags": "سامسونگ,A12,اثر انگشت",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-90"
   ]
  },
  {
@@ -579,7 +576,7 @@
   "tags": "سامسونگ,A32,اثر انگشت,پنل",
   "vid": null,
   "imgs": [
-   "gen-cracked-display"
+   "seed-img-91"
   ]
  },
  {
@@ -613,7 +610,7 @@
   "tags": "سامسونگ,S23,Face Unlock",
   "vid": null,
   "imgs": [
-   "gen-cracked-lens"
+   "seed-img-92"
   ]
  },
  {
@@ -647,7 +644,7 @@
   "tags": "سامسونگ,A54,NFC",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-93"
   ]
  },
  {
@@ -681,7 +678,7 @@
   "tags": "سامسونگ,A12,سیم‌کارت",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-94"
   ]
  },
  {
@@ -716,7 +713,7 @@
   "tags": "سامسونگ,S21,لوگو,Odin",
   "vid": null,
   "imgs": [
-   "gen-screws-mat"
+   "seed-img-95"
   ]
  },
  {
@@ -751,7 +748,7 @@
   "tags": "سامسونگ,A52,Odin,فلش",
   "vid": null,
   "imgs": [
-   "gen-esd-workspace"
+   "seed-img-96"
   ]
  }
 ]

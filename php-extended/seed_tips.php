@@ -279,12 +279,18 @@ foreach ($tips as $idx => $t) {
     }
     $solutionJson = json_encode($steps, JSON_UNESCAPED_UNICODE);
 
-    /* تصاویر */
+    /* تصاویر — اولویت: عکس یکتای همین قلق (سئو) tip-{no:3d}.jpg، سپس نگاشت موضوعی */
     $images = [];
-    foreach (($t['imgs'] ?? []) as $imgKey) {
-        $p = $resolve_img((string)$imgKey);
-        if ($p !== null) $images[] = $p;
+    $uniqueImg = '/uploads/tip-' . sprintf('%03d', $no) . '.jpg';
+    if (is_file(rtrim((string)UPLOAD_DIR, '/') . '/tip-' . sprintf('%03d', $no) . '.jpg')) {
+        $images[] = $uniqueImg;
+    } else {
+        foreach (($t['imgs'] ?? []) as $imgKey) {
+            $p = $resolve_img((string)$imgKey);
+            if ($p !== null) $images[] = $p;
+        }
     }
+    if (empty($images)) $images[] = $uniqueImg;
     $imagesJson = json_encode($images, JSON_UNESCAPED_UNICODE);
 
     /* ابزارها — با «،» جدا می‌شوند (فرمت نمایش سایت) */
