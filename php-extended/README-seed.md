@@ -71,13 +71,17 @@ php php-extended/seed_tips.php --fresh    # حذف قبلی‌ها و نصب ا�
 به همین دلیل این بسته عکس‌ها را **تخت و با پیشوند `tip-`** در ریشهٔ `uploads/` کپی می‌کند
 (مثل `uploads/tip-swollen-battery.jpg`). پوشهٔ قدیمی `uploads/tips` اگر ساخته شده می‌توانید حذفش کنید.
 
-اگر قبلاً قلق‌ها را با نسخهٔ قدیمی (مسیر خراب `uploads/tips/...`) ثبت کرده‌اید، پس از آپلود فایل‌های جدید یک‌بار:
+اگر قبلاً قلق‌ها با مسیر خراب ثبت شده‌اند، دو راه دارید:
 
+**راه سریع (پیشنهادی — فقط مسیر عکس‌ها اصلاح می‌شود، حذف/درجی انجام نمی‌شود):**
 ```text
-https://bordkhan.ir/seed_tips.php?key=INSTALL_KEY&fresh=1
+https://bordkhan.ir/seed_tips.php?key=INSTALL_KEY همراه پارامتر fiximgs=1
 ```
 
-را اجرا کنید تا قلق‌های قبلی حذف و با مسیر درست عکس‌ها دوباره ثبت شوند.
+**راه کامل (حذف ۲۰۹ قلقِ سید و درج مجدد با مسیر درست):**
+```text
+https://bordkhan.ir/seed_tips.php?key=INSTALL_KEY همراه پارامتر fresh=1
+```
 
 ## ❓ رفع خطای 500 / خطاهای رایج
 
@@ -88,7 +92,8 @@ https://bordkhan.ir/seed_tips.php?key=INSTALL_KEY&fresh=1
 | «پوشهٔ seed-data پیدا نشد» | دیتاست کنار فایل نیست | پوشهٔ `seed-data` را کنار فایل یا داخل `php-extended` بگذارید |
 | «کاربر نویسنده پیدا نشد» | هنوز ادمینی در دیتابیس نیست | اول `install.php` را اجرا کنید |
 | خطای اتصال دیتابیس | config ناقص | `DB_NAME/DB_USER/DB_PASS` را در `config.php` چک کنید |
-| تصاویر قلق‌ها 404 می‌دهند | عکس‌ها در زیرپوشه‌اند یا کپی نشده‌اند | `copy_seed_media.php` را اجرا کنید (می‌رود توی ریشهٔ `uploads/`) و سپس `seed_tips.php?key=KEY&fresh=1` |
+| تصاویر قلق‌ها 404 می‌دهند | عکس‌ها کپی نشده‌اند یا مسیر دیتابیس خراب است | اول `copy_seed_media.php` (مقصد را از UPLOAD_DIR خود config می‌خواند) بعد `seed_tips.php` با پارامتر `fiximgs=1` |
+| «کپی نشد» برای همهٔ فایل‌ها | دسترسی uploads یا open_basedir | دسترسی پوشهٔ `public_html/uploads` را روی 755 بگذارید |
 
 ## 📂 نقشهٔ فایل‌ها
 

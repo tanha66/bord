@@ -67,8 +67,9 @@ if (!$BK_IS_CLI) {
 }
 
 /* ---------- پارامترها (CLI و وب) ---------- */
-$FRESH = ($BK_IS_CLI && isset($argv) && in_array('--fresh', $argv, true)) || (!$BK_IS_CLI && isset($_GET['fresh']) && $_GET['fresh'] == '1');
-$LIST  = ($BK_IS_CLI && isset($argv) && in_array('--list', $argv, true))  || (!$BK_IS_CLI && isset($_GET['list'])  && $_GET['list']  == '1');
+$FRESH   = ($BK_IS_CLI && isset($argv) && in_array('--fresh', $argv, true))   || (!$BK_IS_CLI && isset($_GET['fresh'])   && $_GET['fresh']   == '1');
+$LIST    = ($BK_IS_CLI && isset($argv) && in_array('--list', $argv, true))    || (!$BK_IS_CLI && isset($_GET['list'])    && $_GET['list']    == '1');
+$FIXIMGS = ($BK_IS_CLI && isset($argv) && in_array('--fiximgs', $argv, true)) || (!$BK_IS_CLI && isset($_GET['fiximgs']) && $_GET['fiximgs'] == '1');
 
 /* شناسهٔ کاربرِ نویسندهٔ قلق‌ها (ادمین) */
 $AUTHOR_EMAIL = 'admin@bordkhan.ir';
@@ -170,6 +171,47 @@ if ($LIST) {
         bk_seed_out(sprintf("%3d. [%s] %s", $i + 1, $t['cat'], $t['title']));
     }
     bk_seed_out("\nجمع: " . count($tips) . " قلق — حالت پیش‌نمایش (چیزی نوشته نشد)");
+    exit;
+}
+
+/* ---------- حالت اصلاح مسیر عکس‌ها (بدون حذف/درج) ---------- */
+if ($FIXIMGS) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS bk_seed_state (
+      seed_key VARCHAR(64) PRIMARY KEY,
+      item_no INT NOT NULL,
+      tip_id INT UNSIGNED NOT NULL,
+      source VARCHAR(60) NULL,
+      seeded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $rows = $pdo->query('SELECT tip_id FROM bk_seed_state')->fetchAll(PDO::FETCH_COLUMN);
+    if (!$rows) {
+        bk_seed_fail('رکوردی برای اصلاح پیدا نشد (bk_seed_state خالی است). ابتدا سید را اجرا کنید.');
+    }
+    /* قاعده: نام فایل هر عکس با پیشوند tip- در ریشهٔ uploads قرار دارد */
+    $fixStmt = $pdo->prepare('UPDATE tips SET images_json = ? WHERE id = ?');
+    $fixedTips = 0; $fixedImgs = 0;
+    foreach ($rows as $tipId) {
+        $q = $pdo->prepare('SELECT images_json FROM tips WHERE id = ? LIMIT 1');
+        $q->execute([(int)$tipId]);
+        $raw = (string)$q->fetchColumn();
+        if ($raw === '') continue;
+        $imgs = json_decode($raw, true);
+        if (!is_array($imgs)) continue;
+        $new = []; $changed = false;
+        foreach ($imgs as $p) {
+            $base = basename((string)$p);
+            $np = '/uploads/tip-' . $base;
+            if ($np !== $p) { $changed = true; $fixedImgs++; }
+            $new[] = $np;
+        }
+        if ($changed) {
+            $fixStmt->execute([json_encode($new, JSON_UNESCAPED_UNICODE), (int)$tipId]);
+            $fixedTips++;
+        }
+    }
+    bk_seed_out("اصلاح تصاویر انجام شد: {$fixedTips} قلق و {$fixedImgs} مسیر عکس به‌روزرسانی شد.");
+    bk_seed_out('اگر فایل‌های تصویر هنوز کپی نشده‌اند، اول copy_seed_media.php را اجرا کنید.');
+    bk_seed_out('⚠️ پس از اتمام، این فایل را از سرور حذف کنید.');
     exit;
 }
 
