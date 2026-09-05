@@ -20,45 +20,74 @@
 
 - **۴ عکس واقعی** از Pexels و Wikimedia Commons (لایسنس آزاد، بدون واترمارک)
 - **۱۰ عکس تولیدشده با هوش مصنوعی** (بدون کپی‌رایت شخص ثالث)
-- **۱۰ ویدیو** از کانال‌های آموزشی معتبر آپارات (امداد موبایل، Hellomobile، مجتمع آموزشی پل، هارد ریست، DoctorMobile و…) — به‌صورت embed قانونی
+- **۱۰ ویدیو** از کانال‌های آموزشی معتبر آپارات — به‌صورت embed قانونی
 
-## 🚀 روش ۱: نصب با PHP CLI (توصیه‌شده)
+## 🌐 نصب از مرورگر (بدون SSH — ساده‌ترین راه)
+
+فایل‌ها را این‌طوری روی هاست بگذارید:
+
+```
+public_html/
+  index.php, config.php, ...
+  uploads-seed/          ← از این بسته (کل پوشه)
+  php-extended/          ← اگر موجود نیست بسازید
+    seed-data/           ← از این بسته (کل پوشه)
+    seed_tips.php
+    copy_seed_media.php
+```
+
+بعد به ترتیب این دو آدرس را باز کنید (`INSTALL_KEY` همان کلید داخل `config.php` شماست):
+
+```text
+https://bordkhan.ir/php-extended/copy_seed_media.php?key=INSTALL_KEY
+https://bordkhan.ir/php-extended/seed_tips.php?key=INSTALL_KEY
+```
+
+گزینه‌های مرورگری:
+
+```text
+.../seed_tips.php?key=KEY&list=1     ← فقط پیش‌نمایش ۲۰۹ عنوان
+.../seed_tips.php?key=KEY&fresh=1    ← حذف قبلی‌ها و نصب از نو
+```
+
+اگر وسط کار صفحه قطع شد (محدودیت زمانی هاست)، **دوباره همان آدرس را باز کنید** — اسکریپت از همان‌جا ادامه می‌دهد.
+
+## 🚀 نصب با SSH/CLI (در صورت دسترسی)
 
 ```bash
-# ۱) فایل‌های پوشهٔ php-extended را کنار index.php سایت قرار دهید
-# ۲) تصاویر را به uploads کپی کنید (از مرورگر یا CLI):
 php php-extended/copy_seed_media.php
-# ۳) سید قلق‌ها:
-php php-extended/seed_tips.php            # نصب/ادامه (امن برای اجرای مکرر)
-php php-extended/seed_tips.php --list     # فقط پیش‌نمایش
+php php-extended/seed_tips.php            # نصب/ادامه
+php php-extended/seed_tips.php --list     # پیش‌نمایش
 php php-extended/seed_tips.php --fresh    # حذف قبلی‌ها و نصب از نو
 ```
 
-- اسکریپت **idempotent** است: اجرای دوباره چیزی تکرار نمی‌کند و اگر وسط کار قطع شود، از همان‌جا ادامه می‌دهد (resume).
-- قلق‌ها با حساب ادمین سایت (یا `admin@bordkhan.ir`) ثبت می‌شوند و بلافاصله `published` هستند.
-- دسترسی‌ها: ۱۳۹ رایگان، ۵۲ با لایک، ۱۸ پولی (الگوی واقعی سایت برای درآمد و تعامل).
+## 🔧 نسخهٔ phpMyAdmin (بدون CLI و بدون اجرای PHP)
 
-## 🗄 روش ۲: درج از phpMyAdmin (بدون CLI)
+فایل `seed-data/seed_mobile_tips.sql` را در phpMyAdmin → دیتابیس سایت → Import اجرا کنید. اجرای دوباره‌اش امن است. بعد از آن، پوشهٔ `uploads-seed/tips` را از File Manager به `uploads/tips` کپی کنید.
 
-فایل `php-extended/seed-data/seed_mobile_tips.sql` را در phpMyAdmin → دیتابیس سایت → تب Import اجرا کنید. این فایل:
+## ❓ رفع خطای 500 / خطاهای رایج
 
-- نویسنده و دسته را خودش از دیتابیس پیدا می‌کند
-- اجرای دوباره‌اش امن است (INSERT فقط برای عناوین تکراری‌نشده انجام می‌شود)
-- تصاویر مسیر `/uploads/tips/...` را می‌گیرند؛ پس حتماً پوشهٔ `uploads-seed/tips` را به `uploads/tips` کپی کنید.
+| مشکل | علت | راه‌حل |
+|---|---|---|
+| HTTP ERROR 500 در `bordkhan.ir/seed_tips.php` | فایل در ریشه است و config را پیدا نمی‌کند | نسخهٔ جدید را جایگزین کنید (هر دو مسیر را می‌فهمد) یا فایل را به `php-extended/` منتقل کنید |
+| «دسترسی مجاز نیست» | کلید درست نیست | `?key=` را با مقدار `INSTALL_KEY` در `config.php` بگذارید |
+| «پوشهٔ seed-data پیدا نشد» | دیتاست کنار فایل نیست | پوشهٔ `seed-data` را کنار فایل یا داخل `php-extended` بگذارید |
+| «کاربر نویسنده پیدا نشد» | هنوز ادمینی در دیتابیس نیست | اول `install.php` را اجرا کنید |
+| خطای اتصال دیتابیس | config ناقص | `DB_NAME/DB_USER/DB_PASS` را در `config.php` چک کنید |
+| تصاویر قلق‌ها 404 می‌دهند | فایل‌های عکس کپی نشده‌اند | `copy_seed_media.php` را اجرا کنید یا `uploads-seed/tips` را دستی به `uploads/tips` کپی کنید |
 
 ## 📂 نقشهٔ فایل‌ها
 
 ```
-php-extended/
-  seed_tips.php              ← سیدر اصلی (CLI)
-  copy_seed_media.php        ← کپی تصاویر به uploads/tips
-  seed-data/
-    part1.json ... part10.json  ← دیتاست ۲۰۹ قلق
-    image_map.php            ← نگاشت کلید تصویر → فایل
-    seed_mobile_tips.sql     ← نسخهٔ SQL خالص برای phpMyAdmin
-  uploads-seed/tips/
-    mobile/ …                ← ۴ عکس واقعی آزاد
-    gen/ …                   ← ۱۰ عکس تولیدی
+seed_tips.php              ← سیدر اصلی (وب + CLI)
+copy_seed_media.php        ← کپی تصاویر به uploads/tips (وب + CLI)
+seed-data/
+  part1.json ... part10.json  ← دیتاست ۲۰۹ قلق
+  image_map.php               ← نگاشت کلید تصویر → فایل
+  seed_mobile_tips.sql        ← نسخهٔ SQL خالص برای phpMyAdmin
+uploads-seed/tips/
+  mobile/ …                ← ۴ عکس واقعی آزاد
+  gen/ …                   ← ۱۰ عکس تولیدی
 ```
 
 ## ⚠️ پس از نصب
